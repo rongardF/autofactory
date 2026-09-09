@@ -1,0 +1,146 @@
+export GZ_SIM_RESOURCE_PATH="/workspaces/autofactory/gazebo_sandbox/models"
+
+gz topic -t /linear_stage/cmd_hor -m gz.msgs.Double -p 'data: -0.2'
+
+gz topic -t /linear_stage/cmd_ver -m gz.msgs.Double -p 'data: 0.1'
+
+# 2. Once mated, weld them together
+gz topic -t /mating/attach -m gz.msgs.Empty -p 'unused: true'
+
+# Release again
+gz topic -t /tool_mount/detach -m gz.msgs.Empty -p 'unused: true'
+gz topic -t /tool_rack/detach -m gz.msgs.Empty -p 'unused: true'
+
+# Watch state
+gz topic -e -t /mating/state
+
+gz sim default.sdf
+
+
+# spawn Gazebo model
+gz service -s /world/spawn/create \
+  --reqtype gz.msgs.EntityFactory \
+  --reptype gz.msgs.Boolean \
+  --timeout 3000 \
+  --req 'sdf_filename: "model://tool_side/", name: "tool1", pose: {position: {x: 0.0, y: -0.24, z: 0.235}}'
+
+gz service -s /world/spawn/create \
+  --reqtype gz.msgs.EntityFactory \
+  --reptype gz.msgs.Boolean \
+  --timeout 3000 \
+  --req 'sdf_filename: "model://tool_side/", name: "tool2", pose: {position: {x: -0.249, y: -0.24, z: 0.235}}'
+
+
+# move spawned model
+gz service -s /world/spawn/set_pose \
+  --reqtype gz.msgs.Pose \
+  --reptype gz.msgs.Boolean \
+  --timeout 3000 \
+  --req 'name: "tool1", position: {x: 0.0, y: -0.15, z: 0.0}, orientation: {x: 0, y: 0, z: 0, w: 1}'
+
+
+# remove spawned model
+gz service -s /world/spawn/remove \
+  --reqtype gz.msgs.Entity \
+  --reptype gz.msgs.Boolean \
+  --timeout 3000 \
+  --req 'name: "tool2", type: MODEL'
+
+
+# ROS2 PACKAGES NEEDED
+<depend>ros_gz_sim</depend>
+<depend>ros_gz_bridge</depend>
+<depend>ros_gz_interfaces</depend>
+
+
+
+IMPLEMENTATION NOTES:
+- one link can have multiple detachable joints
+- all detachable joints start of as ATTACHED
+- to keep the tool in place and avoid fidgeting one of the joints should always be attached
+- in simulation after bootup all the tool-mount to endtool detachable joints should be DETACHED
+- in simulation after bootup all the tool-rack to endtool detachable joints must be left ATTACHED (so they don't fidget in place and are with known pose)
+- the attach process should be as follows:
+  - tool-mount moves to selected end-tool slide-in pose
+  - tool-mount moves to selected endtools attached pose (linear movement horizontally)
+  - the tool-mount to endtool detachable joint is ATTACHED
+  - the tool-rack to endtool detachable joint is DETACHED
+  - the tool-mount moves to corresponding tool-rack slots tool-lifted pose
+  - the tool-mount can start using the tool
+- the detach process should be as follows:
+  - the tool-mount moves to corresponding tool-rack slots tool-lifted pose
+  - tool-mount moves to selected endtools attached pose (linear movement vertically down)
+  - the tool-rack to endtool detachable joint is ATTACHED
+  - the tool-mount to endtool detachable joint is DETACHED
+  - tool-mount moves to selected end-tool slide-in pose (linear movement horizontally)
+  - the tool-mount can continue with whatever
+- in simulation mode the tool-mount launch file will spawn all endtool Gazebo models
+  - all available endtools are defined in a config file that is input as launch argument for tool-mount
+  - each endtool will define two detachable joints - one connected to tool-mount link; one connected to tool-rack slot link
+  - the endtools are defined as XACRO macros which accept following arguments:
+    - 'tool_mount_topic' - name of the topic that will hold the attach/detach/state gazebo topics for tool-mount detachable joint operation
+    - 'tool_rack_topic' - name of the topic that will hold the attach/detach/state gazebo topics for tool-rack detachable joint operation
+  - the macros are run in launch file and converted to strings which are then used for spawning the Gazebo models
+  - the launch file will include gz-bridge node and will map all the required gazebo topics to corresponding ROS2 topics (for each endtool)
+  - all endtools will be spawned on the tool-rack slots; no endtool will be mounted to tool-mount
+- endtool models in moveit planning scene (RViz) will be attached only once tool-mount and tool-rack lifecycle nodes are activated
+  - tool-mount must be activated to detect if a tool is mounted on it so we cannot attach an object in planning scene until we know if there is anything mounted
+  - the tool-rack must be activated to detect which slots have which tools so we cannot attach object into slots until we know which tools are in which slot
+  - a higher level orchestrator node (the one which manages tool-mount states) will also ensure that no robot movemnts are performed until
+    tool-mount node is in active state; this is required because until all tools are detected and attached in planning scene there is a risk for collision because we are planning "blind"
+- tool-mount launch file will launch all end-tools nodes as it knows which ones are available
+- tool-mount launch file will launch tool-mount node and tool-rack node
+- the tool-mount node will manage the tool-rack states (configures and activates it)
+- the tool-mount node will manage the endtools states to get them configured (it will never activate them, but it can deactivate if tool-mount is deactivated)
+
+
+
+
+REQUIREMENTS:
+- sim and planning scene must always be synced
+- in sim tools will always start on the tool-rack - NOTHING WILL BE MOUNTED
+- in sim tools placment into incorrect tool-rack slot must be possible
+- the model adding into both moveit2 scene and Gazebo mjst happen only once and they are not removed if tool_mount node gets deactivated
+- because tool_mount node can be deactivated and then activated again it is possible that tool is mounted to
+  tool_mount even in simulatin mode
+- world manager changes:
+  - spawning a model must take the 'link' argument - the model will be spawned to links origin
+  - the Gazebo spawner must use the 'link' argument to know which joint to keep attachd and which one to detach
+  - spawning a model must be idempotent which means that we first check if a model_id exists and if it does we do nothing
+
+
+
+PROCESS:
+- in tool_mount launch file we 
+  - process the tool_rack_config file
+  - we launch the endtool nodes based on 'slots' info from 'tool_rack_config'
+  - if simulated then we launch the 'ros_gz_bridge' node that bridges the Gazebo spawn services and topics for each endtool
+  - we launch the tool_mount and tool_rack nodes
+  - if simulated then we launch 'ros_gz_bridge' node that bridges RFID scanner sensor related stuff to ROS2 (INVESTIGATE THIS!)
+- tool_mount on_configure:
+  - we create all services based on 'simualted' parameter (tool_mount controller, world manager)
+  - we create a publisher 'tool_mounted' that publishs mounted tools info; if nthing is mounted then all fields are empty and the field 'mounted' if False
+  - 
+- tool_mount on_activate:
+  - we configure and activate 'tool_rack' node
+  - we call 'tool_rack' service 'get_slots_info' which will yield the same info that is published on 'slots' topic
+  - we loop over slots info which tells which endtools are mounted to which slot:
+    - we spawn the model into moveit2 scene to correct slot
+    - if simulated we spawn model into Gazebo world to correct slot; automatically detaches from 'tool_mount' joint
+    - we set the endtools 'mounted' parameter to False and configure it (lifecycle state change)
+    - tools (nodes) which are not in any of the slots will remain unconfigured
+  - we call tool_mount_controller 'setup' method to initialize it
+  - we check the 'tool_mounted' attribute to see which tool is mounted (if any) on tool_mount
+    - in simulatd mode the simulated tool_mount_controller will use RFID scanner to get this info
+    - in real mode the controller connects to endtool internal controller and retrieves this info
+  - if any tool is mounted to tool_mount then:
+    - we spawn that tools model into moveit2 scene using the 'tool_mount_tcp' link
+    - if simulated then we spawn the model into Gazebo world
+    - we set the endtool 'mounted' parameter to True and configure it
+    - we publish the tool info to 'tool_mounted' topic
+
+
+TODO:
+- figure out the RFID scanner simulating
+- figure out the 'tool_rack_config' schema
+  - data from that schema will also be used for 'tool_rack' slots topic

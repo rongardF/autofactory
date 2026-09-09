@@ -28,7 +28,7 @@
 #
 # Author: Denis Stogl
 
-from os import environ
+from os import environ, pathsep
 from launch import LaunchDescription
 
 from ament_index_python.packages import get_package_share_directory
@@ -64,9 +64,15 @@ def launch_setup(context, *args, **kwargs):
     gazebo_gui = LaunchConfiguration("gazebo_gui")
     world_file = LaunchConfiguration("world_file")
 
-    # set GZ_SIM_RESOURCE_PATH to the models directory of the package
+    # Prepend the launch-provided resource path to any existing
+    # GZ_SIM_RESOURCE_PATH (e.g. entries added by package ament environment
+    # hooks) instead of overwriting it, so package-registered models stay
+    # resolvable.
     gazebo_sim_resource_path = LaunchConfiguration("gazebo_sim_resource_path").perform(context)
-    environ["GZ_SIM_RESOURCE_PATH"] = str(gazebo_sim_resource_path)
+    existing_resource_path = environ.get("GZ_SIM_RESOURCE_PATH", "")
+    environ["GZ_SIM_RESOURCE_PATH"] = pathsep.join(
+        path for path in (gazebo_sim_resource_path, existing_resource_path) if path
+    )
 
     initial_joint_controllers = PathJoinSubstitution(
         [FindPackageShare("movement_controller"), "config", "ur", controllers_file]

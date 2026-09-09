@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tool_rack xmlns:xacro="http://wiki.ros.org/xacro">
+
+<xacro:macro name="tool_rack" params="
+    parent:=station
+    link_name:=tool_rack_link
+    reason:=Adjacent
+    ">
+    <disable_collisions link1="${link_name}" link2="${parent}" reason="${reason}" />
+  </xacro:macro>
+
+</tool_rack>

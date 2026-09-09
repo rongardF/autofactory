@@ -1,0 +1,14 @@
+slots:
+  - index: 1
+    tool_sn: "abc123"
+    tool_ref: "volumetric_dispenser"
+  - index: 2
+    tool_sn: "def123"
+    tool_ref: "volumetric_dispenser"
+sim_bootup:
+  - index: 1
+    tool_sn: "abc123"
+    tool_ref: "volumetric_dispenser"
+  - index: 2
+    tool_sn: "def123"
+    tool_ref: "volumetric_dispenser"

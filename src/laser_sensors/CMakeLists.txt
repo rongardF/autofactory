@@ -62,6 +62,13 @@ install(
   DESTINATION share/${PROJECT_NAME}
 )
 
+# Register this package's Gazebo models on GZ_SIM_RESOURCE_PATH.
+# gz_register_models is baked into the container image (see docker/cmake).
+# model contains the captron/ model:// folder.
+list(APPEND CMAKE_MODULE_PATH "$ENV{GZ_CMAKE_MODULE_DIR}")
+include(gz_register_models)
+gz_register_models(model)
+
 # Install the Captron ORL2 node so it is discoverable as
 # `ros2 run laser_sensors captron_orl2` and via the launch file.
 install(PROGRAMS

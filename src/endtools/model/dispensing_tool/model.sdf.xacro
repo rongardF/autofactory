@@ -1,0 +1,95 @@
+<?xml version="1.0" ?>
+<sdf version="1.6" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="dispensing_tool"
+      params="
+        model_name:=abc123
+        station_model_name:=station
+        tool_mount_link:=tool_mount_tcp
+        tool_rack_link:=slot1_attached_link
+      ">
+
+    <model name="${model_name}">
+      <link name="dispensing_tool_origin">
+        <inertial>
+          <mass> 0.5094651951956418 </mass>
+          <pose> -4.6297522176e-05 -2.7501563919e-02 -2.8689966722e-06 0 0 0 </pose>
+          <inertia>
+            <ixx>  1.8444458772e-04 </ixx>
+            <ixy> -1.8714769888e-07 </ixy>
+            <ixz>  2.5644282048e-08 </ixz>
+            <iyy>  1.8051069194e-04 </iyy>
+            <iyz>  4.2089057146e-08 </iyz>
+            <izz>  2.0096567452e-04 </izz>
+          </inertia>
+        </inertial>
+        <collision name="collision.stl">
+          <geometry>
+            <mesh>
+              <uri>model://dispensing_tool/meshes/collision.stl</uri>
+            </mesh>
+          </geometry>
+        </collision>
+        <visual name="visual.dae">
+          <geometry>
+            <mesh>
+              <uri>model://dispensing_tool/meshes/visual.dae</uri>
+            </mesh>
+          </geometry>
+          <material>
+              <ambient>1 0 0 1</ambient>
+              <diffuse>1 0 0 1</diffuse>
+          </material>
+        </visual>
+      </link>
+
+      <!--
+      IMPORTANT (gz-sim 8.11.0): this plugin STARTS ATTACHED. Its
+      internal attachRequested flag defaults to true, so a fixed joint
+      is created on the very first simulation step at the parts'
+      INITIAL relative pose. There is no <start_detached> option in
+      this version; <attach_topic> only RE-attaches after a detach.
+
+      Parent_link must be a DIRECT link of the model hosting this
+      plugin
+      -->
+      <plugin filename="gz-sim-detachable-joint-system"
+              name="gz::sim::systems::DetachableJoint">
+          <parent_link>dispensing_tool_origin</parent_link>
+          <child_model>${station_model_name}</child_model>
+          <child_link>${tool_mount_link}</child_link>
+          <attach_topic>/${tool_mount_link}/${model_name}/attach</attach_topic>
+          <detach_topic>/${tool_mount_link}/${model_name}/detach</detach_topic>
+          <output_topic>/${tool_mount_link}/${model_name}/state</output_topic>
+      </plugin>
+
+      <plugin filename="gz-sim-detachable-joint-system"
+              name="gz::sim::systems::DetachableJoint">
+          <parent_link>dispensing_tool_origin</parent_link>
+          <child_model>${station_model_name}</child_model>
+          <child_link>${tool_rack_link}</child_link>
+          <attach_topic>/${tool_rack_link}/${model_name}/attach</attach_topic>
+          <detach_topic>/${tool_rack_link}/${model_name}/detach</detach_topic>
+          <output_topic>/${tool_rack_link}/${model_name}/state</output_topic>
+      </plugin>
+    </model>
+
+  </xacro:macro>
+
+  <xacro:arg name="model_name"                  default="abc123"/>
+  <xacro:arg name="station_model_name"          default="station"/>
+  <xacro:arg name="tool_mount_link"             default="tool_mount_tcp"/>
+  <xacro:arg name="tool_rack_link"              default="slot1_attached_joint"/>
+
+  <!-- Instantiate the macro so `xacro dispensing_tool.sdf.xacro` emits a complete model.
+       Each macro parameter is fed from its matching $(arg ...) so values passed
+       on the xacro command line take effect. Include this file elsewhere and
+       call <xacro:dispensing_tool .../> directly if you prefer to pass values inline. -->
+  <xacro:dispensing_tool
+      model_name="$(arg model_name)"
+      station_model_name="$(arg station_model_name)"
+      tool_mount_link="$(arg tool_mount_link)"
+      tool_rack_link="$(arg tool_rack_link)"
+  />
+
+</sdf>

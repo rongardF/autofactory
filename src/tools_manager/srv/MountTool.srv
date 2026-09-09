@@ -1,0 +1,4 @@
+string tool_sn
+---
+bool success
+string message

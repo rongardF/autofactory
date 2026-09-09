@@ -1,0 +1,2 @@
+string slot_id
+string tool_sn

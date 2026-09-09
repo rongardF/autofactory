@@ -1,0 +1,35 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <model name="tool_rack">
+    <link name="rack">
+      <inertial>
+        <mass> 1 </mass>
+      </inertial>
+      <collision name="collision">
+        <geometry>
+          <mesh>
+            <uri>model://tool_rack/meshes/collision.stl</uri>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name="visual">
+	    <geometry>
+          <mesh>
+            <uri>model://tool_rack/meshes/visual.dae</uri>
+          </mesh>
+        </geometry>
+        <material>
+            <ambient>0.0 0.8 1 1</ambient>
+            <diffuse>0.0 0.8 1 1</diffuse>
+        </material>
+      </visual>
+      <pose>0.0 0.0 0.0 0 0 0</pose>
+    </link>
+
+    <joint name="rack_to_world" type="fixed">
+      <parent>world</parent>
+      <child>rack</child>
+      <pose>0.0 0.0 0.0 0 0 0</pose>
+    </joint>
+  </model>
+</sdf>

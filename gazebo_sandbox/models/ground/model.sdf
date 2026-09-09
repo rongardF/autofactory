@@ -1,0 +1,35 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <model name="ground_plane">
+    <static>true</static>
+    <link name="ground_plane">
+      <collision name="collision">
+        <geometry>
+          <plane>
+            <normal>0 0 1</normal>
+          </plane>
+        </geometry>
+        <surface>
+          <friction>
+            <torsional>
+              <coefficient>0.0</coefficient>
+            </torsional>
+          </friction>
+        </surface>
+      </collision>
+      <visual name="visual">
+        <geometry>
+            <plane>
+                <normal>0 0 1</normal>
+                <size>10 10</size>
+            </plane>
+        </geometry>
+        <material>
+          <ambient>0.7 0.7 0.7 1</ambient>
+          <diffuse>0.7 0.7 0.7 1</diffuse>
+          <specular>0.2 0.2 0.2 1</specular>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

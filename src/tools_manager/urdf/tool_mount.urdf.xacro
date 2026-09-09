@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<tool_mount xmlns:xacro="http://wiki.ros.org/xacro">
+
+  <xacro:macro name="tool_mount" params="
+    parent:=tool0
+    mount_origin_xyz:='0 0 0'
+    mount_origin_rpy:='0 0 0'
+    tcp_origin_xyz:='0 0 0'
+    tcp_origin_rpy:='0 0 0'
+    ">
+
+    <link name="tool_mount_link">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh>
+                <uri>model://tool_mount/meshes/visual.dae</uri>
+                </mesh>
+            </geometry>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh>
+                <uri>model://tool_mount/meshes/collision.stl</uri>
+                </mesh>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.5"/>
+            <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+        </inertial>
+    </link>
+
+    <joint name="tool_mount_joint" type="fixed">
+        <parent link="${parent}"/>
+        <child link="tool_mount_link"/>
+        <origin xyz="${mount_origin_xyz}" rpy="${mount_origin_rpy}"/>
+    </joint>
+
+    <link name="tool_mount_tcp"/>
+
+    <joint name="tool_mount_to_tool_tcp_joint" type="fixed">
+        <parent link="tool_mount_link"/>
+        <child link="tool_mount_tcp"/>
+        <origin xyz="${tcp_origin_xyz}" rpy="${tcp_origin_rpy}"/>
+    </joint>
+  </xacro:macro>
+</tool_mount>

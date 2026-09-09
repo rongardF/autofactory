@@ -1,0 +1,6 @@
+# DispenseStop.srv — stop the dispensing by closing the valve
+---
+bool     success            # True if the stop succeeded (was dispensing)
+float64  dispensed_volume 0.0   # dispensed volume = flow_rate * duration_seconds
+float64  duration_seconds 0.0   # Elapsed dispensing time in seconds
+string   error_message      # Populated when success is False

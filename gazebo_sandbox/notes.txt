@@ -1,0 +1,14 @@
+endtools spawning process:
+- generate SDF file string from 'sdf.xacro' file
+    - the child model will be 'ur' and will be same for both detachable joints in SDF
+    - the child link will be unique (inside the 'ur' model) 
+- use the generated string for 'EntityFactory.sdf' field when spawning model
+
+robot spawning process:
+- the 'tool_mount' and 'tool_rack' macros will be included and run to define the links/joints (in gz_sim.urdf.xacro)
+- the generated robot description will be provided to Gazebo to spawn the entities
+
+
+NOTES:
+- there will be NO SDF files that Gazebo uses, there will only be XACRO files which generate SDF file
+  content (but we never save it to file, but use it directly)

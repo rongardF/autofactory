@@ -1,0 +1,33 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <model name="tool_mount">
+    <link name="mount">
+      <inertial>
+        <mass>0.23170504236087314</mass>
+        <pose>  1.7381693723e-06 -1.2078454606e-02  1.0968082327e-05 0 0 0 </pose>
+        <inertia>
+            <ixx>  4.7087914472e-05 </ixx>
+            <ixy>  2.9688550775e-09 </ixy>
+            <ixz> -4.4471234162e-08 </ixz>
+            <iyy>  6.7356053048e-05 </iyy>
+            <iyz>  1.8736423946e-08 </iyz>
+            <izz>  4.6814177648e-05 </izz>
+        </inertia>
+      </inertial>
+      <collision name="collision">
+        <geometry>
+          <mesh>
+            <uri>model://tool_mount/meshes/collision.stl</uri>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name="visual">
+	    <geometry>
+          <mesh>
+            <uri>model://tool_mount/meshes/visual.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+  </model>
+</sdf>

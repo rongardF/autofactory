@@ -1,0 +1,105 @@
+<?xml version="1.0"?>
+<tool_rack xmlns:xacro="http://wiki.ros.org/xacro">
+
+  <!--
+    Single slot: a group of 3 links rigidly attached to
+    `parent`. `index` makes the link/joint names unique so the macro can be
+    instantiated many times. Each of the 3 links has its own configurable origin.
+  -->
+  <xacro:macro name="tool_slot" params="
+    index:='2'
+    parent:='tool_rack_link'
+    x_offset:='0'
+    tool_attached_origin_xyz:='0.1 0 0'
+    tool_attached_origin_rpy:='0 0 0'
+    tool_lifted_origin_xyz:='0.1 0 0'
+    tool_lifted_origin_rpy:='0 0 0'
+    tool_slide_in_origin_xyz:='0.1 0 0'
+    tool_slide_in_origin_rpy:='0 0 0'
+    ">
+
+    <link name="slot${index}_attached_link"/>
+    <joint name="slot${index}_attached_joint" type="fixed">
+        <parent link="${parent}"/>
+        <child link="slot${index}_attached_link"/>
+        <origin xyz="${float(tool_attached_origin_xyz.split()[0]) + float(x_offset)} ${tool_attached_origin_xyz.split()[1]} ${tool_attached_origin_xyz.split()[2]}" rpy="${tool_attached_origin_rpy}"/>
+    </joint>
+
+    <link name="slot${index}_lifted_link"/>
+    <joint name="slot${index}_lifted_joint" type="fixed">
+        <parent link="${parent}"/>
+        <child link="slot${index}_lifted_link"/>
+        <origin xyz="${float(tool_lifted_origin_xyz.split()[0]) + float(x_offset)} ${tool_lifted_origin_xyz.split()[1]} ${tool_lifted_origin_xyz.split()[2]}" rpy="${tool_lifted_origin_rpy}"/>
+    </joint>
+
+    <link name="slot${index}_slide_in_link"/>
+    <joint name="slot${index}_slide_in_joint" type="fixed">
+        <parent link="${parent}"/>
+        <child link="slot${index}_slide_in_link"/>
+        <origin xyz="${float(tool_slide_in_origin_xyz.split()[0]) + float(x_offset)} ${tool_slide_in_origin_xyz.split()[1]} ${tool_slide_in_origin_xyz.split()[2]}" rpy="${tool_slide_in_origin_rpy}"/>
+    </joint>
+  </xacro:macro>
+
+  <!--
+    "Loop" over slots. Xacro has no native for-loop, so recursion is used:
+    the macro instantiates one slot then calls itself with index+1 until
+    index == count. Each slot is offset along X by `spacing`.
+  -->
+  <xacro:macro name="tool_slots" params="parent count spacing:=0.15 index:=0">
+    <xacro:if value="${index &lt; count}">
+        <xacro:tool_slot
+            index="${index}"
+            parent="${parent}"
+            x_offset="${index * spacing}"/>
+        <xacro:tool_slots
+            parent="${parent}"
+            count="${count}"
+            spacing="${spacing}"
+            index="${index + 1}"/>
+    </xacro:if>
+  </xacro:macro>
+
+  <xacro:macro name="tool_rack" params="
+    parent:=station
+    rack_origin_xyz:='0 0 0'
+    rack_origin_rpy:='0 0 0'
+    number_of_slots:=2
+    slot_spacing:=0.15 
+    ">
+    <!--The 'slot_spacing' parameter controls the distance between consecutive slots (x-axis, in meters)-->
+    <link name="tool_rack_link">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh>
+                <uri>model://tool_rack/meshes/visual.dae</uri>
+                </mesh>
+            </geometry>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh>
+                <uri>model://tool_rack/meshes/collision.stl</uri>
+                </mesh>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.5"/>
+            <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+        </inertial>
+    </link>
+
+    <joint name="tool_rack_joint" type="fixed">
+        <parent link="${parent}"/>
+        <child link="tool_rack_link"/>
+        <origin xyz="${rack_origin_xyz}" rpy="${rack_origin_rpy}"/>
+    </joint>
+
+    <!-- Instantiate N slots as children of the rack body -->
+    <xacro:tool_slots parent="tool_rack_link" count="${number_of_slots}" spacing="${slot_spacing}"/>
+  </xacro:macro>
+
+  <link name="station"/>
+  <xacro:tool_rack parent="station"/>
+</tool_rack>

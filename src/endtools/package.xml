@@ -1,14 +1,46 @@
 <?xml version="1.0"?>
-<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd"
+  schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>endtools</name>
-  <version>0.0.0</version>
-  <description>Station end tools package</description>
+  <version>0.1.0</version>
+  <description>
+    Package providing nodes to interface with robot endtools
+  </description>
   <maintainer email="ronnyBravo32@proton.me">Ron Freimann</maintainer>
-  <license>BSD-3</license>
+  <license>BSD-3-Clause</license>
 
+  <!-- Build tool -->
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
 
+  <!-- Interface generation -->
+  <buildtool_depend>rosidl_default_generators</buildtool_depend>
+
+  <!-- Runtime interface support -->
+  <exec_depend>rosidl_default_runtime</exec_depend>
+
+  <!-- Python runtime -->
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>python3-pydantic</exec_depend>
+
+  <!-- Message / service runtime dependencies -->
+  <exec_depend>rcl_interfaces</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
+  <exec_depend>builtin_interfaces</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>tf2_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+
+  <!-- Launch runtime -->
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+  <!-- Marks this package as containing ROS2 interface definitions -->
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <!-- Test dependencies -->
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 

@@ -1,0 +1,160 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <model name="tool_side">
+    <link name="tool">
+      <inertial>
+        <mass> 0.5094651951956418 </mass>
+        <pose> -4.6297522176e-05 -2.7501563919e-02 -2.8689966722e-06 0 0 0 </pose>
+        <inertia>
+          <ixx>  1.8444458772e-04 </ixx>
+          <ixy> -1.8714769888e-07 </ixy>
+          <ixz>  2.5644282048e-08 </ixz>
+          <iyy>  1.8051069194e-04 </iyy>
+          <iyz>  4.2089057146e-08 </iyz>
+          <izz>  2.0096567452e-04 </izz>
+        </inertia>
+      </inertial>
+      <collision name="tool_collision">
+        <geometry>
+          <mesh>
+            <uri>model://tool_side/meshes/collision_tool_side.stl</uri>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name="tool_visual">
+	    <geometry>
+          <mesh>
+            <uri>model://tool_side/meshes/visual_tool_side.dae</uri>
+          </mesh>
+        </geometry>
+        <material>
+            <ambient>1 0 0 1</ambient>
+            <diffuse>1 0 0 1</diffuse>
+        </material>
+      </visual>
+      <pose>0.0 0.075 0.05 0 0 0</pose>
+    </link>
+
+    <!-- <link name="mating_link">
+      <inertial>
+          <mass>1.0</mass>
+          <inertia>
+              <ixx>0.02104</ixx>
+              <ixy>0</ixy>
+              <ixz>0</ixz>
+              <iyy>0.02104</iyy>
+              <iyz>0</iyz>
+              <izz>0.04167</izz>
+          </inertia>
+      </inertial>
+      <collision name="collision">
+          <geometry>
+              <box>
+                  <size>0.1 0.1 0.1</size>
+              </box>
+          </geometry>
+      </collision>
+      <visual name="visual">
+          <geometry>
+              <box>
+                  <size>0.1 0.1 0.1</size>
+              </box>
+          </geometry>
+          <material>
+              <ambient>0.2 0.5 0.8 1</ambient>
+              <diffuse>1 0.0 0.8 1</diffuse>
+          </material>
+      </visual>
+      <pose>0.0 0.0 0.05 0 0 0</pose>
+    </link> -->
+
+    <!-- <include>
+        <uri>model://tool_side/</uri>
+        <name>tool_side</name>
+        <pose>0.0 0.075 0.05 0 0 0</pose>
+    </include> -->
+
+    <!-- <joint name="tool_side_joint" type="fixed">
+      <parent>mating_link</parent>
+      <child>tool</child>
+      <pose relative_to="mating_link">0.0 0.075 0.05 0 0 0</pose>
+    </joint> -->
+
+    <!-- Detachable (fixed) joint used to weld the parts together at
+    runtime.
+
+    IMPORTANT (gz-sim 8.11.0): this plugin STARTS ATTACHED. Its
+    internal attachRequested flag defaults to true, so a fixed joint
+    is created on the very first simulation step at the parts'
+    INITIAL relative pose. There is no <start_detached> option in
+    this version; <attach_topic> only RE-attaches after a detach.
+
+    To get "start separate, weld on slide-in" behaviour you must
+    publish a detach once at startup, then attach after mating:
+      gz topic -t /mating/detach -m gz.msgs.Empty -p 'unused: true'
+      # ... slide robot_side::tool_mount into position ...
+      gz topic -t /mating/attach -m gz.msgs.Empty -p 'unused: true'
+    attach welds at the CURRENT relative pose, so only attach once
+    the parts are actually seated.
+
+    /mating/state is EVENT-ONLY: it publishes "attached"/"detached"
+    exactly once per attach/detach event and does NOT latch. Start
+    `gz topic -e -t /mating/state` BEFORE sending attach/detach or
+    you will see nothing.
+
+    parent_link must be a DIRECT link of the model hosting this
+    plugin, so it is mating_link (which is rigidly fixed to
+    tool_side::tool via tool_side_joint). child_model/child_link may
+    be a nested model, so we target the sliding robot_side/tool_mount. -->
+    <plugin filename="gz-sim-detachable-joint-system"
+            name="gz::sim::systems::DetachableJoint">
+        <parent_link>tool</parent_link>
+        <child_model>robot_side</child_model>
+        <child_link>tool_mount</child_link>
+        <attach_topic>/mating/attach</attach_topic>
+        <detach_topic>/mating/detach</detach_topic>
+        <output_topic>/mating/state</output_topic>
+    </plugin>
+
+    <plugin filename="gz-sim-detachable-joint-system"
+            name="gz::sim::systems::DetachableJoint">
+        <parent_link>tool</parent_link>
+        <child_model>tool_rack</child_model>
+        <child_link>rack</child_link>
+        <attach_topic>/rack1/attach</attach_topic>
+        <detach_topic>/rack1/detach</detach_topic>
+        <output_topic>/rack1/state</output_topic>
+    </plugin>
+
+    <!-- <plugin filename="gz-sim-detachable-joint-system"
+            name="gz::sim::systems::DetachableJoint">
+        <parent_link>mating_link</parent_link>
+        <child_model>tool_rack</child_model>
+        <child_link>rack</child_link>
+        <attach_topic>/rack2/attach</attach_topic>
+        <detach_topic>/rack2/detach</detach_topic>
+        <output_topic>/rack2/state</output_topic>
+    </plugin> -->
+
+    <!-- Publishes this model's world pose so it can be observed over the
+    ROS graph. The SceneBroadcaster's /world/<world>/pose/info topic carries
+    the entity name in gz.msgs.Pose.name, which the ros_gz_bridge Pose_V ->
+    tf2_msgs/TFMessage converter does NOT copy into child_frame_id (it only
+    reads header data keys "frame_id"/"child_frame_id"). PosePublisher DOES
+    populate those header data entries, so the bridged TFMessage carries a
+    real child_frame_id (this model's name) and frame_id (its parent).
+
+    use_pose_vector_msg=true makes it publish a single gz.msgs.Pose_V on
+    /model/<model_name>/pose, matching the bridge type below. -->
+    <plugin filename="gz-sim-pose-publisher-system"
+            name="gz::sim::systems::PosePublisher">
+        <publish_link_pose>false</publish_link_pose>
+        <publish_collision_pose>false</publish_collision_pose>
+        <publish_visual_pose>false</publish_visual_pose>
+        <publish_nested_model_pose>false</publish_nested_model_pose>
+        <publish_model_pose>true</publish_model_pose>
+        <use_pose_vector_msg>true</use_pose_vector_msg>
+        <update_frequency>125</update_frequency>
+    </plugin>
+  </model>
+</sdf>
