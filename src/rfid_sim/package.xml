@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>rfid_sim</name>
+  <version>0.0.0</version>
+  <description>
+    Custom Gazebo Harmonic (gz-sim 8) system plugins that simulate passive RFID:
+    an omnidirectional reader that detects tags within a configurable radius and
+    publishes a detection flag and the detected tag's byte payload, bridged to
+    ROS 2 via ros_gz_bridge.
+  </description>
+  <maintainer email="ronnyBravo32@proton.me">Ron Freimann</maintainer>
+  <license>BSD-3</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>gz_sim_vendor</depend>
+  <depend>gz_plugin_vendor</depend>
+  <depend>gz_transport_vendor</depend>
+  <depend>gz_msgs_vendor</depend>
+  <depend>gz_math_vendor</depend>
+  <depend>gz_common_vendor</depend>
+
+  <exec_depend>ros_gz_bridge</exec_depend>
+  <exec_depend>ros_gz_interfaces</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
