@@ -3,6 +3,7 @@
 
   <xacro:macro name="tool_mount" params="
     parent:=tool0
+    simulated:=true
     mount_origin_xyz:='0 0 0'
     mount_origin_rpy:='0 0 0'
     tcp_origin_xyz:='0 0 0'
@@ -45,5 +46,27 @@
         <child link="tool_mount_tcp"/>
         <origin xyz="${tcp_origin_xyz}" rpy="${tcp_origin_rpy}"/>
     </joint>
+
+    <xacro:if value="${simulated}">
+        <link name="rfid_scanner_link"/>
+
+        <joint name="tool_mount_to_rfid_scanner_joint" type="fixed">
+            <parent link="tool_mount_link"/>
+            <child link="rfid_scanner_link"/>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+        </joint>
+
+        <gazebo>
+            <plugin filename="rfid_sim_systems"
+                    name="autofactory::rfid::RfidReader">
+                <link>rfid_scanner_link</link>
+                <range>0.1</range>
+                <update_rate>10</update_rate>
+                <detected_topic>/tool_mount_rfid_scanner/detected</detected_topic>
+                <content_topic>/tool_mount_rfid_scanner/tag_data</content_topic>
+                <reader_id>tool_mount_reader</reader_id>
+            </plugin>
+        </gazebo>
+    </xacro:if>
   </xacro:macro>
 </tool_mount>

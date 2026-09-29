@@ -1,8 +1,6 @@
-from typing import Callable
 from threading import RLock
 
 from rclpy.lifecycle import LifecycleNode
-from geometry_msgs.msg import TransformStamped
 
 from tools_manager.model.tool_rack_node_config_dto import ToolRackNodeConfigDTO
 from tools_manager.model.tool_info_dto import ToolInfoDto
@@ -15,11 +13,9 @@ class HardwareRackController(RackController):
         self,
         node: LifecycleNode,
         config: ToolRackNodeConfigDTO,
-        callback: Callable[[SlotsDto], None]
     ) -> None:
         self._node = node
         self._config = config
-        self._callback = callback
 
         self._callback_lock = RLock()
         self._slot_info_map_lock = RLock()
@@ -30,17 +26,11 @@ class HardwareRackController(RackController):
     def teardown(self) -> None:
         raise NotImplementedError()
     
-    def get_reserved_slot_id(self, tool_sn: str) -> str|None:
+    def get_slot_index(self, tool_sn: str) -> int|None:
         raise NotImplementedError()
 
-    def get_tool_info(self, slot_id: str) -> ToolInfoDto|None:
+    def get_tool_info(self, index: int) -> ToolInfoDto|None:
         raise NotImplementedError()
 
-    def get_tool_lifted_transform(self, tool_sn: str) -> TransformStamped|None:
-        raise NotImplementedError()
-
-    def get_tool_attached_transform(self, tool_sn: str) -> TransformStamped|None:
-        raise NotImplementedError()
-
-    def get_tool_slide_in_transform(self, tool_sn: str) -> TransformStamped|None:
+    def get_slots_data(self) -> SlotsDto:
         raise NotImplementedError()

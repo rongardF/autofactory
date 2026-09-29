@@ -30,16 +30,14 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from tools_manager.model.rack_config import RackConfigDTO
+from tools_manager.model.tools_manager_config import ToolsManagerConfigDTO
 
 
 class ToolMountNodeConfigDTO(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    rack_config: RackConfigDTO = Field(
-        description='Tool rack configuration.',
-    )
+
     parent_frame_id: str = Field(
         default="station",
         description='Parent frame ID.',
@@ -49,10 +47,7 @@ class ToolMountNodeConfigDTO(BaseModel):
         default=True,
         description='Selects Gazebo spawn (true) vs UR payload path (false).',
     )
-    tool_rack_node_name: str = Field(
-        description='Tool rack node name to communicate with.',
-    )
-    endtool_node_names: list[str] = Field(
-        default=[],
-        description='Endtool node names to communicate with.',
+    mounted_publish_rate: float = Field(
+        default=10.0,
+        description='Publish rate for the mounted tool information.',
     )

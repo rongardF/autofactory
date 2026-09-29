@@ -2,14 +2,14 @@ from pydantic import BaseModel, Field
 
 from tools_manager.msg import SlotInfo, ToolInfo, Slots
 
-from tools_manager.model.slot_info_dto import SlotInfoDto
+from tools_manager.model.tools_manager_config import ToolSlotDTO
 from tools_manager.model.tool_info_dto import ToolInfoDto
 
 
 class SlotsDto(BaseModel):
     """Information about all slots in the rack."""
 
-    tools_expected: list[SlotInfoDto] = Field(description='List of tools expected in the rack.')
+    tools_expected: list[ToolSlotDTO] = Field(description='List of tools expected in the rack, if serial is "None" then slot is empty.')
     tools_mounted: list[ToolInfoDto] = Field(description='List of tools currently mounted in the rack.')
 
     def __eq__(self, value: object) -> bool:
@@ -20,16 +20,16 @@ class SlotsDto(BaseModel):
         )
 
     @staticmethod
-    def to_slots_msg(slots_dto: 'SlotsDto') -> 'Slots':
+    def to_slots_msg(slots_dto: 'SlotsDto') -> Slots:
         """Convert a SlotsDto to a Slots message."""
 
         slots_msg = Slots()
         slots_msg.tools_expected = [
-            SlotInfo(slot_id=slot.slot_id, tool_sn=slot.tool_sn) for slot in slots_dto.tools_expected
+            SlotInfo(slot_id=slot.index, tool_sn=slot.tool_sn) for slot in slots_dto.tools_expected
         ]
         slots_msg.tools_mounted = [
             ToolInfo(
-                slot_id=tool.slot_id,
+                index=tool.index,
                 tool_sn=tool.tool_sn,
                 tool_type=tool.tool_type.value,
                 tool_part_number=tool.tool_part_number,
@@ -41,6 +41,19 @@ class SlotsDto(BaseModel):
         ]
         return slots_msg
 
+    @staticmethod
+    def from_slots_msg(slots_msg: Slots) -> 'SlotsDto':
+        """Convert a Slots message to a SlotsDto."""
+
+        return SlotsDto(
+            tools_expected=[
+                ToolSlotDTO(index=slot.slot_id, tool_sn=slot.tool_sn) for slot in slots_msg.tools_expected
+            ],
+            tools_mounted=[
+                ToolInfoDto.from_msg(tool_info_msg=tool) for tool in slots_msg.tools_mounted
+            ],
+        )   
+
     def get_tool_info(self, tool_sn: str) -> ToolInfoDto|None:
         """Get the tool info for a given tool serial number."""
         for tool in self.tools_mounted:
@@ -48,9 +61,25 @@ class SlotsDto(BaseModel):
                 return tool
         return None
 
-    def get_slot_info(self, tool_sn: str) -> SlotInfoDto|None:
+    def get_slot_info(self, tool_sn: str) -> ToolSlotDTO|None:
         """Get the slot info for a given tool serial number."""
         for slot in self.tools_expected:
-            if slot.tool_sn == tool_sn:
+            if slot.tool_sn and slot.tool_sn == tool_sn:
                 return slot
         return None
+
+    def is_slot_empty(self, slot_index: int) -> bool:
+        """Check if a slot is empty."""
+        # first check there is such slot with this index
+        for slot in self.tools_expected:
+            if slot.index == slot_index:
+                break
+        else:
+            return False
+
+        # then check that the slot is empty - if no tool is mounted in this slot, then it is empty
+        for slot in self.tools_mounted:
+            if slot.index == slot_index:
+                return False
+        
+        return True

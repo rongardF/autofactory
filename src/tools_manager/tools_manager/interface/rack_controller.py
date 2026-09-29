@@ -1,8 +1,7 @@
 from abc import ABC, abstractmethod
 
-from geometry_msgs.msg import TransformStamped
-
 from tools_manager.model.tool_info_dto import ToolInfoDto
+from tools_manager.model.slots_dto import SlotsDto
 
 
 class RackController(ABC):
@@ -15,23 +14,15 @@ class RackController(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_reserved_slot_id(self, tool_sn: str) -> str|None:
+    def get_slot_index(self, tool_sn: str) -> int|None:
         raise NotImplementedError()
 
     @abstractmethod
-    def get_tool_info(self, slot_id: str) -> ToolInfoDto|None:
+    def get_tool_info(self, index: int) -> ToolInfoDto|None:
         raise NotImplementedError()
 
     @abstractmethod
-    def get_tool_lifted_transform(self, tool_sn: str) -> TransformStamped|None:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def get_tool_attached_transform(self, tool_sn: str) -> TransformStamped|None:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def get_tool_slide_in_transform(self, tool_sn: str) -> TransformStamped|None:
+    def get_slots_data(self) -> SlotsDto:
         raise NotImplementedError()
 
     
