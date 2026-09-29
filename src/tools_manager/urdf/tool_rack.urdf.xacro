@@ -7,6 +7,7 @@
     instantiated many times. Each of the 3 links has its own configurable origin.
   -->
   <xacro:macro name="tool_slot" params="
+    simulated:=true
     index:='2'
     parent:='tool_rack_link'
     x_offset:='0'
@@ -38,6 +39,28 @@
         <child link="slot${index}_slide_in_link"/>
         <origin xyz="${float(tool_slide_in_origin_xyz.split()[0]) + float(x_offset)} ${tool_slide_in_origin_xyz.split()[1]} ${tool_slide_in_origin_xyz.split()[2]}" rpy="${tool_slide_in_origin_rpy}"/>
     </joint>
+
+    <xacro:if value="${simulated}">
+        <link name="slot${index}_rfid_scanner_link"/>
+
+        <joint name="slot${index}_to_rfid_scanner_joint" type="fixed">
+            <parent link="slot${index}_attached_link"/>
+            <child link="slot${index}_rfid_scanner_link"/>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+        </joint>
+
+        <gazebo>
+            <plugin filename="rfid_sim_systems"
+                    name="autofactory::rfid::RfidReader">
+                <link>slot${index}_rfid_scanner_link</link>
+                <range>0.1</range>
+                <update_rate>10</update_rate>
+                <detected_topic>/slot${index}_rfid_scanner/detected</detected_topic>
+                <content_topic>/slot${index}_rfid_scanner/tag_data</content_topic>
+                <reader_id>slot${index}_rfid_scanner</reader_id>
+            </plugin>
+        </gazebo>
+    </xacro:if>
   </xacro:macro>
 
   <!--
@@ -45,13 +68,15 @@
     the macro instantiates one slot then calls itself with index+1 until
     index == count. Each slot is offset along X by `spacing`.
   -->
-  <xacro:macro name="tool_slots" params="parent count spacing:=0.15 index:=0">
+  <xacro:macro name="tool_slots" params="parent simulated count spacing:=0.15 index:=0">
     <xacro:if value="${index &lt; count}">
         <xacro:tool_slot
+            simulated="${simulated}"
             index="${index}"
             parent="${parent}"
             x_offset="${index * spacing}"/>
         <xacro:tool_slots
+            simulated="${simulated}"
             parent="${parent}"
             count="${count}"
             spacing="${spacing}"
@@ -61,6 +86,7 @@
 
   <xacro:macro name="tool_rack" params="
     parent:=station
+    simulated:=true
     rack_origin_xyz:='0 0 0'
     rack_origin_rpy:='0 0 0'
     number_of_slots:=2
@@ -97,9 +123,6 @@
     </joint>
 
     <!-- Instantiate N slots as children of the rack body -->
-    <xacro:tool_slots parent="tool_rack_link" count="${number_of_slots}" spacing="${slot_spacing}"/>
+    <xacro:tool_slots parent="tool_rack_link" simulated="${simulated}" count="${number_of_slots}" spacing="${slot_spacing}"/>
   </xacro:macro>
-
-  <link name="station"/>
-  <xacro:tool_rack parent="station"/>
 </tool_rack>

@@ -1,0 +1,46 @@
+slots:
+  - index: 1
+    tool_sn: "abc123"
+    metadata:
+      launch_file: "volumetric_dispenser_launch.py"
+      model: "dispensing_tool"
+    parameters:
+        node_name: "dispenser_abc123"
+        flowrate: 1.0
+        tcp_frame_id: "tool0"
+        tcp:
+          - 0.0837
+          - 0.0
+          - -0.267
+          - 1.570797
+          - 0.0
+          - 1.570797
+  - index: 2
+    tool_sn: "def123"
+    metadata:
+      launch_file: "volumetric_dispenser_launch.py"
+      model: "dispensing_tool"
+    parameters:
+      - node_name: "dispenser_abc123"
+        flowrate: 1.0
+        tcp_frame_id: "tool0"
+        tcp:
+          - 0.0837
+          - 0.0
+          - -0.267
+          - 1.570797
+          - 0.0
+          - 1.570797
+  - index: 3
+    tool_sn: null
+    metadata: null
+    parameters: null
+simulation_setup:
+  tool_rack:
+    - index: 1 # TODO: update the tag info - tool type is incorrect!!!
+      tag_data: 6162633132330020202020202020202044495350454E53494E475F30303100204B5243313233002020202020202020205231410020202020202020202020202053584E3132330020202020202020202052314100202020202020202020202020
+    - index: 2
+      tag_data: 6465663132330020202020202020202044495350454E53494E475F30303100204B5243313233002020202020202020205231410020202020202020202020202053584E3132330020202020202020202052314100202020202020202020202020
+    - index: 3
+      tag_data: null
+  tool_mount: null

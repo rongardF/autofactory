@@ -1,2 +1,2 @@
-string slot_id
+string index
 string tool_sn

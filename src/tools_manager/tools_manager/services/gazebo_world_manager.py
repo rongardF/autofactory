@@ -31,6 +31,10 @@ any ``gz.*`` binding. Models are spawned via the world ``create`` service and
 removed via ``remove``. Each spawned tool carries detachable-joint plugins whose
 attach/detach requests and state feedback are bridged onto per-link, per-model
 topics of the form ``/<link_name>/<model_id>/{attach,detach,state}``.
+
+The link a model is welded to is supplied by the caller and the manager keeps an 
+internal record of the link each model
+is currently attached to so transfers only need the destination link.
 """
 
 from __future__ import annotations
@@ -53,18 +57,24 @@ from tf2_ros import Buffer, TransformException, TransformListener
 from ros_gz_interfaces.msg import Entity, EntityFactory
 from ros_gz_interfaces.srv import DeleteEntity, SpawnEntity
 
-from tools_manager.model.rack_config import RackConfigDTO
+from tools_manager.model.tool_info_dto import ToolInfoDto
 from tools_manager.interface.world_manager import WorldManager
+from tools_manager.exception.world_manager_exception import (
+    ModelAttachError,
+    ModelDeleteError,
+    ModelSpawnError,
+)
 
 
 
 class GazeboWorldManager(WorldManager):
     """Manage tool models inside a running Gazebo world over ``ros_gz_bridge``.
 
-    A tool is spawned at the world pose of its rack slot link and welded to that
-    slot via a detachable joint. Mounting and returning a tool is a matter of
-    attaching one detachable joint and detaching the other; the manager always
-    attaches the destination joint first so the model never floats free.
+    A tool is spawned at the world pose of a caller-supplied link and welded to
+    that link via a detachable joint. Transferring a tool between links attaches
+    the destination joint first and only then detaches the source joint, so the
+    model is never held by zero joints. The manager tracks the link each model is
+    currently attached to so ``attach_to_link`` only needs the destination link.
     """
 
     def __init__(
@@ -72,7 +82,6 @@ class GazeboWorldManager(WorldManager):
         node: Node,
         world_name: str,
         station_model_name: str,
-        rack_config: RackConfigDTO,
         tool_mount_link: str = 'tool_mount_tcp',
         service_timeout_sec: float = 5.0,
         tf_timeout_sec: float = 5.0,
@@ -83,7 +92,6 @@ class GazeboWorldManager(WorldManager):
         :param node: Node used to create clients/publishers and access logger/clock.
         :param world_name: Name of the Gazebo world (used in the service names).
         :param station_model_name: Name of the station model in the world.
-        :param rack_config: Rack configuration used to resolve slot frames.
         :param tool_mount_link: Link a tool is welded to when mounted.
         :param service_timeout_sec: Timeout for world service availability/results.
         :param tf_timeout_sec: Timeout for slot-frame TF lookups.
@@ -95,7 +103,6 @@ class GazeboWorldManager(WorldManager):
         self._logger = node.get_logger()
         self._world_name = world_name
         self._station_model_name = station_model_name
-        self._rack_config = rack_config
         self._tool_mount_link = tool_mount_link
         self._service_timeout_sec = service_timeout_sec
         self._tf_timeout_sec = tf_timeout_sec
@@ -103,6 +110,8 @@ class GazeboWorldManager(WorldManager):
 
         self._service_callback_group = MutuallyExclusiveCallbackGroup()
         self._state_callback_group = ReentrantCallbackGroup()
+
+        self._attached_link_lookup = {}
 
         self._create_client = node.create_client(
             SpawnEntity,
@@ -118,155 +127,53 @@ class GazeboWorldManager(WorldManager):
         self._tf_buffer = Buffer()
         self._tf_listener = TransformListener(self._tf_buffer, node)
 
-    def _get_slot_frame_name(self, tool_sn: str) -> str:
-        """Resolve the tool-rack slot link frame for a tool serial number.
+    def _generate_model_path(self, tool: ToolInfoDto) -> str:
+        """Generate the filesystem path to a tool's XACRO model description.
 
-        Finds the ``sim_bootup`` entry matching ``tool_sn`` and builds the slot
-        link frame name from its ``index`` field.
-
-        :param tool_sn: Serial number of the tool (equal to the model ID).
-        :returns: Slot link frame name, e.g. ``slot_1_attached_link``.
-        :raises ValueError: If no matching ``sim_bootup`` entry exists.
+        :param tool: Tool information.
+        :returns: Filesystem path to the XACRO model description.
+        :raises NotImplementedError: Always; subclasses must implement this.
         """
-        for entry in self._rack_config.sim_bootup:
-            if entry.tool_sn == tool_sn:
-                return f'slot_{entry.index}_attached_link'
-        raise ValueError(f'no sim_bootup entry for tool_sn "{tool_sn}"')
+        raise NotImplementedError('subclass must implement _generate_model_path()')
+
+    def _transfer(self, model_id: str, source_link: str, target_link: str) -> bool:
+        """Transfer a model's weld from one link to another.
+
+        The destination joint is attached first and only then is the source joint
+        detached, so the model is never held by zero joints.
+
+        :param model_id: Unique model ID (equal to the tool serial number).
+        :param source_link: Link the model is currently welded to.
+        :param target_link: Link to weld the model to.
+        :returns: ``True`` on success, ``False`` otherwise.
+        """
+        if not self._apply_joint_action(target_link, model_id, attach=True):
+            return False
+        return self._apply_joint_action(source_link, model_id, attach=False)
 
     def _generate_sdf_content(
-        self, model_path: str, model_name: str, tool_rack_child_link: str
+        self, model_path: str, model_name: str, tool_rack_link: str
     ) -> str:
         """Expand a XACRO description into an SDF string via the xacro API.
 
+        The tool carries two detachable joints: one to the tool-mount link and
+        one to ``tool_rack_link`` (the tool's rack slot link).
+
         :param model_path: Filesystem path to the XACRO model description.
         :param model_name: Model name (equal to the model ID / tool serial number).
-        :param tool_rack_child_link: Slot link the tool's rack joint targets.
+        :param tool_rack_link: Link the tool's rack joint targets.
         :returns: The expanded SDF document as a string.
         """
         document = xacro.process_file(
             model_path,
             mappings={
                 'model_name': model_name,
-                'tool_mount_child_link': self._tool_mount_link,
-                'tool_rack_child_link': tool_rack_child_link,
+                'station_model_name': self._station_model_name,
+                'tool_mount_link': self._tool_mount_link,
+                'tool_rack_link': tool_rack_link,
             },
         )
-        return document.toxml()
-
-    def spawn_model(self, model_id: str, model_path: str) -> bool:
-        """Spawn a tool model welded to its rack slot in the Gazebo world.
-
-        The model is spawned at the world pose of its rack slot link. Because a
-        freshly spawned model has all of its detachable joints attached, the
-        tool-mount joint is detached afterwards so the tool rests on its rack
-        slot only.
-
-        :param model_id: Unique model ID (equal to the tool serial number).
-        :param model_path: Filesystem path to the XACRO model description.
-        :returns: ``True`` on success, ``False`` otherwise.
-        """
-        try:
-            slot_link = self._get_slot_frame_name(model_id)
-            sdf = self._generate_sdf_content(model_path, model_id, slot_link)
-
-            pose = self._lookup_pose_in_world(slot_link)
-            if pose is None:
-                return False
-
-            factory = EntityFactory()
-            factory.name = model_id
-            factory.sdf = sdf
-            factory.pose = pose
-            factory.relative_to = 'world'
-
-            request = SpawnEntity.Request()
-            request.entity_factory = factory
-            response = self._call(self._create_client, request, f'spawn model {model_id}')
-            if response is None or not response.success:
-                self._logger.error(f'Failed to spawn model {model_id} in Gazebo world')
-                return False
-
-            if not self._apply_joint_action(self._tool_mount_link, model_id, attach=False):
-                self._logger.error(
-                    f'Model {model_id} spawned but tool-mount detach not confirmed'
-                )
-                return False
-            return True
-        except Exception as exc:
-            self._logger.error(f'Failed to spawn model {model_id}: {exc}')
-            return False
-
-    def delete_model(self, model_id: str) -> bool:
-        """Remove a tool model from the Gazebo world.
-
-        Both detachable joints (tool-mount and rack slot) are detached before the
-        model is removed. Detaching is best-effort: a tool is only ever welded to
-        one link at a time, so the other joint is already detached and produces
-        no state event — the removal proceeds regardless.
-
-        :param model_id: Unique model ID (equal to the tool serial number).
-        :returns: ``True`` on success, ``False`` otherwise.
-        """
-        try:
-            slot_link = self._get_slot_frame_name(model_id)
-
-            self._detach_best_effort(self._tool_mount_link, model_id)
-            self._detach_best_effort(slot_link, model_id)
-
-            entity = Entity()
-            entity.name = model_id
-            entity.type = Entity.MODEL
-
-            request = DeleteEntity.Request()
-            request.entity = entity
-            response = self._call(self._remove_client, request, f'remove model {model_id}')
-            if response is None or not response.success:
-                self._logger.error(f'Failed to remove model {model_id} from Gazebo world')
-                return False
-            return True
-        except Exception as exc:
-            self._logger.error(f'Failed to delete model {model_id}: {exc}')
-            return False
-
-    def attach_to_tool_mount(self, model_id: str) -> bool:
-        """Transfer a tool model from its rack slot to the tool-mount link.
-
-        The tool-mount joint is attached first and only then is the rack joint
-        detached, so the model is never held by zero joints.
-
-        :param model_id: Unique model ID (equal to the tool serial number).
-        :returns: ``True`` on success, ``False`` otherwise.
-        """
-        try:
-            slot_link = self._get_slot_frame_name(model_id)
-            if not self._apply_joint_action(self._tool_mount_link, model_id, attach=True):
-                return False
-            if not self._apply_joint_action(slot_link, model_id, attach=False):
-                return False
-            return True
-        except Exception as exc:
-            self._logger.error(f'Failed to attach model {model_id} to tool-mount: {exc}')
-            return False
-
-    def attach_to_tool_rack(self, model_id: str) -> bool:
-        """Transfer a tool model from the tool-mount link to its rack slot.
-
-        The rack joint is attached first and only then is the tool-mount joint
-        detached, so the model is never held by zero joints.
-
-        :param model_id: Unique model ID (equal to the tool serial number).
-        :returns: ``True`` on success, ``False`` otherwise.
-        """
-        try:
-            slot_link = self._get_slot_frame_name(model_id)
-            if not self._apply_joint_action(slot_link, model_id, attach=True):
-                return False
-            if not self._apply_joint_action(self._tool_mount_link, model_id, attach=False):
-                return False
-            return True
-        except Exception as exc:
-            self._logger.error(f'Failed to attach model {model_id} to tool-rack: {exc}')
-            return False
+        return document.toxml()  # type: ignore
 
     def _lookup_pose_in_world(self, frame_id: str) -> Pose | None:
         """Look up the world pose of a TF frame.
@@ -400,3 +307,86 @@ class GazeboWorldManager(WorldManager):
             time.sleep(0.01)
 
         return future.result()
+
+    def spawn_model(self, tool: ToolInfoDto, link_name: str):
+        try:
+            model_id = tool.tool_sn
+            model_path = self._generate_model_path(tool)
+            slot_link = tool.tool_attached_frame
+            sdf = self._generate_sdf_content(model_path, model_id, slot_link)
+
+            pose = self._lookup_pose_in_world(link_name)
+            if pose is None:
+                raise ModelSpawnError(
+                    f'Failed to look up world pose of link {link_name} for model {model_id}'
+                )
+
+            factory = EntityFactory()
+            factory.name = model_id
+            factory.sdf = sdf
+            factory.pose = pose
+            factory.relative_to = 'world'
+
+            request = SpawnEntity.Request()
+            request.entity_factory = factory
+            response = self._call(self._create_client, request, f'spawn model {model_id}')
+            if response is None or not response.success:
+                raise ModelSpawnError(f'Failed to spawn model {model_id} in Gazebo world')
+
+            # Both detachable joints start attached; detach the redundant one so
+            # the tool is welded to ``link_name`` only.
+            redundant_link = slot_link if link_name == self._tool_mount_link else self._tool_mount_link
+            if not self._apply_joint_action(redundant_link, model_id, attach=False):
+                raise ModelSpawnError(
+                    f'Model {model_id} spawned but detach of {redundant_link} not confirmed'
+                )
+
+            self._attached_link_lookup[model_id] = link_name
+        except Exception as exc:
+            self._logger.error(f'Failed to spawn model {tool.tool_sn}: {exc}')
+            raise ModelSpawnError(
+                f'Failed to spawn model {tool.tool_sn} in Gazebo world: {exc}'
+            ) from exc
+
+    def delete_model(self, model_id: str):
+        try:
+            source_link = self._attached_link_lookup.get(model_id, None)
+            if source_link is not None:
+                self._detach_best_effort(source_link, model_id)
+
+            entity = Entity()
+            entity.name = model_id
+            entity.type = Entity.MODEL
+
+            request = DeleteEntity.Request()
+            request.entity = entity
+            response = self._call(self._remove_client, request, f'remove model {model_id}')
+            if response is None or not response.success:
+                raise ModelDeleteError(f'Failed to remove model {model_id} from Gazebo world')
+
+            self._attached_link_lookup.pop(model_id, None)
+        except Exception as exc:
+            self._logger.error(f'Failed to delete model {model_id}: {exc}')
+            raise ModelDeleteError(
+                f'Failed to delete model {model_id} in Gazebo world: {exc}'
+            ) from exc
+
+    def attach_to_link(self, model_id: str, link_name: str):
+        try:
+            source_link = self._attached_link_lookup.get(model_id, None)
+            if source_link is None:
+                self._logger.error(f'Model {model_id} is not currently attached to any link')
+                raise ModelAttachError(f'Model {model_id} is not currently attached to any link')
+            if source_link == link_name:
+                return
+            if not self._transfer(model_id, source_link, link_name):
+                raise ModelAttachError(f'Failed to attach model {model_id} to link {link_name}')
+
+            self._attached_link_lookup[model_id] = link_name
+        except Exception as exc:
+            self._logger.error(f'Failed to attach model {model_id} to link {link_name}: {exc}')
+            raise ModelAttachError(
+                f'Failed to attach model {model_id} to link {link_name}: {exc}'
+            ) from exc
+
+    

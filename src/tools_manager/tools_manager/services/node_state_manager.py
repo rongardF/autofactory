@@ -5,7 +5,7 @@ class NodeStateManager():
 
     def __init__(self, node: LifecycleNode, node_name: str) -> None:
         self._node = node
-        self._node_name = node_name
+        self.node_name = node_name
 
     def configure_node(self) -> TransitionCallbackReturn:
         """

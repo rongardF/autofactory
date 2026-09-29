@@ -48,8 +48,13 @@ from moveit_msgs.msg import (
 from moveit_msgs.srv import ApplyPlanningScene, GetPlanningScene
 from shape_msgs.msg import Mesh, MeshTriangle
 
-from tools_manager.tools_manager.model.rack_config import RackConfigDTO
+from tools_manager.model.tool_info_dto import ToolInfoDto
 from tools_manager.interface.world_manager import WorldManager
+from tools_manager.exception.world_manager_exception import (
+    ModelAttachError,
+    ModelDeleteError,
+    ModelSpawnError,
+)
 
 
 
@@ -64,7 +69,6 @@ class Moveit2WorldManager(WorldManager):
     def __init__(
         self,
         node: Node,
-        rack_config: RackConfigDTO,
         get_scene_service: str = '/get_planning_scene',
         apply_scene_service: str = '/apply_planning_scene',
         tool_mount_link: str = 'tool_mount_tcp',
@@ -74,7 +78,7 @@ class Moveit2WorldManager(WorldManager):
         """Create the planning-scene service clients.
 
         :param node: Node used to create clients and access the logger/clock.
-        :param rack_config: Rack configuration used to resolve slot frames.
+        :param tools_manager_config: Tools manager configuration used to resolve slot frames.
         :param get_scene_service: ``GetPlanningScene`` service name.
         :param apply_scene_service: ``ApplyPlanningScene`` service name.
         :param tool_mount_link: Link a tool is attached to when mounted.
@@ -87,12 +91,13 @@ class Moveit2WorldManager(WorldManager):
         super().__init__()
 
         self._node = node
-        self._rack_config = rack_config
         self._logger = node.get_logger()
         self._service_timeout_sec = service_timeout_sec
         self._tool_mount_link = tool_mount_link
         self._touch_links = list(touch_links) if touch_links else []
         self._callback_group = MutuallyExclusiveCallbackGroup()
+
+        self._attached_link_lookup = {}
 
         self._get_client = node.create_client(
             GetPlanningScene,
@@ -104,21 +109,6 @@ class Moveit2WorldManager(WorldManager):
             apply_scene_service,
             callback_group=self._callback_group,
         )
-
-    def _get_slot_frame_name(self, tool_sn: str) -> str:
-        """Resolve the tool-rack slot link frame for a tool serial number.
-
-        Finds the ``sim_bootup`` entry matching ``tool_sn`` and builds the slot
-        link frame name from its ``index`` field.
-
-        :param tool_sn: Serial number of the tool (equal to the model ID).
-        :returns: Slot link frame name, e.g. ``slot_1_attached_link``.
-        :raises ValueError: If no matching ``sim_bootup`` entry exists.
-        """
-        for entry in self._rack_config.sim_bootup:
-            if entry.tool_sn == tool_sn:
-                return f'slot_{entry.index}_attached_link'
-        raise ValueError(f'no sim_bootup entry for tool_sn "{tool_sn}"')
 
     def _generate_mesh(self, model_path: str) -> Mesh:
         """Load an STL file into a ``shape_msgs/Mesh``.
@@ -142,108 +132,13 @@ class Moveit2WorldManager(WorldManager):
         ]
         return mesh
 
-    def spawn_model(self, model_id: str, model_path: str) -> bool:
-        """Add a tool model to the planning scene, attached to its rack slot.
+    def _generate_model_path(self, tool: ToolInfoDto) -> str:
+        """Generate the filesystem path to a tool's STL model.
 
-        :param model_id: Unique model ID (equal to the tool serial number).
-        :param model_path: Filesystem path to the STL model.
-        :returns: ``True`` on success, ``False`` otherwise.
+        :param tool: Tool information.
+        :returns: Filesystem path to the STL model.
         """
-        try:
-            mesh = self._generate_mesh(model_path)
-            link_name = self._get_slot_frame_name(model_id)
-            attached = self._build_attached_object(
-                model_id,
-                link_name,
-                CollisionObject.ADD,
-                mesh=mesh,
-            )
-            return self._apply_attached_object(attached, f'spawn model {model_id}')
-        except Exception as exc:
-            self._logger.error(f'Failed to spawn model {model_id}: {exc}')
-            return False
-
-    def delete_model(self, model_id: str) -> bool:
-        """Remove a tool model from the planning scene entirely.
-
-        Detaches the object from its link and then removes it from the world in
-        two separate service calls.
-
-        :param model_id: Unique model ID (equal to the tool serial number).
-        :returns: ``True`` on success, ``False`` otherwise.
-        """
-        try:
-            detach = self._build_attached_object(model_id, '', CollisionObject.REMOVE)
-            if not self._apply_attached_object(detach, f'detach model {model_id}'):
-                return False
-
-            world_object = CollisionObject()
-            world_object.id = model_id
-            world_object.operation = CollisionObject.REMOVE
-            return self._apply_world_object(world_object, f'remove model {model_id}')
-        except Exception as exc:
-            self._logger.error(f'Failed to delete model {model_id}: {exc}')
-            return False
-
-    def attach_to_tool_mount(self, model_id: str) -> bool:
-        """Transfer a tool model from its rack slot to the tool-mount link.
-
-        :param model_id: Unique model ID (equal to the tool serial number).
-        :returns: ``True`` on success, ``False`` otherwise.
-        """
-        try:
-            source_link = self._get_slot_frame_name(model_id)
-            return self._transfer(model_id, source_link, self._tool_mount_link)
-        except Exception as exc:
-            self._logger.error(f'Failed to attach model {model_id} to tool-mount: {exc}')
-            return False
-
-    def attach_to_tool_rack(self, model_id: str) -> bool:
-        """Transfer a tool model from the tool-mount link to its rack slot.
-
-        :param model_id: Unique model ID (equal to the tool serial number).
-        :returns: ``True`` on success, ``False`` otherwise.
-        """
-        try:
-            target_link = self._get_slot_frame_name(model_id)
-            return self._transfer(model_id, self._tool_mount_link, target_link)
-        except Exception as exc:
-            self._logger.error(f'Failed to attach model {model_id} to tool-rack: {exc}')
-            return False
-
-    def allow_collisions(self, model_id: str, allowed: bool) -> bool:
-        """Allow or disallow collisions among the tool, tool-mount, and rack slot.
-
-        Permits the transient interpenetration that occurs while the tool-mount
-        slides into (or out of) a tool sitting on the rack. The three entities —
-        the tool collision object, the tool-mount link, and the tool's rack slot
-        link — are pairwise allowed (or disallowed) in the allowed-collision
-        matrix. Call with ``allowed=True`` before the maneuver and ``False``
-        afterwards to restore normal collision checking.
-
-        :param model_id: Unique model ID (equal to the tool serial number).
-        :param allowed: ``True`` to allow collisions, ``False`` to re-enable checking.
-        :returns: ``True`` on success, ``False`` otherwise.
-        """
-        try:
-            slot_link = self._get_slot_frame_name(model_id)
-            acm = self._get_allowed_collision_matrix()
-            if acm is None:
-                return False
-
-            entities = [model_id, self._tool_mount_link, slot_link]
-            for i in range(len(entities)):
-                for j in range(i + 1, len(entities)):
-                    self._set_acm_pair(acm, entities[i], entities[j], allowed)
-
-            scene = PlanningScene()
-            scene.is_diff = True
-            scene.allowed_collision_matrix = acm
-            state = 'allow' if allowed else 'disallow'
-            return self._apply_scene(scene, f'{state} collisions for model {model_id}')
-        except Exception as exc:
-            self._logger.error(f'Failed to update collisions for model {model_id}: {exc}')
-            return False
+        raise NotImplementedError('subclass must implement _generate_model_path()')
 
     def _transfer(self, model_id: str, source_link: str, target_link: str) -> bool:
         """Detach a model from one link and re-attach it to another.
@@ -421,3 +316,86 @@ class Moveit2WorldManager(WorldManager):
             time.sleep(0.01)
 
         return future.result()
+
+    def spawn_model(self, tool: ToolInfoDto, link_name: str):
+        try:
+            mesh = self._generate_mesh(self._generate_model_path(tool))
+            attached = self._build_attached_object(
+                tool.tool_sn,
+                link_name,
+                CollisionObject.ADD,
+                mesh=mesh,
+            )
+            if not self._apply_attached_object(attached, f'spawn model {tool.tool_sn}'):
+                raise ModelSpawnError(f'Failed to spawn model {tool.tool_sn} in MoveIt2 planning scene')
+
+            self._attached_link_lookup[tool.tool_sn] = link_name
+        except Exception as exc:
+            self._logger.error(f'Failed to spawn model {tool.tool_sn}: {exc}')
+            raise ModelSpawnError(f'Failed to spawn model {tool.tool_sn} in MoveIt2 planning scene: {exc}') from exc
+
+    def delete_model(self, model_id: str):
+        try:
+            detach = self._build_attached_object(model_id, '', CollisionObject.REMOVE)
+            if not self._apply_attached_object(detach, f'detach model {model_id}'):
+                raise ModelDeleteError(f'Failed to delete model {model_id} in MoveIt2 planning scene')
+
+            world_object = CollisionObject()
+            world_object.id = model_id
+            world_object.operation = CollisionObject.REMOVE
+            if not self._apply_world_object(world_object, f'remove model {model_id}'):
+                raise ModelDeleteError(f'Failed to delete model {model_id} in MoveIt2 planning scene')
+
+            self._attached_link_lookup.pop(model_id, None)
+        except Exception as exc:
+            self._logger.error(f'Failed to delete model {model_id}: {exc}')
+            raise ModelDeleteError(f'Failed to delete model {model_id} in MoveIt2 planning scene: {exc}') from exc
+
+    def attach_to_link(self, model_id: str, link_name: str):
+        try:
+            source_link = self._attached_link_lookup.get(model_id, None)
+            if source_link is None:
+                self._logger.error(f'Model {model_id} is not currently attached to any link')
+                raise ModelAttachError(f'Model {model_id} is not currently attached to any link')
+            if source_link == link_name:
+                return
+            if not self._transfer(model_id, source_link, link_name):
+                raise ModelAttachError(f'Failed to attach model {model_id} to link {link_name}')
+
+            self._attached_link_lookup[model_id] = link_name
+        except Exception as exc:
+            self._logger.error(f'Failed to attach model {model_id} to tool-mount: {exc}')
+            raise ModelAttachError(f'Failed to attach model {model_id} to tool-mount: {exc}') from exc
+
+    def allow_collisions(self, model_id: str, allowed: bool, tool_mount_link: str, slot_link: str) -> bool:
+        """Allow or disallow collisions among the tool, tool-mount, and rack slot.
+
+        Permits the transient interpenetration that occurs while the tool-mount
+        slides into (or out of) a tool sitting on the rack. The three entities —
+        the tool collision object, the tool-mount link, and the tool's rack slot
+        link — are pairwise allowed (or disallowed) in the allowed-collision
+        matrix. Call with ``allowed=True`` before the maneuver and ``False``
+        afterwards to restore normal collision checking.
+
+        :param model_id: Unique model ID (equal to the tool serial number).
+        :param allowed: ``True`` to allow collisions, ``False`` to re-enable checking.
+        :returns: ``True`` on success, ``False`` otherwise.
+        """
+        try:
+            acm = self._get_allowed_collision_matrix()
+            if acm is None:
+                return False
+
+            entities = [model_id, tool_mount_link, slot_link]
+            for i in range(len(entities)):
+                for j in range(i + 1, len(entities)):
+                    self._set_acm_pair(acm, entities[i], entities[j], allowed)
+
+            scene = PlanningScene()
+            scene.is_diff = True
+            scene.allowed_collision_matrix = acm
+            state = 'allow' if allowed else 'disallow'
+            return self._apply_scene(scene, f'{state} collisions for model {model_id}')
+        except Exception as exc:
+            self._logger.error(f'Failed to update collisions for model {model_id}: {exc}')
+            return False

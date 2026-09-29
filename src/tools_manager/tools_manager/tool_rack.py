@@ -34,18 +34,18 @@ from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle.node import LifecycleState, TransitionCallbackReturn
 from rclpy.publisher import Publisher
 from rclpy.callback_groups import ReentrantCallbackGroup
-from rclpy.service import Service
+from rclpy.timer import Timer
 
 from tools_manager.msg import Slots
-from tools_manager.srv import FillSlot, FreeSlot
 
-from tools_manager.utils.config_reader import read_tool_rack_config_file
 from tools_manager.model.slots_dto import SlotsDto
-from tools_manager.model.tool_info_dto import ToolInfoDto
 from tools_manager.model.tool_rack_node_config_dto import ToolRackNodeConfigDTO
 from tools_manager.interface.rack_controller import RackController
 from tools_manager.services.hardware_rack_controller import HardwareRackController
 from tools_manager.services.simulated_rack_controller import SimulatedRackController
+
+from tools_manager.utils.config_reader import read_config_file
+
 
 class ToolRack(LifecycleNode):
 
@@ -71,8 +71,8 @@ class ToolRack(LifecycleNode):
             ParameterDescriptor(description='Whether the node is running in simulation mode'),
         )
         self.declare_parameter(
-            'config_file',
-            "tool_rack_config.yaml",
+            'tools_manager_config_file',
+            "tools_manager_config.yaml",
             ParameterDescriptor(description='Path to the tool rack configuration file'),
         )
         self.declare_parameter(
@@ -80,10 +80,14 @@ class ToolRack(LifecycleNode):
             "station",
             ParameterDescriptor(description='Parent frame ID'),
         )
+        self.declare_parameter(
+            'slots_update_rate',
+            10.0,
+            ParameterDescriptor(description='Rate at which to update slots (in Hz)'),
+        )
 
         self._slots_topic: Publisher | None = None
-        self._fill_slot: Service | None = None
-        self._free_slot: Service | None = None
+        self._slots_update_timer: Timer | None = None
 
         self._service_callback_group = ReentrantCallbackGroup()
 
@@ -95,11 +99,12 @@ class ToolRack(LifecycleNode):
 
         # Read and validate constraint parameters
         try:
-            rack_config = read_tool_rack_config_file(self.get_parameter('config_file').get_parameter_value().string_value)
+            config = read_config_file(self.get_parameter('tools_manager_config_file').get_parameter_value().string_value)
             self._config = ToolRackNodeConfigDTO(
-                rack_config=rack_config,
+                slots=config.slots,
                 simulated=self.get_parameter('simulated').get_parameter_value().bool_value,
                 parent_frame_id=self.get_parameter('parent_frame_id').get_parameter_value().string_value,
+                slots_update_rate=self.get_parameter('slots_update_rate').get_parameter_value().double_value,
             )
 
             self._slots_topic = self.create_lifecycle_publisher(
@@ -107,20 +112,13 @@ class ToolRack(LifecycleNode):
                 '~/slots',
                 QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
             )
-            def _callback(slots: SlotsDto) -> None:
-                self.get_logger().info(f"Slot info updated: {slots}")
-                slots_msg = SlotsDto.to_slots_msg(slots)
-                if self._slots_topic is not None:
-                    self._slots_topic.publish(slots_msg)
-                else:
-                    self.get_logger().error("Slots topic publisher is not initialized.")
-
+            
             if self._config.simulated:
-                self._rack_controller = SimulatedRackController(self, self._config, _callback)
+                self._rack_controller = SimulatedRackController(self, self._config)
             else:
-                self._rack_controller = HardwareRackController(self, self._config, _callback)
+                self._rack_controller = HardwareRackController(self, self._config)
         except ValidationError as e:
-            self.get_logger().error(f'Failed to generate tool rack config: {e}')
+            self.get_logger().error(f'Failed to process/generate config: {e}')
             return TransitionCallbackReturn.FAILURE
         except Exception as e:
             self.get_logger().error(f'Unknown error while configuring: {e}')
@@ -142,44 +140,16 @@ class ToolRack(LifecycleNode):
             self.get_logger().error("Slots topic publisher is not initialized.")
             return TransitionCallbackReturn.FAILURE
 
-        # publish bootup rack state if in simulated mode; in real hardware mode
-        # the rack controller will publish once established connection with the hardware
-        if self._config.simulated:
-            self.get_logger().info('Setting up simulated rack controller')
-            if not isinstance(self._rack_controller, SimulatedRackController):
-                self.get_logger().error('Rack controller is not a SimulatedRackController in simulated mode')
-                return TransitionCallbackReturn.FAILURE
+        if self._rack_controller is None:
+            self.get_logger().error("Rack controller is not initialized.")
+            return TransitionCallbackReturn.FAILURE
 
-            self._rack_controller.setup()
+        self._rack_controller.setup()
 
-            slots = self._rack_controller.get_current_slots_dto()
-            slots_msg = SlotsDto.to_slots_msg(slots)
-            self._slots_topic.publish(slots_msg)
-
-            # setup services to mount and unmount tools in simulation mode
-            self._fill_slot = self.create_service(
-                FillSlot,
-                '~/fill_slot',
-                self._fill_slot_callback,
-                callback_group=self._service_callback_group
-            )
-            self._free_slot = self.create_service(
-                FreeSlot,
-                '~/free_slot',
-                self._free_slot_callback,
-                callback_group=self._service_callback_group
-            )
-        else:
-            self.get_logger().info('Setting up hardware rack controller')
-            if not isinstance(self._rack_controller, HardwareRackController):
-                self.get_logger().error('Rack controller is not a HardwareRackController in hardware mode')
-                return TransitionCallbackReturn.FAILURE
-
-            try:
-                self._rack_controller.setup()
-            except Exception as e:
-                self.get_logger().error(f'Error during hardware rack controller setup: {e}')
-                return TransitionCallbackReturn.FAILURE
+        self._slots_update_timer = self.create_timer(
+            1.0 / self._config.slots_update_rate,
+            self._update_slots
+        )
 
         return TransitionCallbackReturn.SUCCESS
 
@@ -196,13 +166,9 @@ class ToolRack(LifecycleNode):
                 return TransitionCallbackReturn.FAILURE
 
         # remove the simulation only services if they were created
-        if self._config is not None and self._config.simulated:
-            if self._fill_slot is not None:
-                self.destroy_service(self._fill_slot)
-                self._fill_slot = None
-            if self._free_slot is not None:
-                self.destroy_service(self._free_slot)
-                self._free_slot = None
+        if self._slots_update_timer is not None:
+            self.destroy_timer(self._slots_update_timer)
+            self._slots_update_timer = None
 
         return TransitionCallbackReturn.SUCCESS
 
@@ -226,49 +192,19 @@ class ToolRack(LifecycleNode):
     # endregion: lifecycle callbacks
 
     # region: callbacks
-    def _fill_slot_callback(self, request: FillSlot.Request, response: FillSlot.Response) -> FillSlot.Response:
+    def _update_slots(self) -> None:
         if self._rack_controller is None:
             self.get_logger().error("Rack controller is not initialized.")
-            response.success = False
-            response.err_message = "Rack controller is not initialized."
-            return response
+            # TODO: node should transistion into error state
+            return
+        if self._slots_topic is None:
+            self.get_logger().error("Slots topic publisher is not initialized.")
+            # TODO: node should transistion into error state
+            return
 
-        try:
-            if not isinstance(self._rack_controller, SimulatedRackController):
-                self.get_logger().error("FillSlot service is only available in simulated mode.")
-                response.success = False
-                response.err_message = "FillSlot service is only available in simulated mode."
-                return response
-            self._rack_controller.update_slot_info(request.tool.slot_id, ToolInfoDto.from_msg(request.tool))
-            response.success = True
-        except Exception as e:
-            self.get_logger().error(f"Error filling slot: {e}")
-            response.success = False
-            response.err_message = str(e)
-
-        return response
-
-    def _free_slot_callback(self, request: FreeSlot.Request, response: FreeSlot.Response) -> FreeSlot.Response:
-        if self._rack_controller is None:
-            self.get_logger().error("Rack controller is not initialized.")
-            response.success = False
-            response.err_message = "Rack controller is not initialized."
-            return response
-
-        try:
-            if not isinstance(self._rack_controller, SimulatedRackController):
-                self.get_logger().error("FreeSlot service is only available in simulated mode.")
-                response.success = False
-                response.err_message = "FreeSlot service is only available in simulated mode."
-                return response
-            self._rack_controller.update_slot_info(request.slot_id, None)
-            response.success = True
-        except Exception as e:
-            self.get_logger().error(f"Error freeing slot: {e}")
-            response.success = False
-            response.err_message = str(e)
-
-        return response
+        slots = self._rack_controller.get_slots_data()
+        slots_msg = SlotsDto.to_slots_msg(slots)
+        self._slots_topic.publish(slots_msg)
     # endregion: callbacks
 
 

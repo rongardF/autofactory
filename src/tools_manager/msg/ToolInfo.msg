@@ -1,4 +1,4 @@
-string slot_id
+string index
 string tool_sn
 string tool_type
 string tool_part_number

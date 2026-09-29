@@ -30,21 +30,25 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from tools_manager.model.rack_config import RackConfigDTO
+from tools_manager.model.tools_manager_config import ToolSlotDTO
 
 
 class ToolRackNodeConfigDTO(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    rack_config: RackConfigDTO = Field(
+    slots: list[ToolSlotDTO] = Field(
         description='Tool rack configuration.',
+        default_factory=list,
     )
     parent_frame_id: str = Field(
         default="station",
         description='Parent frame ID.',
     )
-    
+    slots_update_rate: float = Field(
+        default=10.0,
+        description='Rate at which to update slots (in Hz).',
+    )
     simulated: bool = Field(
         default=True,
         description='Selects Gazebo spawn (true) vs UR payload path (false).',

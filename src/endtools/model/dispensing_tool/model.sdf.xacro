@@ -7,6 +7,7 @@
         station_model_name:=station
         tool_mount_link:=tool_mount_tcp
         tool_rack_link:=slot1_attached_link
+        tag_data:=6162633132330020202020202020202044495350454E53494E470020202020204B5243313233002020202020202020205231410020202020202020202020202053584E3132330020202020202020202052314100202020202020202020202020
       ">
 
     <model name="${model_name}">
@@ -71,6 +72,12 @@
           <attach_topic>/${tool_rack_link}/${model_name}/attach</attach_topic>
           <detach_topic>/${tool_rack_link}/${model_name}/detach</detach_topic>
           <output_topic>/${tool_rack_link}/${model_name}/state</output_topic>
+      </plugin>
+
+      <plugin filename="rfid_sim_systems"
+              name="autofactory::rfid::RfidTag">
+        <id>${model_name}</id>
+        <data encoding="hex">${tag_data}</data>
       </plugin>
     </model>
 
