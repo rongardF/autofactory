@@ -86,6 +86,34 @@ class ToolInfoDto(BaseModel):
             material_part_revision=material_rev,
         )
 
+    def to_tag_data(self) -> bytes:
+        """Convert the tool information to a hex-encoded RFID tag payload.
+
+        The payload is a hex string whose decoded form is six fixed-width
+        16-byte fields (null/space padded), in order: 
+            serial number
+            tool_type
+            tool_part_number
+            tool_part_revision
+            material_part_number
+            material_part_revision
+
+        :returns: The hex-encoded tag payload bytes.
+        :rtype: bytes
+        """
+        field_size = 16
+        fields = [
+            self.tool_sn,
+            self.tool_type.value,
+            self.tool_part_number,
+            self.tool_part_revision,
+            self.material_part_number,
+            self.material_part_revision,
+        ]
+        padded_fields = [f.ljust(field_size, '\x00') for f in fields]
+        concatenated = ''.join(padded_fields)
+        return concatenated.encode().hex().encode()
+
     @property
     def tool_lifted_frame(self) -> str:
         """Get the name of the frame for the tool lifted pose."""

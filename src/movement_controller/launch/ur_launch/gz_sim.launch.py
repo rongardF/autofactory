@@ -63,6 +63,7 @@ def launch_setup(context, *args, **kwargs):
     initial_joint_controller = LaunchConfiguration("initial_joint_controller")
     gazebo_gui = LaunchConfiguration("gazebo_gui")
     world_file = LaunchConfiguration("world_file")
+    station_model_name = LaunchConfiguration("station_model_name")
 
     # Prepend the launch-provided resource path to any existing
     # GZ_SIM_RESOURCE_PATH (e.g. entries added by package ament environment
@@ -153,7 +154,7 @@ def launch_setup(context, *args, **kwargs):
             "-string",
             robot_description_content,
             "-name",
-            "ur",
+            station_model_name,
             "-allow_renaming",
             "true",
         ],
@@ -306,6 +307,20 @@ def generate_launch_description():
             "world_file",
             default_value="/workspaces/autofactory/world/default.world",
             description="Gazebo world file (absolute path or filename from the gazebosim worlds collection) containing a custom world.",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "station_model_name",
+            default_value="station",
+            description="Name of the station model in Gazebo.",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "world_name",
+            default_value="default",
+            description="Name of the Gazebo world to load.",
         )
     )
 

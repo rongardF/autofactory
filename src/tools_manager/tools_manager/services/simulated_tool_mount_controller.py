@@ -4,16 +4,13 @@ from rclpy.lifecycle import LifecycleNode
 from rclpy.subscription import Subscription
 from ros_gz_interfaces.msg import Dataframe
 
-from tools_manager.tools_manager.interface.tool_mount_controller import ToolMountController
-
-from tools_manager.model.tool_mount_node_config_dto import ToolMountNodeConfigDTO
-from tools_manager.tools_manager.model.tool_info_dto import ToolInfoDto
+from tools_manager.interface.tool_mount_controller import ToolMountController
+from tools_manager.model.tool_info_dto import ToolInfoDto
 
 
 class SimulatedToolMountController(ToolMountController):
-    def __init__(self, node: LifecycleNode, config: ToolMountNodeConfigDTO) -> None:
+    def __init__(self, node: LifecycleNode) -> None:
         self._node = node
-        self._config = config
 
         self._mounted_info: ToolInfoDto|None = None
         self._mounted_info_lock = RLock()
@@ -56,4 +53,4 @@ class SimulatedToolMountController(ToolMountController):
             return self._mounted_info is not None
 
     def lock_closed(self, closed: bool) -> bool:
-        pass # No-op for simulated tool mount, as locking is not simulated
+        return True

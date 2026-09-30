@@ -33,6 +33,8 @@
         </inertial>
     </link>
 
+    <disable_collisions link1="tool_mount_link" link2="${parent}" reason="Adjacent" />
+
     <joint name="tool_mount_joint" type="fixed">
         <parent link="${parent}"/>
         <child link="tool_mount_link"/>

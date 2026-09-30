@@ -42,8 +42,6 @@ def generate_launch_description():
     tcp = LaunchConfiguration("tcp", default="[0.0837, 0.0, -0.267, 1.570797, 0.0, 1.570797]")
     mounted = LaunchConfiguration("mounted", default="false")
     flow_rate = LaunchConfiguration("flow_rate", default="1.0")
-    tool_rack_link = LaunchConfiguration("tool_rack_link")
-    tool_mount_link = LaunchConfiguration("tool_mount_link", default="tool_mount_tcp")
 
     declared_arguments = [
         DeclareLaunchArgument("simulated", default_value="true", description="Whether the tool is simulated."),

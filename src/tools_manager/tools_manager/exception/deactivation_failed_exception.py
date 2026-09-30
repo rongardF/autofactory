@@ -1,4 +1,4 @@
-# Copyright (c) 2026, Endtools Contributors
+# Copyright (c) 2026, Tools Manager Contributors
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -24,28 +24,8 @@
 # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
-"""ToolRackNodeConfigDTO — Pydantic v2 DTO for tool rack node parameters."""
-
-from __future__ import annotations
-
-from pydantic import BaseModel, ConfigDict, Field
+"""Exceptions raised internally to signal deactivation failures."""
 
 
-class ToolMountNodeConfigDTO(BaseModel):
-
-    model_config = ConfigDict(frozen=True)
-
-
-    parent_frame_id: str = Field(
-        default="station",
-        description='Parent frame ID.',
-    )
-    
-    simulated: bool = Field(
-        default=True,
-        description='Selects Gazebo spawn (true) vs UR payload path (false).',
-    )
-    mounted_publish_rate: float = Field(
-        default=10.0,
-        description='Publish rate for the mounted tool information.',
-    )
+class DeactivationFailedException(Exception):
+    """Raised when a deactivation fails."""

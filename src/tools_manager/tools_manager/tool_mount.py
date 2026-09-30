@@ -40,12 +40,15 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from tools_manager.msg import ToolInfo
 from std_srvs.srv import SetBool
 
+from tools_manager.exception.deactivation_failed_exception import DeactivationFailedException
+from tools_manager.exception.cleanup_failed_exception import CleanupFailedException
 from tools_manager.exception.tool_mount_exception import ToolMountControllerError
-from tools_manager.tools_manager.model.tool_mount_node_config_dto import ToolMountNodeConfigDTO
-from tools_manager.tools_manager.model.tool_info_dto import ToolInfoDto
+from tools_manager.model.tool_mount_node_config_dto import ToolMountNodeConfigDTO
+from tools_manager.model.tool_info_dto import ToolInfoDto
 from tools_manager.interface.tool_mount_controller import ToolMountController
-from tools_manager.tools_manager.services.simulated_tool_mount_controller import SimulatedToolMountController
-from tools_manager.tools_manager.services.hardware_tool_mount_controller import HardwareToolMountController
+from tools_manager.services.simulated_tool_mount_controller import SimulatedToolMountController
+from tools_manager.services.hardware_tool_mount_controller import HardwareToolMountController
+
 
 class ToolMount(LifecycleNode):
 
@@ -110,9 +113,9 @@ class ToolMount(LifecycleNode):
             )
 
             if self._config.simulated:
-                self._tool_mount_controller = SimulatedToolMountController(self, self._config)
+                self._tool_mount_controller = SimulatedToolMountController(self)
             else:
-                self._tool_mount_controller = HardwareToolMountController(self, self._config)
+                self._tool_mount_controller = HardwareToolMountController(self)
 
             self._tool_mounted_publisher = self.create_lifecycle_publisher(
                 ToolInfo,
@@ -169,7 +172,7 @@ class ToolMount(LifecycleNode):
         self._lock_service = self.create_service(
             SetBool,
             'lock',
-            self._lock_callback,  # FIXME: check typing annotation on callback
+            self._lock_callback,
         )
 
     def on_deactivate(self, state: LifecycleState) -> TransitionCallbackReturn:
@@ -189,12 +192,11 @@ class ToolMount(LifecycleNode):
             self.destroy_timer(self._mounted_check_timer)
             self._mounted_check_timer = None
 
-
     def on_cleanup(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info(f'Cleaning up from state: {state.label}')
         if super().on_cleanup(state) != TransitionCallbackReturn.SUCCESS:
             self.get_logger().error('Failed to cleanup base lifecycle node.')
-            return TransitionCallbackReturn.FAILURE
+            raise CleanupFailedException('Failed to cleanup base lifecycle node.')
 
         if self._tool_mounted_publisher is not None:
             self.destroy_publisher(self._tool_mounted_publisher)
@@ -210,13 +212,24 @@ class ToolMount(LifecycleNode):
     # endregion: lifecycle callbacks
 
     # region: callbacks
-    def _lock_callback(self, msg: SetBool.Request) -> SetBool.Response:
-        self.get_logger().info(f'Received lock update: {msg}')
+    def _lock_callback(self, request: SetBool.Request, response: SetBool.Response) -> SetBool.Response:
+        self.get_logger().info(f'Received lock update: {request}')
+        
         if self._tool_mount_controller is None:
             self.get_logger().error('Tool mount controller is not initialized.')
-            return SetBool.Response(success=False, message="Tool mount controller is not initialized.")
-        self._tool_mount_controller.lock_closed(msg.data)
-        return SetBool.Response(success=True, message="Lock update processed successfully.")
+            response.success = False
+            response.message = "Tool mount controller is not initialized."
+            return response
+        
+        if not self._tool_mount_controller.lock_closed(request.data):
+            self.get_logger().error('Failed to close the lock.')
+            response.success = False
+            response.message = "Failed to close the lock."
+            return response
+        
+        response.success = True
+        response.message = "Lock update processed successfully."
+        return response
 
     def _check_mounted_tool(self) -> None:
         if self._tool_mount_controller is None or self._tool_mounted_publisher is None:
@@ -237,7 +250,7 @@ def main(args=None) -> None:
     """Entry point for the ``tool_mount`` executable.
 
     Initialises rclpy, creates a :class:`ToolMount` node, and spins
-    it with a :class:`~rclpy.executors.MultiThreadedExecutor` (5 threads) to
+    it with a :class:`~rclpy.executors.MultiThreadedExecutor` (3 threads) to
     allow concurrent goal, feedback, and cancel callbacks.  Shuts down cleanly
     on exit or keyboard interrupt.
 

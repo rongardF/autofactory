@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator, ValidationError
+from pydantic import BaseModel, Field, model_validator
 
 from tools_manager.utils.hex_to_string import hex_to_string
 from tools_manager.model.tool_metadata_dto import ToolMetadataDto
@@ -16,7 +16,7 @@ class ToolSlotDTO(BaseModel):
     metadata: ToolMetadataDto|None = Field(description='Metadata for the tool, used to configure the tool node.', default=None)
     parameters: dict[str, str|float|bool|list]|None = Field(
         description='Parameters for the tool, used to configure the tool node.',
-        default_factory=dict,
+        default=None
     )
 
     def __eq__(self, value: object) -> bool:
@@ -25,6 +25,7 @@ class ToolSlotDTO(BaseModel):
             and self.index == value.index
             and self.tool_sn == value.tool_sn
         )
+
 
     @model_validator(mode='before')
     @classmethod
@@ -42,7 +43,7 @@ class ToolSlotDTO(BaseModel):
             return data
 
         if not isinstance(tools_parameters, dict):
-            raise ValidationError(
+            raise ValueError(
                 f'tools_parameters has invalid type {type(tools_parameters).__name__}; must be dict',
             )
 
@@ -51,16 +52,34 @@ class ToolSlotDTO(BaseModel):
             if isinstance(value, list):
                 for item_index, item in enumerate(value):
                     if not isinstance(item, allowed_scalar_types):
-                        raise ValidationError(
+                        raise ValueError(
                             f'parameters[{key!r}][{item_index}] has '
                             f'invalid type {type(item).__name__}; list items must be '
                             'int, float, str or bool',
                         )
             elif not isinstance(value, allowed_scalar_types):
-                raise ValidationError(
+                raise ValueError(
                     f'parameters[{key!r}] has invalid type '
                     f'{type(value).__name__}; must be str, float, int, bool or list',
                 )
+        return data
+
+    # NOTE: this validator has to be below the validator above (_valid_tools_parameters_value_types)
+    # to be run first, do not move it!
+    @model_validator(mode='before')
+    @classmethod
+    def _clear_fields_when_no_tool(cls, data: Any) -> Any:
+        """Force ``parameters`` and ``metadata`` to ``None`` when ``tool_sn`` is unset.
+
+        A slot without an expected tool serial number must not carry tool
+        configuration, so any provided ``parameters`` or ``metadata`` are
+        cleared before model initialization.
+        """
+        if not isinstance(data, dict):
+            return data
+        if data.get('tool_sn') is None:
+            data['parameters'] = None
+            data['metadata'] = None
         return data
 
 
@@ -164,6 +183,18 @@ class ToolsManagerConfigDTO(BaseModel):
         for entry in self.slots:
             if entry.tool_sn == tool_sn:
                 return entry.metadata
+
+        return None
+
+    def get_simulated_tag_data(self, tool_sn: str) -> bytes|None:
+        """Get the simulated RFID tag data for a given tool serial number.
+
+        :param tool_sn: Serial number of the tool.
+        :returns: The simulated tag data for the tool, or ``None`` if no tag data is defined.
+        """
+        for entry in self.simulation_setup.tool_rack:
+            if (serial := self._serial_from_tag_data(entry.tag_data)) == tool_sn:
+                return entry.tag_data
 
         return None
 

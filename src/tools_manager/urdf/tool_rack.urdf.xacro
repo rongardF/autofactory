@@ -116,6 +116,8 @@
         </inertial>
     </link>
 
+    <disable_collisions link1="tool_rack_link" link2="${parent}" reason="Adjacent" />
+
     <joint name="tool_rack_joint" type="fixed">
         <parent link="${parent}"/>
         <child link="tool_rack_link"/>

@@ -1,4 +1,4 @@
-string index
+int32 index
 string tool_sn
 string tool_type
 string tool_part_number

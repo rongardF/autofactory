@@ -152,7 +152,7 @@ class GazeboWorldManager(WorldManager):
         return self._apply_joint_action(source_link, model_id, attach=False)
 
     def _generate_sdf_content(
-        self, model_path: str, model_name: str, tool_rack_link: str
+        self, model_path: str, model_name: str, tool_rack_link: str, tag_data: str = ''
     ) -> str:
         """Expand a XACRO description into an SDF string via the xacro API.
 
@@ -171,6 +171,7 @@ class GazeboWorldManager(WorldManager):
                 'station_model_name': self._station_model_name,
                 'tool_mount_link': self._tool_mount_link,
                 'tool_rack_link': tool_rack_link,
+                "tag_data": tag_data,
             },
         )
         return document.toxml()  # type: ignore
@@ -313,7 +314,8 @@ class GazeboWorldManager(WorldManager):
             model_id = tool.tool_sn
             model_path = self._generate_model_path(tool)
             slot_link = tool.tool_attached_frame
-            sdf = self._generate_sdf_content(model_path, model_id, slot_link)
+            tag_data = tool.to_tag_data().decode()  # Convert bytes to string for XACRO
+            sdf = self._generate_sdf_content(model_path, model_id, slot_link, tag_data)
 
             pose = self._lookup_pose_in_world(link_name)
             if pose is None:

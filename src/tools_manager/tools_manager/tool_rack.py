@@ -38,6 +38,8 @@ from rclpy.timer import Timer
 
 from tools_manager.msg import Slots
 
+from tools_manager.exception.deactivation_failed_exception import DeactivationFailedException
+from tools_manager.exception.cleanup_failed_exception import CleanupFailedException
 from tools_manager.model.slots_dto import SlotsDto
 from tools_manager.model.tool_rack_node_config_dto import ToolRackNodeConfigDTO
 from tools_manager.interface.rack_controller import RackController
@@ -156,14 +158,11 @@ class ToolRack(LifecycleNode):
     def on_deactivate(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info(f'Deactivating from state: {state.label}')
         if super().on_deactivate(state) != TransitionCallbackReturn.SUCCESS:
-            return TransitionCallbackReturn.FAILURE
+            self.get_logger().error('Failed to deactivate node: super().on_deactivate() returned FAILURE')
+            raise DeactivationFailedException('Failed to deactivate node: super().on_deactivate() returned FAILURE')
 
         if self._rack_controller is not None:
-            try:
-                self._rack_controller.teardown()
-            except Exception as e:
-                self.get_logger().error(f'Error during rack controller teardown: {e}')
-                return TransitionCallbackReturn.FAILURE
+            self._rack_controller.teardown()
 
         # remove the simulation only services if they were created
         if self._slots_update_timer is not None:
@@ -175,7 +174,8 @@ class ToolRack(LifecycleNode):
     def on_cleanup(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info(f'Cleaning up from state: {state.label}')
         if super().on_cleanup(state) != TransitionCallbackReturn.SUCCESS:
-            return TransitionCallbackReturn.FAILURE
+            self.get_logger().error('Failed to cleanup node: super().on_cleanup() returned FAILURE')
+            raise CleanupFailedException('Failed to cleanup node: super().on_cleanup() returned FAILURE')
         
         self._config = None
         self._rack_controller = None
@@ -212,7 +212,7 @@ def main(args=None) -> None:
     """Entry point for the ``tool_rack`` executable.
 
     Initialises rclpy, creates a :class:`ToolRack` node, and spins
-    it with a :class:`~rclpy.executors.MultiThreadedExecutor` (5 threads) to
+    it with a :class:`~rclpy.executors.MultiThreadedExecutor` (3 threads) to
     allow concurrent goal, feedback, and cancel callbacks.  Shuts down cleanly
     on exit or keyboard interrupt.
 
@@ -221,7 +221,7 @@ def main(args=None) -> None:
     """
     init(args=args)
     node = ToolRack()
-    executor = MultiThreadedExecutor(num_threads=5)
+    executor = MultiThreadedExecutor(num_threads=3)
     executor.add_node(node)
     try:
         executor.spin()

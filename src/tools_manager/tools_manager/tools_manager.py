@@ -28,47 +28,47 @@
 import os
 from threading import RLock
 from uuid import uuid4
-from time import sleep, monotonic
 
 from rclpy import init, shutdown
 from pydantic import ValidationError
 from ament_index_python.packages import get_package_share_directory, PackageNotFoundError
 from action_msgs.msg import GoalStatus
 from rcl_interfaces.msg import ParameterDescriptor
+from rclpy.duration import Duration
 from rclpy.parameter import ParameterValue, ParameterType
 from rclpy.qos import QoSProfile, DurabilityPolicy
 from rclpy.action import ActionClient
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle.node import LifecycleState, TransitionCallbackReturn
-from rclpy.publisher import Publisher
 from rclpy.subscription import Subscription
-from rclpy.service import Service
 from rclpy.action import ActionServer
+from rclpy.action.server import ServerGoalHandle
 from rclpy.client import Client as ServiceClient
 from rclpy.callback_groups import ReentrantCallbackGroup
 
 from geometry_msgs.msg import PoseStamped, Pose
-from std_msgs.msg import String
 from std_srvs.srv import SetBool
 
 from movement_controller.action import ExecuteTrajectory
 from movement_controller.msg import TrajectoryPath
 from tools_manager.msg import Slots, ToolInfo
-from tools_manager.srv import MountTool, UnmountTool
+from tools_manager.action import MountTool, UnmountTool
 
 from tools_manager.utils.config_reader import read_config_file
 from tools_manager.exception.activation_failed_exception import ActivationFailedException
+from tools_manager.exception.deactivation_failed_exception import DeactivationFailedException
+from tools_manager.exception.cleanup_failed_exception import CleanupFailedException
 from tools_manager.exception.world_manager_exception import ModelAttachError
-from tools_manager.tools_manager.model.slots_dto import SlotsDto
-from tools_manager.tools_manager.model.slot_frames_dto import SlotFramesDto
-from tools_manager.tools_manager.model.tool_info_dto import ToolInfoDto
-from tools_manager.tools_manager.model.endtool_launch_dto import EndtoolLaunchDto
+from tools_manager.model.slots_dto import SlotsDto
+from tools_manager.model.slot_frames_dto import SlotFramesDto
+from tools_manager.model.tool_info_dto import ToolInfoDto
+from tools_manager.model.endtool_launch_dto import EndtoolLaunchDto
 from tools_manager.model.tools_manager_node_config import ToolsManagerNodeConfigDTO
-from tools_manager.tools_manager.services.gazebo_world_manager import GazeboWorldManager
-from tools_manager.tools_manager.services.moveit2_world_manager import Moveit2WorldManager
-from tools_manager.tools_manager.services.node_state_manager import NodeStateManager
-from tools_manager.tools_manager.services.ros2_launcher import Ros2Launcher
+from tools_manager.services.gazebo_world_manager import GazeboWorldManager
+from tools_manager.services.moveit2_world_manager import Moveit2WorldManager
+from tools_manager.services.node_state_manager import NodeStateManager
+from tools_manager.services.ros2_launcher import Ros2Launcher
 
 class ToolsManager(LifecycleNode):
 
@@ -250,7 +250,7 @@ class ToolsManager(LifecycleNode):
             return TransitionCallbackReturn.FAILURE
         
         try:
-            # configure and activate tool rack
+            # configure and activate tool rack and tool mount
             for manager in (self._tool_rack_manager, self._tool_mount_manager):
                 if manager.configure_node() != TransitionCallbackReturn.SUCCESS:
                     self.get_logger().error(f'Failed to configure node [{manager.node_name}]')
@@ -279,11 +279,9 @@ class ToolsManager(LifecycleNode):
             # get info of tools installed on rack and mounted on tool mount
             if self._config.simulated:
                 self.get_logger().info('Running in simulation mode, using config to get tools installed and mounted.')
-                tools_installed: dict[int, ToolInfoDto|None] = {}
+                tools_installed: dict[int, ToolInfoDto] = {}
                 for entry in self._config.tools_manager_config.simulation_setup.tool_rack:
-                    if entry.tag_data is None:
-                        tools_installed[entry.index] = None
-                    else:
+                    if entry.tag_data is not None:
                         tools_installed[entry.index] = ToolInfoDto.from_tag_data(entry.index, entry.tag_data)
                 
                 if self._config.tools_manager_config.simulation_setup.tool_mount is not None:
@@ -299,7 +297,7 @@ class ToolsManager(LifecycleNode):
                     slots = self.tool_rack_slots
                     tool_mounted = self.tool_mounted
                     if slots is None or tool_mounted is None:
-                        sleep(1.0) # TODO: use ROS2 sleep instead?
+                        self.get_clock().sleep_for(Duration(seconds=1.0))
                         continue
                     break
                 else:
@@ -325,7 +323,9 @@ class ToolsManager(LifecycleNode):
                     )
 
                 launch_ref = self._ros2_launcher.launch(
-                    launch_file=tool_metadata.launch_file,
+                    launch_file=self._get_full_launch_file_path(
+                        tool_metadata.launch_file
+                    ),
                     launch_arguments={
                         **tool_parameters,
                         "simulated": self._config.simulated,
@@ -467,22 +467,41 @@ class ToolsManager(LifecycleNode):
     def on_deactivate(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info(f'Deactivating from state: {state.label}')
         if super().on_deactivate(state) != TransitionCallbackReturn.SUCCESS:
-            return TransitionCallbackReturn.FAILURE
-        # FIXME: review this method
-        if self._tool_mount_controller is not None:
-            self._tool_mount_controller.teardown()
+            self.get_logger().error('Failed to deactivate node: super().on_deactivate() returned FAILURE')
+            raise DeactivationFailedException('Failed to deactivate node: super().on_deactivate() returned FAILURE')
 
-        if self._tool_rack_manager is not None:
-            self._tool_rack_manager.deactivate_node()
-            self._tool_rack_manager.unconfigure_node()
+        for manager in (self._tool_rack_manager, self._tool_mount_manager):
+            if manager is not None:
+                if manager.deactivate_node() != TransitionCallbackReturn.SUCCESS:
+                    self.get_logger().error(f'Failed to deactivate node [{manager.node_name}]')
+                    raise DeactivationFailedException(f'Failed to deactivate node [{manager.node_name}]')
+                if manager.unconfigure_node() != TransitionCallbackReturn.SUCCESS:
+                    self.get_logger().error(f'Failed to unconfigure node: {manager.node_name}')
+                    raise DeactivationFailedException(f'Failed to unconfigure node: {manager.node_name}')
 
         if self._slots_subscription is not None:
             self.destroy_subscription(self._slots_subscription)
             self._slots_subscription = None
 
+        if self._tool_mounted_subscription is not None:
+            self.destroy_subscription(self._tool_mounted_subscription)
+            self._tool_mounted_subscription = None
+
         if self._movement_controller_action_client is not None:
             self._movement_controller_action_client.destroy()
             self._movement_controller_action_client = None
+
+        if self._mount_tool_action is not None:
+            self._mount_tool_action.destroy()
+            self._mount_tool_action = None
+
+        if self._unmount_tool_action is not None:
+            self._unmount_tool_action.destroy()
+            self._unmount_tool_action = None
+
+        if self._tool_mount_lock is not None:
+            self._tool_mount_lock.destroy()
+            self._tool_mount_lock = None
 
         for tool_sn, endtool_launch in self._endtools.items():
             endtool_launch.endtool_node_manager.deactivate_node()
@@ -496,21 +515,21 @@ class ToolsManager(LifecycleNode):
         if self._ros2_launcher is not None:
             self._ros2_launcher.shutdown_all()
 
+        self._endtools = {}
+
+        return TransitionCallbackReturn.SUCCESS
 
     def on_cleanup(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info(f'Cleaning up from state: {state.label}')
         if super().on_cleanup(state) != TransitionCallbackReturn.SUCCESS:
-            return TransitionCallbackReturn.FAILURE
-        # FIXME: review this method
-        if self._tool_mounted_publisher is not None:
-            self.destroy_publisher(self._tool_mounted_publisher)
-            self._tool_mounted_publisher = None
+            self.get_logger().error('Failed to cleanup node: super().on_cleanup() returned FAILURE')
+            raise CleanupFailedException('Failed to cleanup node: super().on_cleanup() returned FAILURE')
 
-        self._tool_rack_manager = None
-        self._tool_mount_controller = None
         self._planner_service = None
         self._gazebo_service = None
         self._ros2_launcher = None
+        self._tool_mount_manager = None
+        self._tool_rack_manager = None
         self._config = None
     
     def on_error(self, state: LifecycleState) -> TransitionCallbackReturn:
@@ -532,10 +551,14 @@ class ToolsManager(LifecycleNode):
         self.get_logger().info(f'Cancel request received for goal: {goal_handle}')
         return True  # TODO: implement cancel logic
 
-    def _mount_tool_callback(self, request: MountTool.Request, response: MountTool.Response) -> MountTool.Response:
+    def _mount_tool_callback(self, goal_handle: ServerGoalHandle) -> MountTool.Result:
+        request: MountTool.Goal = goal_handle.request
+        response = MountTool.Result()
+
         if self._tool_action_lock.acquire(blocking=False) is False:
             response.success = False
             response.message = "Another mount/unmount operation is in progress. Please try again later."
+            goal_handle.abort()
             return response
         
         with self._tool_action_lock:
@@ -546,11 +569,13 @@ class ToolsManager(LifecycleNode):
             if tool_mounted is not None:
                 response.success = False
                 response.message = "A tool is already mounted. Please unmount it first."
+                goal_handle.abort()
                 return response
 
             if tool_rack_slots is None:
                 response.success = False
                 response.message = "Tool rack slots info is not available. Cannot perform mount operation."
+                goal_handle.abort()
                 return response
 
             # sanity check
@@ -563,6 +588,7 @@ class ToolsManager(LifecycleNode):
             ):
                 response.success = False
                 response.message = "Sanity check failed (something is un-initialized). Cannot perform mount operation."
+                goal_handle.abort()
                 return response
 
             # TODO: consider how failure should be handled - do we roll back or unconfigure or error?
@@ -572,6 +598,7 @@ class ToolsManager(LifecycleNode):
             if tool_info is None:
                 response.success = False
                 response.message = f"Tool with serial number '{tool_sn}' is not on the rack."
+                goal_handle.abort()
                 return response
 
             # get the parent frames for moving with 'tool_mount_tcp' frame/link; all frames are
@@ -581,6 +608,7 @@ class ToolsManager(LifecycleNode):
             if result is None:
                 response.success = False
                 response.message = f"Tool with serial number '{tool_sn}' is not on the rack."
+                goal_handle.abort()
                 return response
             frames, unity_pose = result
 
@@ -598,24 +626,28 @@ class ToolsManager(LifecycleNode):
             if not self._call_action(self._movement_controller_action_client, ExecuteTrajectory.Goal(paths=[path])):
                 response.success = False
                 response.message = "Failed to move to tool_slide_in pose."
+                goal_handle.abort()
                 return response
 
             # allow collisions between tool-mount, endtool and tool-rack for the duration of the mount operation
             if not self._planner_service.allow_collisions(model_id=tool_sn, allowed=True, tool_mount_link='tool_mount_tcp', slot_link='tool_rack'):   
                 response.success = False
                 response.message = "Failed to allow collisions between tool-mount, endtool and tool-rack."
+                goal_handle.abort()
                 return response
 
             # operate tool-mount quick release to open the lock for mounting the tool
             if self._tool_mount_lock.wait_for_service(timeout_sec=5.0) is False:
                 response.success = False
                 response.message = "Failed to connect to lock service to unlock tool."
+                goal_handle.abort()
                 return response
             else:
                 lock_request = SetBool.Request(data=False)  # False means unlock, True means lock
                 if self._call_service(self._tool_mount_lock, lock_request) is False:
                     response.success = False
                     response.message = "Failed to unlock tool-mount quick release."
+                    goal_handle.abort()
                     return response
 
             # move to tool_attached in pose with 'tool_mount_tcp' 
@@ -631,18 +663,21 @@ class ToolsManager(LifecycleNode):
             if not self._call_action(self._movement_controller_action_client, ExecuteTrajectory.Goal(paths=[path])):
                 response.success = False
                 response.message = "Failed to move to tool_attached pose."
+                goal_handle.abort()
                 return response
 
             # operate tool-mount quick release to mount the tool
             if self._tool_mount_lock.wait_for_service(timeout_sec=5.0) is False:
                 response.success = False
                 response.message = "Failed to connect to lock service to lock tool."
+                goal_handle.abort()
                 return response
             else:
                 lock_request = SetBool.Request(data=True)  # False means unlock, True means lock
                 if self._call_service(self._tool_mount_lock, lock_request) is False:
                     response.success = False
                     response.message = "Failed to lock tool-mount quick release."
+                    goal_handle.abort()
                     return response
 
             # check that tool_mount can detect the tool and its correct tool
@@ -650,10 +685,11 @@ class ToolsManager(LifecycleNode):
                 new_tool_mounted = self.tool_mounted
                 if new_tool_mounted is not None and new_tool_mounted.tool_sn == tool_sn:
                     break
-                sleep(1.0)
+                self.get_clock().sleep_for(Duration(seconds=1.0))
             else:
                 response.success = False
                 response.message = f"Tool-mount failed to detect the mounted tool with serial number '{tool_sn}'."
+                goal_handle.abort()
                 return response
 
             try:
@@ -666,6 +702,7 @@ class ToolsManager(LifecycleNode):
             except ModelAttachError as e:
                 response.success = False
                 response.message = f"Failed to attach tool to tool-mount in planning scene: {e}"
+                goal_handle.abort()
                 return response
 
             # move to tool_lifted pose with 'tool_mount_tcp'
@@ -685,12 +722,17 @@ class ToolsManager(LifecycleNode):
             self._endtool_mounted(tool_sn, True)
 
             response.success = True
+            goal_handle.succeed()
             return response
 
-    def _unmount_tool_callback(self, request: UnmountTool.Request, response: UnmountTool.Response) -> UnmountTool.Response:
+    def _unmount_tool_callback(self, goal_handle: ServerGoalHandle) -> UnmountTool.Result:
+        request: UnmountTool.Goal = goal_handle.request
+        response = UnmountTool.Result()
+
         if self._tool_action_lock.acquire(blocking=False) is False:
             response.success = False
             response.message = "Another mount/unmount operation is in progress."
+            goal_handle.abort()
             return response
         
         with self._tool_action_lock:
@@ -700,6 +742,7 @@ class ToolsManager(LifecycleNode):
             if tool_mounted is None:
                 response.success = False
                 response.message = "No tool is currently mounted."
+                goal_handle.abort()
                 return response
             else:
                 tool_sn = tool_mounted.tool_sn
@@ -707,11 +750,13 @@ class ToolsManager(LifecycleNode):
             if slots is None:
                 response.success = False
                 response.message = "Tool rack slots info is not available. Cannot perform unmount operation."
+                goal_handle.abort()
                 return response
             else:
                 if not slots.is_slot_empty(tool_mounted.index):
                     response.success = False
                     response.message = f"Slot {tool_mounted.index} is not empty. Cannot unmount tool with serial number '{tool_sn}'."
+                    goal_handle.abort()
                     return response
 
             # sanity check
@@ -724,6 +769,7 @@ class ToolsManager(LifecycleNode):
             ):
                 response.success = False
                 response.message = "Sanity check failed (something is un-initialized). Cannot perform unmount operation."
+                goal_handle.abort()
                 return response
 
             # TODO: consider how failure should be handled - do we roll back or unconfigure or error?
@@ -735,6 +781,7 @@ class ToolsManager(LifecycleNode):
             if result is None:
                 response.success = False
                 response.message = f"Tool with serial number '{tool_sn}' is not mounted."
+                goal_handle.abort()
                 return response
             frames, unity_pose = result
 
@@ -751,11 +798,14 @@ class ToolsManager(LifecycleNode):
             if not self._call_action(self._movement_controller_action_client, ExecuteTrajectory.Goal(paths=[path])):
                 response.success = False
                 response.message = "Failed to move to tool_lifted pose."
+                goal_handle.abort()
+                return response
 
             # allow collisions between tool-mount, endtool and tool-rack for the duration of the mount operation
             if not self._planner_service.allow_collisions(model_id=tool_sn, allowed=True, tool_mount_link='tool_mount_tcp', slot_link='tool_rack'):   
                 response.success = False
                 response.message = "Failed to allow collisions between tool-mount, endtool and tool-rack."
+                goal_handle.abort()
                 return response
 
             # move to tool_attached in pose with 'tool_mount_tcp' 
@@ -771,6 +821,7 @@ class ToolsManager(LifecycleNode):
             if not self._call_action(self._movement_controller_action_client, ExecuteTrajectory.Goal(paths=[path])):
                 response.success = False
                 response.message = "Failed to move to tool_attached pose."
+                goal_handle.abort()
                 return response
 
             try:
@@ -783,18 +834,21 @@ class ToolsManager(LifecycleNode):
             except ModelAttachError as e:
                 response.success = False
                 response.message = f"Failed to attach tool to tool-rack in planning scene: {e}"
+                goal_handle.abort()
                 return response
 
             # operate tool-mount quick release to open the lock for un-mounting the tool
             if self._tool_mount_lock.wait_for_service(timeout_sec=5.0) is False:
                 response.success = False
                 response.message = "Failed to connect to lock service to unlock tool."
+                goal_handle.abort()
                 return response
             else:
                 lock_request = SetBool.Request(data=False)  # False means unlock, True means lock
                 if self._call_service(self._tool_mount_lock, lock_request) is False:
                     response.success = False
                     response.message = "Failed to unlock tool-mount quick release."
+                    goal_handle.abort()
                     return response
 
             # ensure that tool_rack can detect the tool and its correct tool
@@ -804,10 +858,11 @@ class ToolsManager(LifecycleNode):
                     new_tool_info = new_slots.get_tool_info(tool_sn)
                     if new_tool_info is not None:
                         break
-                sleep(1.0)
+                self.get_clock().sleep_for(Duration(seconds=1.0))
             else:
                 response.success = False
                 response.message = f"Tool-rack failed to detect the unmounted tool with serial number '{tool_sn}'."
+                goal_handle.abort()
                 return response
 
             # move to tool_lifted pose with 'tool_mount_tcp'
@@ -827,6 +882,7 @@ class ToolsManager(LifecycleNode):
             self._endtool_mounted(tool_sn, False)
 
             response.success = True
+            goal_handle.succeed()
             return response
     # endregion: callbacks
 
@@ -863,17 +919,18 @@ class ToolsManager(LifecycleNode):
         Polls ``future.done()`` until it resolves or the timeout elapses. The
         future is serviced by another thread of the node's
         :class:`~rclpy.executors.MultiThreadedExecutor`, so this can safely run
-        on an executor thread.
+        on an executor thread. The timeout is measured against the node clock so
+        that it honours ``use_sim_time``.
 
         :param future: The future to wait on.
         :param timeout: Maximum time to wait, in seconds.
         :returns: ``True`` if the future completed in time, ``False`` otherwise.
         """
-        deadline = monotonic() + timeout
+        deadline = self.get_clock().now() + Duration(seconds=timeout)
         while not future.done():
-            if monotonic() > deadline:
+            if self.get_clock().now() > deadline:
                 return False
-            sleep(0.01)
+            self.get_clock().sleep_for(Duration(seconds=0.01))
         return True
 
     def _call_action(self, client: ActionClient, goal: ExecuteTrajectory.Goal, timeout: float=5.0) -> bool:
@@ -904,10 +961,11 @@ class ToolsManager(LifecycleNode):
             self.get_logger().error('Action goal was rejected.')
             return False
 
+        # Wait indefinitely for the result: this action drives a robot movement
+        # whose duration is unknown, so there is no meaningful timeout to apply.
         result_future = goal_handle.get_result_async()
-        if not self._wait_for_future(result_future, timeout):  # NOTE: there should be no timeout
-            self.get_logger().error('Timed out waiting for action result.')
-            return False
+        while not result_future.done():
+            self.get_clock().sleep_for(Duration(seconds=0.01))
 
         result_wrapper = result_future.result()
         if result_wrapper is None or result_wrapper.status != GoalStatus.STATUS_SUCCEEDED:
