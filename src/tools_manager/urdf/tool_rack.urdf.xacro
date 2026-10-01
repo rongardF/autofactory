@@ -10,34 +10,36 @@
     simulated:=true
     index:='2'
     parent:='tool_rack_link'
-    x_offset:='0'
-    tool_attached_origin_xyz:='0.1 0 0'
+    y_offset:='0'
+    tool_attached_origin_xyz:='0.0256 -0.1025 0.287'
     tool_attached_origin_rpy:='0 0 0'
-    tool_lifted_origin_xyz:='0.1 0 0'
+    tool_lifted_origin_xyz:='0.0256 -0.1025 0.4'
     tool_lifted_origin_rpy:='0 0 0'
-    tool_slide_in_origin_xyz:='0.1 0 0'
+    tool_slide_in_origin_xyz:='0.0656 -0.1025 0.287'
     tool_slide_in_origin_rpy:='0 0 0'
+    rfid_scanner_origin_xyz:='-0.02 -0.1025 0.23'
+    rfid_scanner_origin_rpy:='0 0 0'
     ">
 
     <link name="slot${index}_attached_link"/>
     <joint name="slot${index}_attached_joint" type="fixed">
         <parent link="${parent}"/>
         <child link="slot${index}_attached_link"/>
-        <origin xyz="${float(tool_attached_origin_xyz.split()[0]) + float(x_offset)} ${tool_attached_origin_xyz.split()[1]} ${tool_attached_origin_xyz.split()[2]}" rpy="${tool_attached_origin_rpy}"/>
+        <origin xyz="${tool_attached_origin_xyz.split()[0]} ${float(tool_attached_origin_xyz.split()[1]) + float(y_offset)} ${tool_attached_origin_xyz.split()[2]}" rpy="${tool_attached_origin_rpy}"/>
     </joint>
 
     <link name="slot${index}_lifted_link"/>
     <joint name="slot${index}_lifted_joint" type="fixed">
         <parent link="${parent}"/>
         <child link="slot${index}_lifted_link"/>
-        <origin xyz="${float(tool_lifted_origin_xyz.split()[0]) + float(x_offset)} ${tool_lifted_origin_xyz.split()[1]} ${tool_lifted_origin_xyz.split()[2]}" rpy="${tool_lifted_origin_rpy}"/>
+        <origin xyz="${tool_lifted_origin_xyz.split()[0]} ${float(tool_lifted_origin_xyz.split()[1]) + float(y_offset)} ${tool_lifted_origin_xyz.split()[2]}" rpy="${tool_lifted_origin_rpy}"/>
     </joint>
 
     <link name="slot${index}_slide_in_link"/>
     <joint name="slot${index}_slide_in_joint" type="fixed">
         <parent link="${parent}"/>
         <child link="slot${index}_slide_in_link"/>
-        <origin xyz="${float(tool_slide_in_origin_xyz.split()[0]) + float(x_offset)} ${tool_slide_in_origin_xyz.split()[1]} ${tool_slide_in_origin_xyz.split()[2]}" rpy="${tool_slide_in_origin_rpy}"/>
+        <origin xyz="${tool_slide_in_origin_xyz.split()[0]} ${float(tool_slide_in_origin_xyz.split()[1]) + float(y_offset)} ${tool_slide_in_origin_xyz.split()[2]}" rpy="${tool_slide_in_origin_rpy}"/>
     </joint>
 
     <xacro:if value="${simulated}">
@@ -46,7 +48,7 @@
         <joint name="slot${index}_to_rfid_scanner_joint" type="fixed">
             <parent link="slot${index}_attached_link"/>
             <child link="slot${index}_rfid_scanner_link"/>
-            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <origin xyz="${rfid_scanner_origin_xyz.split()[0]} ${float(rfid_scanner_origin_xyz.split()[1]) + float(y_offset)} ${rfid_scanner_origin_xyz.split()[2]}" rpy="${rfid_scanner_origin_rpy}"/>
         </joint>
 
         <gazebo>
@@ -74,7 +76,7 @@
             simulated="${simulated}"
             index="${index}"
             parent="${parent}"
-            x_offset="${index * spacing}"/>
+            y_offset="${index * spacing}"/>
         <xacro:tool_slots
             simulated="${simulated}"
             parent="${parent}"
@@ -97,17 +99,13 @@
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh>
-                <uri>model://tool_rack/meshes/visual.dae</uri>
-                </mesh>
+                <mesh filename="model://tool_rack/meshes/visual.dae"/>
             </geometry>
         </visual>
         <collision>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh>
-                <uri>model://tool_rack/meshes/collision.stl</uri>
-                </mesh>
+                <mesh filename="model://tool_rack/meshes/collision.stl"/>
             </geometry>
         </collision>
         <inertial>

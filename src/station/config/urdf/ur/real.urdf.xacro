@@ -121,12 +121,14 @@
   </joint>
 
   <!-- tool rack attached to station -->
-  <xacro:tool_rack parent="station" simulated="false">
-    <rack_origin_xyz>0 0 0</rack_origin_xyz>
-    <rack_origin_rpy>0 0 0</rack_origin_rpy>
-    <number_of_slots>2</number_of_slots>
-    <slot_spacing>0.15</slot_spacing>
-  </xacro:tool_rack>
+  <xacro:tool_rack
+    parent="station"
+    simulated="false"
+    rack_origin_xyz="0.35 -0.4 0.9"
+    rack_origin_rpy="0 0 0"
+    number_of_slots="2"
+    slot_spacing="-0.25"
+  />
 
   <xacro:cross_laser parent="station" name="captron" simulated="true" tf_prefix="$(arg tf_prefix)">
     <origin xyz="0.35 0.45 0.95" rpy="0 0 3.14"/>
@@ -150,20 +152,16 @@
   </xacro:ur_robot>
 
   <!-- tool mount attached to tool0 -->
-  <xacro:tool_mount parent="tool0" simulated="true">
-    <mount_origin_xyz>0 0 0</mount_origin_xyz>
-    <mount_origin_rpy>0 0 0</mount_origin_rpy>
-    <tcp_origin_xyz>0 0 0.1</tcp_origin_xyz>
-    <tcp_origin_rpy>0 0 0</tcp_origin_rpy>
-  </xacro:tool_mount>
+  <xacro:tool_mount
+    parent="tool0"
+    simulated="false"
+    mount_origin_xyz="0.0272 0 0"
+    mount_origin_rpy="0 0 0"
+  />
 
-  <xacro:basler_camera parent="tool_mount_link" name="basler" simulated="false" tf_prefix="$(arg tf_prefix)">
-    <origin xyz="-0.03 0.025 -0.057" rpy="1.57 0 1.57"/>
+  <xacro:basler_camera parent="tool_mount_tcp" name="basler" simulated="false" tf_prefix="$(arg tf_prefix)">
+    <origin xyz="-0.110 0.02 -0.0575" rpy="0.0 0 0.0"/>
   </xacro:basler_camera>
-
-  <xacro:dispensing parent="tool_mount_link" name="dispensing" simulated="false" tf_prefix="$(arg tf_prefix)">
-    <origin xyz="0.0475 0 0" rpy="0 0 0"/>
-  </xacro:dispensing>
 
   <link name="conveyor">
     <visual>

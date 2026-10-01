@@ -6,63 +6,56 @@
     simulated:=true
     mount_origin_xyz:='0 0 0'
     mount_origin_rpy:='0 0 0'
-    tcp_origin_xyz:='0 0 0'
-    tcp_origin_rpy:='0 0 0'
     ">
 
-    <link name="tool_mount_link">
+    <link name="tool_mount_tcp">
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh>
-                <uri>model://tool_mount/meshes/visual.dae</uri>
-                </mesh>
+                <mesh filename="model://tool_mount/meshes/visual.dae"/>
             </geometry>
         </visual>
         <collision>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh>
-                <uri>model://tool_mount/meshes/collision.stl</uri>
-                </mesh>
+                <mesh filename="model://tool_mount/meshes/collision.stl"/>
             </geometry>
         </collision>
         <inertial>
-            <mass value="0.5"/>
-            <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <mass value="4.697067588322115"/>
+            <inertia
+                ixx="1.841474459710298"
+                ixy="-0.004289082833111024"
+                ixz="0.10558599010118996"
+                iyy="1.824344061067677"
+                iyz="0.029655588824880397"
+                izz="2.055971309702727"/>
         </inertial>
     </link>
 
-    <disable_collisions link1="tool_mount_link" link2="${parent}" reason="Adjacent" />
+    <disable_collisions link1="tool_mount_tcp" link2="${parent}" reason="Adjacent" />
 
-    <joint name="tool_mount_joint" type="fixed">
+    <joint name="tool_mount_tcp_joint" type="fixed">
         <parent link="${parent}"/>
-        <child link="tool_mount_link"/>
-        <origin xyz="${mount_origin_xyz}" rpy="${mount_origin_rpy}"/>
-    </joint>
-
-    <link name="tool_mount_tcp"/>
-
-    <joint name="tool_mount_to_tool_tcp_joint" type="fixed">
-        <parent link="tool_mount_link"/>
         <child link="tool_mount_tcp"/>
-        <origin xyz="${tcp_origin_xyz}" rpy="${tcp_origin_rpy}"/>
+        <origin xyz="${mount_origin_xyz}" rpy="${mount_origin_rpy}"/>
     </joint>
 
     <xacro:if value="${simulated}">
         <link name="rfid_scanner_link"/>
 
         <joint name="tool_mount_to_rfid_scanner_joint" type="fixed">
-            <parent link="tool_mount_link"/>
+            <parent link="tool_mount_tcp"/>
             <child link="rfid_scanner_link"/>
-            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <origin xyz="0.0778 0 -0.033" rpy="0 0 0"/>
         </joint>
 
         <gazebo>
             <plugin filename="rfid_sim_systems"
                     name="autofactory::rfid::RfidReader">
                 <link>rfid_scanner_link</link>
-                <range>0.1</range>
+                <range>0.02</range>
                 <update_rate>10</update_rate>
                 <detected_topic>/tool_mount_rfid_scanner/detected</detected_topic>
                 <content_topic>/tool_mount_rfid_scanner/tag_data</content_topic>

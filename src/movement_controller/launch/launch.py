@@ -488,8 +488,11 @@ def setup_robot_nodes(context, *args, **kwargs):
             Path(get_package_share_directory("tools_manager")) / "launch" / "tools_manager_launch.py"
         ),
         launch_arguments={
-            "simulated": is_simulated,
-        },
+            "simulated": simulated_value,
+            "world_name": "default",
+            "station_model_name": "station",
+            "movement_controller_node_name": "movement_controller",
+        }.items(),
     )
 
     nodes = [move_group_node, rviz_node, movement_controller, tools_manager]

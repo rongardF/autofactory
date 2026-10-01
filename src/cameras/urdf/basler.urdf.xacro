@@ -81,23 +81,32 @@
       </xacro:unless>
     </link>
 
+    <disable_collisions link1="${parent}" link2="${name}_camera_link" reason="Adjacent" />
+
     <joint name="${name}_camera_joint" type="fixed">
       <parent link="${tf_prefix}${parent}"/>
       <child link="${name}_camera_link"/>
       <xacro:insert_block name="origin"/>
     </joint>
 
+    <link name="camera_tcp_uncalibrated"/>
+
+    <joint name="camera_tcp_uncalibrated_joint" type="fixed">
+        <parent link="${name}_camera_link"/>
+        <child link="camera_tcp_uncalibrated"/>
+        <xacro:if value="${camera_model == 'basler'}">
+            <origin xyz="0.0188 0.0395 -0.0695" rpy="0 0 0"/>
+        </xacro:if>
+        <xacro:unless value="${is_known_model}">
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+        </xacro:unless>
+    </joint>
+
     <!-- Gazebo plugin for camera sensor: https://sdformat.org/spec/1.12/sensor/#sensor_camera -->
     <xacro:if value="${simulated}">
-          <gazebo reference="${name}_camera_link">
+          <gazebo reference="camera_tcp_uncalibrated">
               <sensor name="${name}_camera_sensor" type="camera">
-                  <xacro:if value="${camera_model == 'basler'}">
-                      <pose>0.0700233 -0.127701 -0.0225334 0 0 -1.57</pose>
-                  </xacro:if>
-                  <!-- Fallback sensor pose for unknown camera models -->
-                  <xacro:unless value="${is_known_model}">
-                      <pose>0 0 0 0 0 0</pose>
-                  </xacro:unless>
+                <pose>0 0 0 0 0 0</pose>
               <always_on>true</always_on>
               <update_rate>${update_rate}</update_rate>
               <visualize>true</visualize>

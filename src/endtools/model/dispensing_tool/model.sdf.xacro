@@ -7,21 +7,22 @@
         station_model_name:=station
         tool_mount_link:=tool_mount_tcp
         tool_rack_link:=slot1_attached_link
+        tcp_origin_xyz:='0.1043 0 -0.267'
+        tcp_origin_rpy:='0 0 0'
         tag_data:=6162633132330020202020202020202044495350454E53494E470020202020204B5243313233002020202020202020205231410020202020202020202020202053584E3132330020202020202020202052314100202020202020202020202020
       ">
 
     <model name="${model_name}">
       <link name="dispensing_tool_origin">
         <inertial>
-          <mass> 0.5094651951956418 </mass>
-          <pose> -4.6297522176e-05 -2.7501563919e-02 -2.8689966722e-06 0 0 0 </pose>
+          <mass> 7.063783650845496  </mass>
           <inertia>
-            <ixx>  1.8444458772e-04 </ixx>
-            <ixy> -1.8714769888e-07 </ixy>
-            <ixz>  2.5644282048e-08 </ixz>
-            <iyy>  1.8051069194e-04 </iyy>
-            <iyz>  4.2089057146e-08 </iyz>
-            <izz>  2.0096567452e-04 </izz>
+            <ixx>  0.00011207748967739463 </ixx>
+            <ixy> 1.032237834897387e-07 </ixy>
+            <ixz>  2.690965380322996e-05 </ixz>
+            <iyy>  0.0001003825439622742 </iyy>
+            <iyz>  -2.3925238308720508e-08 </iyz>
+            <izz>  3.538789883197751e-05 </izz>
           </inertia>
         </inertial>
         <collision name="collision.stl">
@@ -43,6 +44,22 @@
           </material>
         </visual>
       </link>
+
+      <link name="rfid_tag_link"/>
+
+      <joint name="rfid_tag_link_joint" type="fixed">
+          <parent>dispensing_tool_origin</parent>
+          <child>rfid_tag_link</child>
+          <pose>0.0506 0 -0.033 0 0 0</pose>
+      </joint>
+
+      <link name="tool_tcp_uncalibrated"/>
+
+      <joint name="tool_tcp_uncalibrated_joint" type="fixed">
+          <parent>dispensing_tool_origin</parent>
+          <child>tool_tcp_uncalibrated</child>
+          <pose>${tcp_origin_xyz} ${tcp_origin_rpy}</pose>
+      </joint>
 
       <!--
       IMPORTANT (gz-sim 8.11.0): this plugin STARTS ATTACHED. Its
@@ -77,6 +94,7 @@
       <plugin filename="rfid_sim_systems"
               name="autofactory::rfid::RfidTag">
         <id>${model_name}</id>
+        <link>rfid_tag_link</link>
         <data encoding="hex">${tag_data}</data>
       </plugin>
     </model>
@@ -86,7 +104,7 @@
   <xacro:arg name="model_name"                  default="abc123"/>
   <xacro:arg name="station_model_name"          default="station"/>
   <xacro:arg name="tool_mount_link"             default="tool_mount_tcp"/>
-  <xacro:arg name="tool_rack_link"              default="slot1_attached_joint"/>
+  <xacro:arg name="tool_rack_link"              default="slot1_attached_link"/>
   <xacro:arg name="tag_data"                    default="6162633132330020202020202020202044495350454E53494E470020202020204B5243313233002020202020202020205231410020202020202020202020202053584E3132330020202020202020202052314100202020202020202020202020"/>
 
   <!-- Instantiate the macro so `xacro dispensing_tool.sdf.xacro` emits a complete model.

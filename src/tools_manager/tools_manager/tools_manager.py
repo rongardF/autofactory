@@ -616,7 +616,7 @@ class ToolsManager(LifecycleNode):
             path = TrajectoryPath()
             path.path_id = str(uuid4())
             path.motion_type = TrajectoryPath.MOTION_TYPE_PTP
-            # TODO: define default speed parameters (both for PTP and LIN) for 'movement_controller' node - if provided values are negative then use default
+            path.joint_speed = -1.0  # NOTE: -1.0 means use default speed defined in movement controller
             path.tool_frame = 'tool_mount_tcp'  # NOTE: this is hardcoded frame and matches the link defined in URDF; DO NOT CHANGE IT UNLESS CHANGING IN URDF ALSO!
             path.target_pose = PoseStamped()
             path.target_pose.header.frame_id = frames.tool_slide_in_frame
@@ -654,6 +654,7 @@ class ToolsManager(LifecycleNode):
             path = TrajectoryPath()
             path.path_id = str(uuid4())
             path.motion_type = TrajectoryPath.MOTION_TYPE_LIN
+            path.cartesian_speed = 0.02
             path.tool_frame = 'tool_mount_tcp'
             path.target_pose = PoseStamped()
             path.target_pose.header.frame_id = frames.tool_attached_frame
@@ -709,6 +710,7 @@ class ToolsManager(LifecycleNode):
             path = TrajectoryPath()
             path.path_id = str(uuid4())
             path.motion_type = TrajectoryPath.MOTION_TYPE_LIN
+            path.cartesian_speed = 0.02
             path.tool_frame = 'tool_mount_tcp'
             path.target_pose = PoseStamped()
             path.target_pose.header.frame_id = frames.tool_lifted_frame
@@ -789,6 +791,7 @@ class ToolsManager(LifecycleNode):
             path = TrajectoryPath()
             path.path_id = str(uuid4())
             path.motion_type = TrajectoryPath.MOTION_TYPE_PTP
+            path.joint_speed = -1.0
             path.tool_frame = 'tool_mount_tcp'  # NOTE: this is hardcoded frame and matches the link defined in URDF; DO NOT CHANGE IT UNLESS CHANGING IN URDF ALSO!
             path.target_pose = PoseStamped()
             path.target_pose.header.frame_id = frames.tool_lifted_frame
@@ -812,6 +815,7 @@ class ToolsManager(LifecycleNode):
             path = TrajectoryPath()
             path.path_id = str(uuid4())
             path.motion_type = TrajectoryPath.MOTION_TYPE_LIN
+            path.cartesian_speed = 0.02
             path.tool_frame = 'tool_mount_tcp'
             path.target_pose = PoseStamped()
             path.target_pose.header.frame_id = frames.tool_attached_frame
@@ -869,6 +873,7 @@ class ToolsManager(LifecycleNode):
             path = TrajectoryPath()
             path.path_id = str(uuid4())
             path.motion_type = TrajectoryPath.MOTION_TYPE_LIN
+            path.cartesian_speed = 0.02
             path.tool_frame = 'tool_mount_tcp'
             path.target_pose = PoseStamped()
             path.target_pose.header.frame_id = frames.tool_slide_in_frame

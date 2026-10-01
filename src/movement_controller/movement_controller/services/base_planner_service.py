@@ -211,11 +211,21 @@ class BasePlannerService:
             return 1.0, 1.0
 
         if path_dto.motion_type in [MotionTypeEnum.LIN, MotionTypeEnum.CIRC]:
+            # A cartesian_speed of -1.0 is a sentinel meaning "use the node-level
+            # default cartesian velocity" for LIN/CIRC motions.
+            effective_cartesian_speed = path_dto.cartesian_speed
+            if effective_cartesian_speed == -1.0:
+                effective_cartesian_speed = self._constraint_config.default_cartesian_velocity
+                self._logger.debug(
+                    f'cartesian_speed is -1.0 for path {path_dto.path_id}; '
+                    f'using default cartesian velocity {effective_cartesian_speed} m/s'
+                )
+
             if self._constraint_config.max_cartesian_speed > 0.0:
                 self._logger.debug("Max cartesian speed is set, calculating scaling factor")
                 vel_scaling_factor = min(
                     1.0,
-                    path_dto.cartesian_speed / self._constraint_config.max_cartesian_speed
+                    effective_cartesian_speed / self._constraint_config.max_cartesian_speed
                 )
             else:
                 vel_scaling_factor = 1.0
@@ -230,16 +240,26 @@ class BasePlannerService:
                 acc_scaling_factor = 1.0
 
             self._logger.debug(
-                f'Calculated scaling factors for path {path_dto.path_id} with cartesian speed {path_dto.cartesian_speed}: '
+                f'Calculated scaling factors for path {path_dto.path_id} with cartesian speed {effective_cartesian_speed}: '
                 f'velocity_scaling_factor={vel_scaling_factor}, acceleration_scaling_factor={acc_scaling_factor}'
             )
             return vel_scaling_factor, acc_scaling_factor
         else:
+            # A joint_speed of -1.0 is a sentinel meaning "use the node-level
+            # default rotational velocity" for PTP motions.
+            effective_joint_speed = path_dto.joint_speed
+            if effective_joint_speed == -1.0:
+                effective_joint_speed = self._constraint_config.default_rotational_velocity
+                self._logger.debug(
+                    f'joint_speed is -1.0 for path {path_dto.path_id}; '
+                    f'using default rotational velocity {effective_joint_speed} rad/s'
+                )
+
             if self._constraint_config.max_joint_speed > 0.0:
                 self._logger.debug("Max joint speed is set, calculating scaling factor")
                 vel_scaling_factor = min(
                     1.0,
-                    path_dto.joint_speed / self._constraint_config.max_joint_speed
+                    effective_joint_speed / self._constraint_config.max_joint_speed
                 )
             else:
                 vel_scaling_factor = 1.0
@@ -254,7 +274,7 @@ class BasePlannerService:
                 acc_scaling_factor = 1.0
 
             self._logger.debug(
-                f'Calculated scaling factors for path {path_dto.path_id} with joint speed {path_dto.joint_speed}: '
+                f'Calculated scaling factors for path {path_dto.path_id} with joint speed {effective_joint_speed}: '
                 f'velocity_scaling_factor={vel_scaling_factor}, acceleration_scaling_factor={acc_scaling_factor}'
             )
             return vel_scaling_factor, acc_scaling_factor
