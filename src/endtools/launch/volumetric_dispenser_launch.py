@@ -41,7 +41,8 @@ def generate_launch_description():
     tcp_frame_id = LaunchConfiguration("tcp_frame_id", default="tool0")
     tcp = LaunchConfiguration("tcp", default="[0.0837, 0.0, -0.267, 1.570797, 0.0, 1.570797]")
     mounted = LaunchConfiguration("mounted", default="false")
-    flow_rate = LaunchConfiguration("flow_rate", default="1.0")
+    flowrate = LaunchConfiguration("flowrate", default="1.0")
+    node_name = LaunchConfiguration("node_name", default="volumetric_dispensing_tool")
 
     declared_arguments = [
         DeclareLaunchArgument("simulated", default_value="true", description="Whether the tool is simulated."),
@@ -49,14 +50,16 @@ def generate_launch_description():
         DeclareLaunchArgument("tcp_frame_id", default_value="tool0", description="TCP frame ID."),
         DeclareLaunchArgument("tcp", default_value="[0.0837, 0.0, -0.267, 1.570797, 0.0, 1.570797]", description="TCP transform as [x, y, z, roll, pitch, yaw] (m, rad)."),
         DeclareLaunchArgument("mounted", default_value="false", description="Whether the tool is mounted."),
-        DeclareLaunchArgument("flow_rate", default_value="1.0", description="Volumetric flow rate (ml/s). Must be >= 0."),
+        DeclareLaunchArgument("flowrate", default_value="1.0", description="Volumetric flow rate (ml/s). Must be >= 0."),
         DeclareLaunchArgument("tool_rack_link", description="The link name of the tool rack to which the tool is installed."),
         DeclareLaunchArgument("tool_mount_link", default_value="tool_mount_tcp", description="The link name of the tool mount to which the tool is attached."),
+        DeclareLaunchArgument("node_name", default_value="volumetric_dispensing_tool", description="Name of the endtool lifecycle node."),
     ]
 
     endtool_node = Node(
         package="endtools",
         executable="volumetric_dispensing_tool",
+        name=node_name,
         output="screen",
         parameters=[
             {
@@ -66,7 +69,7 @@ def generate_launch_description():
                 "tcp_frame_id": tcp_frame_id,
                 "tcp": tcp,
                 "mounted": mounted,
-                "flow_rate": flow_rate,
+                "flowrate": flowrate,
             },
         ],
     )

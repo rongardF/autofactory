@@ -114,8 +114,8 @@
   <xacro:tool_rack
     parent="station"
     simulated="true"
-    rack_origin_xyz="0.35 -0.4 0.9"
-    rack_origin_rpy="0 0 0"
+    rack_origin_xyz="0.3 -0.7 0.9"
+    rack_origin_rpy="0 0 1.5708"
     number_of_slots="2"
     slot_spacing="-0.25"
   />
@@ -145,8 +145,8 @@
   <xacro:tool_mount
     parent="tool0"
     simulated="true"
-    mount_origin_xyz="0.0272 0 0"
-    mount_origin_rpy="0 0 0"
+    mount_origin_xyz="0 0 0.0272"
+    mount_origin_rpy="0 -1.5708 -1.5708"
   />
 
   <xacro:basler_camera parent="tool_mount_tcp" name="basler" simulated="true" tf_prefix="$(arg tf_prefix)">

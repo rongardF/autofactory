@@ -28,9 +28,12 @@
 
 from __future__ import annotations
 
+import os
 import time
 
 import trimesh
+
+from ament_index_python.packages import get_package_share_directory, PackageNotFoundError
 
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.client import Client as ServiceClient
@@ -49,6 +52,7 @@ from moveit_msgs.srv import ApplyPlanningScene, GetPlanningScene
 from shape_msgs.msg import Mesh, MeshTriangle
 
 from tools_manager.model.tool_info_dto import ToolInfoDto
+from tools_manager.model.tools_manager_config import ToolsManagerConfigDTO
 from tools_manager.interface.world_manager import WorldManager
 from tools_manager.exception.world_manager_exception import (
     ModelAttachError,
@@ -69,6 +73,7 @@ class Moveit2WorldManager(WorldManager):
     def __init__(
         self,
         node: Node,
+        tools_manager_config: ToolsManagerConfigDTO,
         get_scene_service: str = '/get_planning_scene',
         apply_scene_service: str = '/apply_planning_scene',
         tool_mount_link: str = 'tool_mount_tcp',
@@ -78,7 +83,8 @@ class Moveit2WorldManager(WorldManager):
         """Create the planning-scene service clients.
 
         :param node: Node used to create clients and access the logger/clock.
-        :param tools_manager_config: Tools manager configuration used to resolve slot frames.
+        :param tools_manager_config: Tools manager configuration used to resolve a
+            tool's model directory from its metadata.
         :param get_scene_service: ``GetPlanningScene`` service name.
         :param apply_scene_service: ``ApplyPlanningScene`` service name.
         :param tool_mount_link: Link a tool is attached to when mounted.
@@ -92,6 +98,7 @@ class Moveit2WorldManager(WorldManager):
 
         self._node = node
         self._logger = node.get_logger()
+        self._tools_manager_config = tools_manager_config
         self._service_timeout_sec = service_timeout_sec
         self._tool_mount_link = tool_mount_link
         self._touch_links = list(touch_links) if touch_links else []
@@ -135,10 +142,37 @@ class Moveit2WorldManager(WorldManager):
     def _generate_model_path(self, tool: ToolInfoDto) -> str:
         """Generate the filesystem path to a tool's STL model.
 
+        The tool's model directory name is taken from its metadata
+        (``ToolMetadataDto.model``) and resolved against the installed
+        ``endtools`` package share directory, i.e.
+        ``<endtools_share>/model/<model>/meshes/collision.stl``.
+
         :param tool: Tool information.
         :returns: Filesystem path to the STL model.
+        :raises ModelSpawnError: If the tool has no metadata, the ``endtools``
+            package cannot be found, or the model file does not exist.
         """
-        raise NotImplementedError('subclass must implement _generate_model_path()')
+        metadata = self._tools_manager_config.get_tool_metadata(tool.tool_sn)
+        if metadata is None:
+            raise ModelSpawnError(
+                f'No metadata defined for tool {tool.tool_sn}; cannot resolve model path'
+            )
+
+        try:
+            share_directory = get_package_share_directory('endtools')
+        except PackageNotFoundError as error:
+            raise ModelSpawnError(
+                f"Failed to locate 'endtools' package share directory: {error}"
+            ) from error
+
+        model_path = os.path.join(
+            share_directory, 'model', metadata.model, 'meshes', 'collision.stl'
+        )
+        if not os.path.isfile(model_path):
+            raise ModelSpawnError(
+                f"Collision mesh '{model_path}' not found for tool {tool.tool_sn}"
+            )
+        return model_path
 
     def _transfer(self, model_id: str, source_link: str, target_link: str) -> bool:
         """Detach a model from one link and re-attach it to another.
@@ -178,6 +212,8 @@ class Moveit2WorldManager(WorldManager):
         :returns: The populated ``AttachedCollisionObject`` message.
         """
         identity = Pose()
+        # NOTE: a small offset is added to the x-coordinate to avoid collision with the link
+        identity.position.x = 0.001
         identity.orientation.w = 1.0
 
         collision_object = CollisionObject()

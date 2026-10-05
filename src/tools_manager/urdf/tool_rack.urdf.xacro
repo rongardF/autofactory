@@ -21,12 +21,31 @@
     rfid_scanner_origin_rpy:='0 0 0'
     ">
 
-    <link name="slot${index}_attached_link"/>
+    <link name="slot${index}_attached_link">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <mass value="1e-6"/>
+            <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+        </inertial>
+    </link>
     <joint name="slot${index}_attached_joint" type="fixed">
         <parent link="${parent}"/>
         <child link="slot${index}_attached_link"/>
         <origin xyz="${tool_attached_origin_xyz.split()[0]} ${float(tool_attached_origin_xyz.split()[1]) + float(y_offset)} ${tool_attached_origin_xyz.split()[2]}" rpy="${tool_attached_origin_rpy}"/>
     </joint>
+
+    <!--
+        Keep 'slot${index}_attached_link' as a real SDF <link> so the tool
+        model's Gazebo DetachableJoint can resolve it via model.LinkByName().
+        Without preserveFixedJoint the URDF->SDF converter lumps this
+        fixed-joint child into its parent and demotes it to a <frame>, which
+        the plugin cannot find (resulting in "Child Link slot${index}_attached_link
+        could not be found"). A tiny inertial block is required too: SDFormat
+        ignores preserveFixedJoint on a massless link and lumps it regardless.
+    -->
+    <gazebo reference="slot${index}_attached_joint">
+        <preserveFixedJoint>true</preserveFixedJoint>
+    </gazebo>
 
     <link name="slot${index}_lifted_link"/>
     <joint name="slot${index}_lifted_joint" type="fixed">
@@ -43,13 +62,29 @@
     </joint>
 
     <xacro:if value="${simulated}">
-        <link name="slot${index}_rfid_scanner_link"/>
+        <link name="slot${index}_rfid_scanner_link">
+            <inertial>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <mass value="1e-6"/>
+                <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+            </inertial>
+        </link>
 
         <joint name="slot${index}_to_rfid_scanner_joint" type="fixed">
             <parent link="slot${index}_attached_link"/>
             <child link="slot${index}_rfid_scanner_link"/>
             <origin xyz="${rfid_scanner_origin_xyz.split()[0]} ${float(rfid_scanner_origin_xyz.split()[1]) + float(y_offset)} ${rfid_scanner_origin_xyz.split()[2]}" rpy="${rfid_scanner_origin_rpy}"/>
         </joint>
+
+        <!--
+            Keep the RFID frame as a real SDF <link> so the RfidReader plugin can
+            resolve it via model.LinkByName(). Without preserveFixedJoint the URDF->SDF
+            converter lumps this massless fixed-joint child into its parent and turns it
+            into a <frame>, which the plugin cannot find (link resolver returns null).
+        -->
+        <gazebo reference="slot${index}_to_rfid_scanner_joint">
+            <preserveFixedJoint>true</preserveFixedJoint>
+        </gazebo>
 
         <gazebo>
             <plugin filename="rfid_sim_systems"
@@ -68,15 +103,18 @@
   <!--
     "Loop" over slots. Xacro has no native for-loop, so recursion is used:
     the macro instantiates one slot then calls itself with index+1 until
-    index == count. Each slot is offset along X by `spacing`.
+    index > count. Slot indices are 1-based (slot1, slot2, ...) to match the
+    1-based indices used in the tools_manager config and SlotInfo/ToolInfo
+    messages. Each slot is offset along X by `spacing`, with the first slot
+    (index 1) at zero offset.
   -->
-  <xacro:macro name="tool_slots" params="parent simulated count spacing:=0.15 index:=0">
-    <xacro:if value="${index &lt; count}">
+  <xacro:macro name="tool_slots" params="parent simulated count spacing:=0.15 index:=1">
+    <xacro:if value="${index &lt;= count}">
         <xacro:tool_slot
             simulated="${simulated}"
             index="${index}"
             parent="${parent}"
-            y_offset="${index * spacing}"/>
+            y_offset="${(index - 1) * spacing}"/>
         <xacro:tool_slots
             simulated="${simulated}"
             parent="${parent}"
@@ -99,13 +137,13 @@
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="model://tool_rack/meshes/visual.dae"/>
+                <mesh filename="file://$(find tools_manager)/model/tool_rack/meshes/visual.dae"/>
             </geometry>
         </visual>
         <collision>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="model://tool_rack/meshes/collision.stl"/>
+                <mesh filename="file://$(find tools_manager)/model/tool_rack/meshes/collision.stl"/>
             </geometry>
         </collision>
         <inertial>
@@ -114,8 +152,11 @@
         </inertial>
     </link>
 
-    <disable_collisions link1="tool_rack_link" link2="${parent}" reason="Adjacent" />
-
+    <!--
+      NOTE: Collision between 'tool_rack_link' and its parent is disabled in the
+      SRDF (see tools_manager/srdf/tool_rack.srdf.xacro), NOT here.
+      disable_collisions is an SRDF-only concept; MoveIt ignores it in the URDF.
+    -->
     <joint name="tool_rack_joint" type="fixed">
         <parent link="${parent}"/>
         <child link="tool_rack_link"/>

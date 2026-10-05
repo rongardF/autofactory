@@ -185,7 +185,7 @@ class ToolsManager(LifecycleNode):
 
         try:
             self.get_logger().info('Reading tools manager config file')
-            manager_config = read_config_file(self.get_parameter('config_file').get_parameter_value().string_value)
+            manager_config = read_config_file(self.get_parameter('tools_manager_config_file').get_parameter_value().string_value)
             self._config = ToolsManagerNodeConfigDTO(
                 tools_manager_config=manager_config,
                 simulated=self.get_parameter('simulated').get_parameter_value().bool_value,
@@ -204,9 +204,13 @@ class ToolsManager(LifecycleNode):
                     node=self,
                     world_name=self._config.world_name,
                     station_model_name=self._config.station_model_name,
+                    tools_manager_config=self._config.tools_manager_config,
                     tool_mount_link="tool_mount_tcp",
                 )
-            self._planner_service = Moveit2WorldManager(node=self)
+            self._planner_service = Moveit2WorldManager(
+                node=self,
+                tools_manager_config=self._config.tools_manager_config,
+            )
 
             self.get_logger().info('Creating node state managers and ROS2 launcher')
             self._tool_rack_manager = NodeStateManager(self, self._config.tool_rack_node_name)
@@ -343,7 +347,11 @@ class ToolsManager(LifecycleNode):
                     launch=launch_ref,
                     endtool_node_manager=endtool_node_manager,
                 )
-                endtool_node_manager.configure_node()
+                if endtool_node_manager.configure_node() != TransitionCallbackReturn.SUCCESS:
+                    raise ActivationFailedException(
+                        f'Failed to configure endtool node {tool_parameters["node_name"]!r} '
+                        f'for tool {tool.tool_sn}.'
+                    )
                 
                 self._planner_service.spawn_model(tool, link_name=f'slot{index}_attached_link')
     
@@ -381,7 +389,11 @@ class ToolsManager(LifecycleNode):
                     launch=launch_ref,
                     endtool_node_manager=endtool_node_manager,
                 )
-                endtool_node_manager.configure_node()
+                if endtool_node_manager.configure_node() != TransitionCallbackReturn.SUCCESS:
+                    raise ActivationFailedException(
+                        f'Failed to configure endtool node {tool_parameters["node_name"]!r} '
+                        f'for tool {tool_mounted.tool_sn}.'
+                    )
                 
                 self._planner_service.spawn_model(tool_mounted, link_name="tool_mount_tcp")
     
@@ -541,7 +553,7 @@ class ToolsManager(LifecycleNode):
     # region: callbacks
     def _slots_callback(self, msg: Slots) -> None:
         self.get_logger().info(f'Received slots info update: {msg}')
-        self.tool_rack_slots_state = SlotsDto.from_slots_msg(msg)
+        self.tool_rack_slots = SlotsDto.from_slots_msg(msg)
 
     def _mounted_callback(self, msg: ToolInfo) -> None:
         self.get_logger().info(f'Received mounted info update: {msg}')

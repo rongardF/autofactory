@@ -9,7 +9,7 @@ from tools_manager.services.node_state_manager import NodeStateManager
 class EndtoolLaunchDto(BaseModel):
     """Frame names for a single tool slot in the rack."""
 
-    model_config = ConfigDict(extra='forbid', frozen=True)
+    model_config = ConfigDict(extra='forbid', frozen=True, arbitrary_types_allowed=True)
 
     launch: LaunchDto = Field(
         description='Reference to launch process where node is launched.',

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="tool_mount_srdf">
+
+  <!--
+    "Loop" over the touch_links and disable collision between 'tool_mount_tcp'
+    and each one. Xacro has no native for-loop, so recursion is used: disable
+    collision with the first link, then recurse on the remaining links until
+    the list is empty.
+
+    NOTE: disable_collisions is an SRDF concept. MoveIt only reads these rules
+    from the SRDF, never from the URDF, so this macro must be invoked from the
+    assembled SRDF (default_setup.srdf.xacro), not from tool_mount.urdf.xacro.
+  -->
+  <xacro:macro name="tool_mount_srdf" params="touch_links:='wrist_1_link wrist_2_link wrist_3_link'">
+    <xacro:if value="${len(touch_links.split()) &gt; 0}">
+      <xacro:property name="touch_link_list" value="${touch_links.split()}"/>
+      <disable_collisions link1="tool_mount_tcp" link2="${touch_link_list[0]}" reason="Adjacent"/>
+      <xacro:tool_mount_srdf touch_links="${' '.join(touch_link_list[1:])}"/>
+    </xacro:if>
+  </xacro:macro>
+
+</robot>

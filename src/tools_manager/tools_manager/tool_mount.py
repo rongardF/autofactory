@@ -164,7 +164,7 @@ class ToolMount(LifecycleNode):
             return TransitionCallbackReturn.FAILURE
 
         self._mounted_check_timer = self.create_timer(
-            self._config.mounted_publish_rate,
+            1.0 / self._config.mounted_publish_rate,
             self._check_mounted_tool,
         )
 
@@ -174,6 +174,8 @@ class ToolMount(LifecycleNode):
             'lock',
             self._lock_callback,
         )
+
+        return TransitionCallbackReturn.SUCCESS
 
     def on_deactivate(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info(f'Deactivating from state: {state.label}')
@@ -192,6 +194,8 @@ class ToolMount(LifecycleNode):
             self.destroy_timer(self._mounted_check_timer)
             self._mounted_check_timer = None
 
+        return TransitionCallbackReturn.SUCCESS
+
     def on_cleanup(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info(f'Cleaning up from state: {state.label}')
         if super().on_cleanup(state) != TransitionCallbackReturn.SUCCESS:
@@ -204,7 +208,9 @@ class ToolMount(LifecycleNode):
 
         self._tool_mount_controller = None
         self._config = None
-    
+
+        return TransitionCallbackReturn.SUCCESS
+
     def on_error(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().error(f'Error occurred in state: {state.label}')
         return super().on_error(state)

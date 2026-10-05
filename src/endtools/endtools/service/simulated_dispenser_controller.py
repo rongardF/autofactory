@@ -2,7 +2,7 @@ from threading import RLock
 
 from rclpy.lifecycle import LifecycleNode
 
-from endtools.endtools.interface.dispenser_controller import DispenserController
+from endtools.interface.dispenser_controller import DispenserController
 from endtools.model.dispensing_metrics_dto import DispensingMetricsDTO
 from endtools.model.dispensing_tool_config_dto import DispensingToolConfigDTO
 

@@ -67,7 +67,7 @@ class VolumetricDispensingTool(LifecycleNode):
         # region: parameters
         self.declare_parameter(
             'tool_type',
-            "dispensing",
+            "VOL_DISPENSER",
             ParameterDescriptor(description='Tool type', read_only=True),
         )
         self.declare_parameter(

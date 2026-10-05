@@ -155,8 +155,8 @@
   <xacro:tool_mount
     parent="tool0"
     simulated="false"
-    mount_origin_xyz="0.0272 0 0"
-    mount_origin_rpy="0 0 0"
+    mount_origin_xyz="0 0 0.0272"
+    mount_origin_rpy="0 -1.5708 -1.5708"
   />
 
   <xacro:basler_camera parent="tool_mount_tcp" name="basler" simulated="false" tf_prefix="$(arg tf_prefix)">

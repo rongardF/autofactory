@@ -106,7 +106,7 @@ install(
 # --------------------------------------------------------------------------
 # Install launch, config, and description files
 # --------------------------------------------------------------------------
-install(DIRECTORY launch config model urdf
+install(DIRECTORY launch config model urdf srdf
   DESTINATION share/${PROJECT_NAME}
 )
 

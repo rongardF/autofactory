@@ -25,7 +25,7 @@ class SlotsDto(BaseModel):
 
         slots_msg = Slots()
         slots_msg.tools_expected = [
-            SlotInfo(slot_id=slot.index, tool_sn=slot.tool_sn) for slot in slots_dto.tools_expected
+            SlotInfo(index=slot.index, tool_sn=slot.tool_sn or '') for slot in slots_dto.tools_expected
         ]
         slots_msg.tools_mounted = [
             ToolInfo(
@@ -47,7 +47,7 @@ class SlotsDto(BaseModel):
 
         return SlotsDto(
             tools_expected=[
-                ToolSlotDTO(index=slot.slot_id, tool_sn=slot.tool_sn) for slot in slots_msg.tools_expected
+                ToolSlotDTO(index=slot.index, tool_sn=slot.tool_sn or None) for slot in slots_msg.tools_expected
             ],
             tools_mounted=[
                 ToolInfoDto.from_msg(tool_info_msg=tool) for tool in slots_msg.tools_mounted

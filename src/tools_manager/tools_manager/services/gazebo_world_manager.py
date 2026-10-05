@@ -39,10 +39,13 @@ is currently attached to so transfers only need the destination link.
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 
 import xacro
+
+from ament_index_python.packages import get_package_share_directory, PackageNotFoundError
 
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
 from rclpy.client import Client as ServiceClient
@@ -52,12 +55,17 @@ from rclpy.time import Time
 
 from geometry_msgs.msg import Point, Pose, Quaternion
 from std_msgs.msg import Empty, String
-from tf2_ros import Buffer, TransformException, TransformListener
+# NOTE: TransformException is re-exported by tf2_ros from the compiled tf2_py
+# C-extension via a wildcard import, so Pylance/Pyright cannot resolve it
+# statically even though it exists at runtime.
+from tf2_ros import Buffer, TransformListener
+from tf2_ros import TransformException  # type: ignore[attr-defined]
 
 from ros_gz_interfaces.msg import Entity, EntityFactory
 from ros_gz_interfaces.srv import DeleteEntity, SpawnEntity
 
 from tools_manager.model.tool_info_dto import ToolInfoDto
+from tools_manager.model.tools_manager_config import ToolsManagerConfigDTO
 from tools_manager.interface.world_manager import WorldManager
 from tools_manager.exception.world_manager_exception import (
     ModelAttachError,
@@ -82,6 +90,7 @@ class GazeboWorldManager(WorldManager):
         node: Node,
         world_name: str,
         station_model_name: str,
+        tools_manager_config: ToolsManagerConfigDTO,
         tool_mount_link: str = 'tool_mount_tcp',
         service_timeout_sec: float = 5.0,
         tf_timeout_sec: float = 5.0,
@@ -92,6 +101,8 @@ class GazeboWorldManager(WorldManager):
         :param node: Node used to create clients/publishers and access logger/clock.
         :param world_name: Name of the Gazebo world (used in the service names).
         :param station_model_name: Name of the station model in the world.
+        :param tools_manager_config: Tools manager configuration used to resolve a
+            tool's model directory from its metadata.
         :param tool_mount_link: Link a tool is welded to when mounted.
         :param service_timeout_sec: Timeout for world service availability/results.
         :param tf_timeout_sec: Timeout for slot-frame TF lookups.
@@ -103,10 +114,14 @@ class GazeboWorldManager(WorldManager):
         self._logger = node.get_logger()
         self._world_name = world_name
         self._station_model_name = station_model_name
+        self._tools_manager_config = tools_manager_config
         self._tool_mount_link = tool_mount_link
         self._service_timeout_sec = service_timeout_sec
         self._tf_timeout_sec = tf_timeout_sec
         self._confirm_timeout_sec = confirm_timeout_sec
+        # Interval between re-publishing an attach/detach request while waiting
+        # for the joint's event-driven `state` confirmation.
+        self._republish_interval_sec = 0.25
 
         self._service_callback_group = MutuallyExclusiveCallbackGroup()
         self._state_callback_group = ReentrantCallbackGroup()
@@ -130,11 +145,35 @@ class GazeboWorldManager(WorldManager):
     def _generate_model_path(self, tool: ToolInfoDto) -> str:
         """Generate the filesystem path to a tool's XACRO model description.
 
+        The tool's model directory name is taken from its metadata
+        (``ToolMetadataDto.model``) and resolved against the installed
+        ``endtools`` package share directory, i.e.
+        ``<endtools_share>/model/<model>/model.sdf.xacro``.
+
         :param tool: Tool information.
         :returns: Filesystem path to the XACRO model description.
-        :raises NotImplementedError: Always; subclasses must implement this.
+        :raises ModelSpawnError: If the tool has no metadata, the ``endtools``
+            package cannot be found, or the model file does not exist.
         """
-        raise NotImplementedError('subclass must implement _generate_model_path()')
+        metadata = self._tools_manager_config.get_tool_metadata(tool.tool_sn)
+        if metadata is None:
+            raise ModelSpawnError(
+                f'No metadata defined for tool {tool.tool_sn}; cannot resolve model path'
+            )
+
+        try:
+            share_directory = get_package_share_directory('endtools')
+        except PackageNotFoundError as error:
+            raise ModelSpawnError(
+                f"Failed to locate 'endtools' package share directory: {error}"
+            ) from error
+
+        model_path = os.path.join(share_directory, 'model', metadata.model, 'model.sdf.xacro')
+        if not os.path.isfile(model_path):
+            raise ModelSpawnError(
+                f"Model description '{model_path}' not found for tool {tool.tool_sn}"
+            )
+        return model_path
 
     def _transfer(self, model_id: str, source_link: str, target_link: str) -> bool:
         """Transfer a model's weld from one link to another.
@@ -197,7 +236,8 @@ class GazeboWorldManager(WorldManager):
         translation = transform.transform.translation
         rotation = transform.transform.rotation
         pose = Pose()
-        pose.position = Point(x=translation.x, y=translation.y, z=translation.z)
+        # NOTE: a small offset is added to the x-coordinate to avoid collision with the link
+        pose.position = Point(x=translation.x+0.001, y=translation.y, z=translation.z)
         pose.orientation = Quaternion(
             x=rotation.x, y=rotation.y, z=rotation.z, w=rotation.w
         )
@@ -256,14 +296,22 @@ class GazeboWorldManager(WorldManager):
                 self._logger.error(f"No subscriber matched on '{action_topic}'")
                 return False
 
-            publisher.publish(Empty())
-            if not confirmed.wait(timeout=self._confirm_timeout_sec):
-                self._logger.error(
-                    f"'{verb}' of '{model_id}' on '{link_name}' not confirmed "
-                    f'within {self._confirm_timeout_sec:.1f}s'
-                )
-                return False
-            return True
+            # The joint's `state` output is event-driven (not latched) and, per the
+            # gz-sim 8.x DetachableJoint quirk, the joint may not exist yet on the
+            # first simulation step. A single publish can therefore be missed, so
+            # the request is re-published periodically until the desired state is
+            # observed or the overall timeout elapses.
+            deadline = time.monotonic() + self._confirm_timeout_sec
+            while True:
+                publisher.publish(Empty())
+                if confirmed.wait(timeout=self._republish_interval_sec):
+                    return True
+                if time.monotonic() >= deadline:
+                    self._logger.error(
+                        f"'{verb}' of '{model_id}' on '{link_name}' not confirmed "
+                        f'within {self._confirm_timeout_sec:.1f}s'
+                    )
+                    return False
         finally:
             self._node.destroy_publisher(publisher)
             self._node.destroy_subscription(subscription)

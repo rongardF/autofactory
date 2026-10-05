@@ -1,6 +1,11 @@
 <?xml version="1.0"?>
 <tool_mount xmlns:xacro="http://wiki.ros.org/xacro">
 
+  <!--
+    NOTE: Collisions between 'tool_mount_tcp' and its touch links are disabled
+    in the SRDF (see tools_manager/srdf/tool_mount.srdf.xacro), NOT here.
+    disable_collisions is an SRDF-only concept; MoveIt ignores it in the URDF.
+  -->
   <xacro:macro name="tool_mount" params="
     parent:=tool0
     simulated:=true
@@ -12,13 +17,13 @@
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="model://tool_mount/meshes/visual.dae"/>
+                <mesh filename="file://$(find tools_manager)/model/tool_mount/meshes/visual.dae"/>
             </geometry>
         </visual>
         <collision>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="model://tool_mount/meshes/collision.stl"/>
+                <mesh filename="file://$(find tools_manager)/model/tool_mount/meshes/collision.stl"/>
             </geometry>
         </collision>
         <inertial>
@@ -34,22 +39,47 @@
         </inertial>
     </link>
 
-    <disable_collisions link1="tool_mount_tcp" link2="${parent}" reason="Adjacent" />
-
     <joint name="tool_mount_tcp_joint" type="fixed">
         <parent link="${parent}"/>
         <child link="tool_mount_tcp"/>
         <origin xyz="${mount_origin_xyz}" rpy="${mount_origin_rpy}"/>
     </joint>
 
+    <!--
+        Keep 'tool_mount_tcp' as a real SDF <link> so the tool model's Gazebo
+        DetachableJoint can resolve it via model.LinkByName(). Without
+        preserveFixedJoint the URDF->SDF converter lumps this fixed-joint child
+        into its parent and demotes it to a <frame>, which the plugin cannot
+        find (resulting in "Child Link tool_mount_tcp could not be found").
+    -->
+    <gazebo reference="tool_mount_tcp_joint">
+        <preserveFixedJoint>true</preserveFixedJoint>
+    </gazebo>
+
     <xacro:if value="${simulated}">
-        <link name="rfid_scanner_link"/>
+        <link name="rfid_scanner_link">
+            <inertial>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <mass value="1e-6"/>
+                <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+            </inertial>
+        </link>
 
         <joint name="tool_mount_to_rfid_scanner_joint" type="fixed">
             <parent link="tool_mount_tcp"/>
             <child link="rfid_scanner_link"/>
             <origin xyz="0.0778 0 -0.033" rpy="0 0 0"/>
         </joint>
+
+        <!--
+            Keep the RFID frame as a real SDF <link> so the RfidReader plugin can
+            resolve it via model.LinkByName(). Without preserveFixedJoint the URDF->SDF
+            converter lumps this massless fixed-joint child into its parent and turns it
+            into a <frame>, which the plugin cannot find (link resolver returns null).
+        -->
+        <gazebo reference="tool_mount_to_rfid_scanner_joint">
+            <preserveFixedJoint>true</preserveFixedJoint>
+        </gazebo>
 
         <gazebo>
             <plugin filename="rfid_sim_systems"
