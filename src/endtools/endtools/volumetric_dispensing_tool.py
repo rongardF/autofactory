@@ -304,6 +304,7 @@ def main(args=None) -> None:
     executor.add_node(node)
     try:
         executor.spin()
+    except KeyboardInterrupt:
+        node.get_logger().info('Keyboard interrupt received, shutting down.')
     finally:
-        node.destroy_node()
         shutdown()

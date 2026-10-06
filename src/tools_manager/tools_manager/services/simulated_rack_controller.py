@@ -30,7 +30,10 @@ class SimulatedRackController(RackController):
                 self._slot_info[index] = None
                 return
             try:
-                self._slot_info[index] = ToolInfoDto.from_tag_data(index, bytes(data.data))
+                # The RFID reader plugin publishes the already hex-decoded tag
+                # payload bytes, whereas from_tag_data expects the hex-text
+                # representation (as stored in config). Re-encode to hex text.
+                self._slot_info[index] = ToolInfoDto.from_tag_data(index, bytes(data.data).hex().encode())
             except Exception as e:
                 self._node.get_logger().error(
                     f'Failed to parse RFID tag data for slot {index}: {e}'

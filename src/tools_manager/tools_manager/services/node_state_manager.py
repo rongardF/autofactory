@@ -186,6 +186,20 @@ class NodeStateManager:
             return None
         return response.values[0]
 
+    # Primary lifecycle state each managed transition should leave the node in.
+    # Used to confirm a transition that actually took effect even when its
+    # service response was lost: a freshly created client can hit a DDS
+    # discovery race on the response path (the request is delivered, but the
+    # target node replies before it has discovered the client's response
+    # reader, so the reply is dropped) while the transition itself still
+    # completes on the target node.
+    _EXPECTED_STATE_AFTER_TRANSITION: dict[int, str] = {
+        Transition.TRANSITION_CONFIGURE: 'inactive',
+        Transition.TRANSITION_ACTIVATE: 'active',
+        Transition.TRANSITION_DEACTIVATE: 'inactive',
+        Transition.TRANSITION_CLEANUP: 'unconfigured',
+    }
+
     def _change_state(self, transition_id: int, label: str) -> TransitionCallbackReturn:
         """Request a lifecycle transition and map the result to a callback return.
 
@@ -200,12 +214,26 @@ class NodeStateManager:
             request,
             f'{label} {self.node_name}',
         )
-        if response is None or not response.success:
-            self._node.get_logger().error(
-                f"Transition '{label}' on node '{self.node_name}' failed"
+        if response is not None and response.success:
+            return TransitionCallbackReturn.SUCCESS
+
+        # The call failed or its response was lost in transit. A lost response
+        # does not mean the transition failed, so confirm the node's actual
+        # state before giving up (DDS discovery has settled by now, so the
+        # follow-up get_state call is no longer subject to the response race).
+        expected_state = self._EXPECTED_STATE_AFTER_TRANSITION.get(transition_id)
+        if expected_state is not None and self.get_node_state() == expected_state:
+            self._node.get_logger().warning(
+                f"Transition '{label}' response for '{self.node_name}' was not "
+                f"received, but the node is already in '{expected_state}'; "
+                f"treating the transition as successful."
             )
-            return TransitionCallbackReturn.FAILURE
-        return TransitionCallbackReturn.SUCCESS
+            return TransitionCallbackReturn.SUCCESS
+
+        self._node.get_logger().error(
+            f"Transition '{label}' on node '{self.node_name}' failed"
+        )
+        return TransitionCallbackReturn.FAILURE
 
     def _call(self, client: ServiceClient, request, description: str):
         """Call a service and wait for the result within the configured timeout.

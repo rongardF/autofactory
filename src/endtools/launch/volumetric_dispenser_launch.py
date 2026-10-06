@@ -30,6 +30,7 @@ def _bridge_setup(context, *args, **kwargs):
         Node(
             package='ros_gz_bridge',
             executable='parameter_bridge',
+            name=f"gz_ros_bridge_{tool_sn}",
             arguments=args,
             output='screen'
         )

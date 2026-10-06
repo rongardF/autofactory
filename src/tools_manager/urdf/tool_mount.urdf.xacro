@@ -85,7 +85,7 @@
             <plugin filename="rfid_sim_systems"
                     name="autofactory::rfid::RfidReader">
                 <link>rfid_scanner_link</link>
-                <range>0.02</range>
+                <range>0.1</range>
                 <update_rate>10</update_rate>
                 <detected_topic>/tool_mount_rfid_scanner/detected</detected_topic>
                 <content_topic>/tool_mount_rfid_scanner/tag_data</content_topic>

@@ -516,7 +516,14 @@ class ToolsManager(LifecycleNode):
             self._tool_mount_lock = None
 
         for tool_sn, endtool_launch in self._endtools.items():
-            endtool_launch.endtool_node_manager.deactivate_node()
+            endtool_node_state = endtool_launch.endtool_node_manager.get_node_state()
+            if endtool_node_state is not None and endtool_node_state == 'active':
+                if endtool_launch.endtool_node_manager.deactivate_node() != TransitionCallbackReturn.SUCCESS:
+                    self.get_logger().error(f'Failed to deactivate endtool node [{endtool_launch.endtool_node_manager.node_name}]')
+                    raise DeactivationFailedException(f'Failed to deactivate endtool node [{endtool_launch.endtool_node_manager.node_name}]')
+            if endtool_launch.endtool_node_manager.unconfigure_node() != TransitionCallbackReturn.SUCCESS:
+                self.get_logger().error(f'Failed to unconfigure endtool node: {endtool_launch.endtool_node_manager.node_name}')
+                raise DeactivationFailedException(f'Failed to unconfigure endtool node: {endtool_launch.endtool_node_manager.node_name}')
 
             if self._planner_service is not None:
                 self._planner_service.delete_model(tool_sn)
@@ -552,7 +559,6 @@ class ToolsManager(LifecycleNode):
 
     # region: callbacks
     def _slots_callback(self, msg: Slots) -> None:
-        self.get_logger().info(f'Received slots info update: {msg}')
         self.tool_rack_slots = SlotsDto.from_slots_msg(msg)
 
     def _mounted_callback(self, msg: ToolInfo) -> None:
