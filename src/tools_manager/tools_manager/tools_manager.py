@@ -65,6 +65,7 @@ from tools_manager.model.slot_frames_dto import SlotFramesDto
 from tools_manager.model.tool_info_dto import ToolInfoDto
 from tools_manager.model.endtool_launch_dto import EndtoolLaunchDto
 from tools_manager.model.tools_manager_node_config import ToolsManagerNodeConfigDTO
+from tools_manager.model.tools_manager_config import ToolSlotDTO
 from tools_manager.services.gazebo_world_manager import GazeboWorldManager
 from tools_manager.services.moveit2_world_manager import Moveit2WorldManager
 from tools_manager.services.node_state_manager import NodeStateManager
@@ -550,7 +551,9 @@ class ToolsManager(LifecycleNode):
         self._tool_mount_manager = None
         self._tool_rack_manager = None
         self._config = None
-    
+
+        return TransitionCallbackReturn.SUCCESS
+
     def on_error(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().error(f'Error occurred in state: {state.label}')
         return super().on_error(state)
@@ -562,7 +565,6 @@ class ToolsManager(LifecycleNode):
         self.tool_rack_slots = SlotsDto.from_slots_msg(msg)
 
     def _mounted_callback(self, msg: ToolInfo) -> None:
-        self.get_logger().info(f'Received mounted info update: {msg}')
         self.tool_mounted = ToolInfoDto.from_msg(msg)
 
     def _cancel_tool_action_callback(self, goal_handle) -> bool:
@@ -634,7 +636,6 @@ class ToolsManager(LifecycleNode):
             path = TrajectoryPath()
             path.path_id = str(uuid4())
             path.motion_type = TrajectoryPath.MOTION_TYPE_PTP
-            path.joint_speed = -1.0  # NOTE: -1.0 means use default speed defined in movement controller
             path.tool_frame = 'tool_mount_tcp'  # NOTE: this is hardcoded frame and matches the link defined in URDF; DO NOT CHANGE IT UNLESS CHANGING IN URDF ALSO!
             path.target_pose = PoseStamped()
             path.target_pose.header.frame_id = frames.tool_slide_in_frame
@@ -672,7 +673,7 @@ class ToolsManager(LifecycleNode):
             path = TrajectoryPath()
             path.path_id = str(uuid4())
             path.motion_type = TrajectoryPath.MOTION_TYPE_LIN
-            path.cartesian_speed = 0.02
+            path.cartesian_speed = 0.08
             path.tool_frame = 'tool_mount_tcp'
             path.target_pose = PoseStamped()
             path.target_pose.header.frame_id = frames.tool_attached_frame
@@ -728,12 +729,18 @@ class ToolsManager(LifecycleNode):
             path = TrajectoryPath()
             path.path_id = str(uuid4())
             path.motion_type = TrajectoryPath.MOTION_TYPE_LIN
-            path.cartesian_speed = 0.02
+            path.cartesian_speed = 0.08
             path.tool_frame = 'tool_mount_tcp'
             path.target_pose = PoseStamped()
             path.target_pose.header.frame_id = frames.tool_lifted_frame
             path.target_pose.header.stamp = self.get_clock().now().to_msg()
             path.target_pose.pose = unity_pose
+
+            if not self._call_action(self._movement_controller_action_client, ExecuteTrajectory.Goal(paths=[path])):
+                response.success = False
+                response.message = "Failed to move to tool_lifted pose."
+                goal_handle.abort()
+                return response
 
             # re-enable collisions between tool-mount and tool-rack after the mount operation
             self._planner_service.allow_collisions(model_id=tool_sn, allowed=False, tool_mount_link='tool_mount_tcp', slot_link='tool_rack')
@@ -773,12 +780,18 @@ class ToolsManager(LifecycleNode):
                 goal_handle.abort()
                 return response
             else:
-                if not slots.is_slot_empty(tool_mounted.index):
+                slot_info = slots.get_slot_info(tool_sn)
+                if slot_info is None:
                     response.success = False
-                    response.message = f"Slot {tool_mounted.index} is not empty. Cannot unmount tool with serial number '{tool_sn}'."
+                    response.message = f"Slot information for tool with serial number '{tool_sn}' is not available. Cannot unmount tool."
                     goal_handle.abort()
                     return response
-
+                elif not slots.is_slot_empty(slot_info.index):
+                    response.success = False
+                    response.message = f"Slot {slot_info.index} is not empty. Cannot unmount tool with serial number '{tool_sn}'."
+                    goal_handle.abort()
+                    return response
+                
             # sanity check
             if (
                 self._planner_service is None or
@@ -797,7 +810,7 @@ class ToolsManager(LifecycleNode):
             # get the parent frames for moving with 'tool_mount_tcp' frame/link; all frames are
             # defined in such a way that movement pose required is all zeros - this means that
             # 'tool_mount_tcp' frame must align with the target frame and then we are in correct pose
-            result = self._get_frames_and_unity_pose(tool_mounted)
+            result = self._get_frames_and_unity_pose(slot_info)
             if result is None:
                 response.success = False
                 response.message = f"Tool with serial number '{tool_sn}' is not mounted."
@@ -809,7 +822,6 @@ class ToolsManager(LifecycleNode):
             path = TrajectoryPath()
             path.path_id = str(uuid4())
             path.motion_type = TrajectoryPath.MOTION_TYPE_PTP
-            path.joint_speed = -1.0
             path.tool_frame = 'tool_mount_tcp'  # NOTE: this is hardcoded frame and matches the link defined in URDF; DO NOT CHANGE IT UNLESS CHANGING IN URDF ALSO!
             path.target_pose = PoseStamped()
             path.target_pose.header.frame_id = frames.tool_lifted_frame
@@ -833,7 +845,7 @@ class ToolsManager(LifecycleNode):
             path = TrajectoryPath()
             path.path_id = str(uuid4())
             path.motion_type = TrajectoryPath.MOTION_TYPE_LIN
-            path.cartesian_speed = 0.02
+            path.cartesian_speed = 0.08
             path.tool_frame = 'tool_mount_tcp'
             path.target_pose = PoseStamped()
             path.target_pose.header.frame_id = frames.tool_attached_frame
@@ -891,12 +903,18 @@ class ToolsManager(LifecycleNode):
             path = TrajectoryPath()
             path.path_id = str(uuid4())
             path.motion_type = TrajectoryPath.MOTION_TYPE_LIN
-            path.cartesian_speed = 0.02
+            path.cartesian_speed = 0.08
             path.tool_frame = 'tool_mount_tcp'
             path.target_pose = PoseStamped()
             path.target_pose.header.frame_id = frames.tool_slide_in_frame
             path.target_pose.header.stamp = self.get_clock().now().to_msg()
             path.target_pose.pose = unity_pose
+
+            if not self._call_action(self._movement_controller_action_client, ExecuteTrajectory.Goal(paths=[path])):
+                response.success = False
+                response.message = "Failed to move to tool_slide_in pose."
+                goal_handle.abort()
+                return response
 
             # re-enable collisions between tool-mount and tool-rack after the mount operation
             self._planner_service.allow_collisions(model_id=tool_sn, allowed=False, tool_mount_link='tool_mount_tcp', slot_link='tool_rack')
@@ -1025,22 +1043,22 @@ class ToolsManager(LifecycleNode):
 
         return future.result()
 
-    def _get_frames_and_unity_pose(self, tool_info: ToolInfoDto) -> tuple[SlotFramesDto, Pose]|None:
+    def _get_frames_and_unity_pose(self, tool_info: ToolInfoDto|ToolSlotDTO) -> tuple[SlotFramesDto, Pose]|None:
         frames_dto = SlotFramesDto(
             tool_slide_in_frame=tool_info.tool_slide_in_frame,
             tool_attached_frame=tool_info.tool_attached_frame,
             tool_lifted_frame=tool_info.tool_lifted_frame
         )
 
-        # prepear unity pose - pose that does zero movement
+        # prepear pose rotated 180 degrees about the Z axis (no translation) FIXME: rename - not unity anymore
         unity_pose = Pose()  
-        unity_pose.position.x = 0.0
+        unity_pose.position.x = 0.0001
         unity_pose.position.y = 0.0
         unity_pose.position.z = 0.0
         unity_pose.orientation.x = 0.0
         unity_pose.orientation.y = 0.0
-        unity_pose.orientation.z = 0.0
-        unity_pose.orientation.w = 1.0
+        unity_pose.orientation.z = 1.0
+        unity_pose.orientation.w = 0.0
 
         return frames_dto, unity_pose
 

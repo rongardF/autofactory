@@ -27,7 +27,8 @@ class SimulatedToolMountController(ToolMountController):
                 # The RFID reader plugin publishes the already hex-decoded tag
                 # payload bytes, whereas from_tag_data expects the hex-text
                 # representation (as stored in config). Re-encode to hex text.
-                self._mounted_info = ToolInfoDto.from_tag_data(0, bytes(data.data).hex().encode())
+                # the -1 index means that it is not on a rack
+                self._mounted_info = ToolInfoDto.from_tag_data(-1, bytes(data.data).hex().encode())
             except Exception as e:
                 self._node.get_logger().error(
                     f'Failed to parse RFID tag data for tool mount: {e}'

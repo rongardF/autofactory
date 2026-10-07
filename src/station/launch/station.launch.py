@@ -34,6 +34,9 @@ them as launch arguments to the reusable ``movement_controller`` launch file,
 keeping the movement controller decoupled from any particular robot cell.
 """
 
+from pathlib import Path
+from ament_index_python.packages import get_package_share_directory
+
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
@@ -170,6 +173,18 @@ def generate_launch_description() -> LaunchDescription:
         }.items(),
     )
 
+    tools_manager = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            Path(get_package_share_directory("tools_manager")) / "launch" / "tools_manager_launch.py"
+        ),
+        launch_arguments={
+            "simulated": simulated,
+            "world_name": "default",
+            "station_model_name": "station",
+            "movement_controller_node_name": "movement_controller",
+        }.items(),
+    )
+
     # use GroupAction to scope the launch files so that their declared arguments don't leak into 
     # the global namespace
     return LaunchDescription(
@@ -179,5 +194,6 @@ def generate_launch_description() -> LaunchDescription:
             GroupAction([laser_cross_launch], scoped=True),
             GroupAction([gpio_controller_launch], scoped=True),
             GroupAction([movement_controller_launch], scoped=True),
+            GroupAction([tools_manager], scoped=True),
         ]
     )

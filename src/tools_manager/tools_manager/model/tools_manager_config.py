@@ -82,6 +82,21 @@ class ToolSlotDTO(BaseModel):
             data['metadata'] = None
         return data
 
+    @property
+    def tool_lifted_frame(self) -> str:
+        """Get the name of the frame for the tool lifted pose."""
+        return f'slot{self.index}_lifted_link'
+
+    @property
+    def tool_attached_frame(self) -> str:
+        """Get the name of the frame for the tool attached pose."""
+        return f'slot{self.index}_attached_link'
+
+    @property
+    def tool_slide_in_frame(self) -> str:
+        """Get the name of the frame for the tool slide in pose."""
+        return f'slot{self.index}_slide_in_link'
+
 
 class ToolRackSimulationSetupDTO(BaseModel):
     """Tools setup for simulation bootup."""

@@ -181,13 +181,23 @@ class MovementController(LifecycleNode):
         )
         self.declare_parameter(
             'default_rotational_velocity',
-            0.2,
+            0.5,
             ParameterDescriptor(description='Default rotational velocity for the robot (radians per second).'),
         )
         self.declare_parameter(
             'default_cartesian_velocity',
             0.2,
             ParameterDescriptor(description='Default cartesian velocity for the robot (meters per second).'),
+        )
+        self.declare_parameter(
+            'default_rotational_acceleration',
+            2.0,
+            ParameterDescriptor(description='Default rotational acceleration for the robot (radians per second squared).'),
+        )
+        self.declare_parameter(
+            'default_cartesian_acceleration',
+            1.0,
+            ParameterDescriptor(description='Default cartesian acceleration for the robot (meters per second squared).'),
         )
         # endregion: parameters
 
@@ -234,6 +244,8 @@ class MovementController(LifecycleNode):
             max_joint_accel = self.get_parameter('constraints.max_joint_acceleration').get_parameter_value().double_value
             default_rot_vel = self.get_parameter('default_rotational_velocity').get_parameter_value().double_value
             default_cart_vel = self.get_parameter('default_cartesian_velocity').get_parameter_value().double_value
+            default_rot_accel = self.get_parameter('default_rotational_acceleration').get_parameter_value().double_value
+            default_cart_accel = self.get_parameter('default_cartesian_acceleration').get_parameter_value().double_value
             self.get_logger().info('Parameters read successfully, building constraint configuration DTO')
 
             dto = ConstraintConfigDTO(
@@ -251,7 +263,9 @@ class MovementController(LifecycleNode):
                 max_joint_speed=max_joint_speed,
                 max_joint_acceleration=max_joint_accel,
                 default_rotational_velocity=default_rot_vel,
-                default_cartesian_velocity=default_cart_vel
+                default_cartesian_velocity=default_cart_vel,
+                default_rotational_acceleration=default_rot_accel,
+                default_cartesian_acceleration=default_cart_accel
             )
 
             self.get_logger().info('Constraint configuration DTO built and validated successfully')

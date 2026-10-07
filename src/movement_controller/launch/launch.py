@@ -483,19 +483,7 @@ def setup_robot_nodes(context, *args, **kwargs):
         ],
     )
 
-    tools_manager = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            Path(get_package_share_directory("tools_manager")) / "launch" / "tools_manager_launch.py"
-        ),
-        launch_arguments={
-            "simulated": simulated_value,
-            "world_name": "default",
-            "station_model_name": "station",
-            "movement_controller_node_name": "movement_controller",
-        }.items(),
-    )
-
-    nodes = [move_group_node, rviz_node, movement_controller, tools_manager]
+    nodes = [move_group_node, rviz_node, movement_controller]
 
     # Simulation: Gazebo owns the controller_manager and robot_state_publisher,
     # so start the MoveIt nodes directly alongside the sim driver launch.

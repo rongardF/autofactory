@@ -236,8 +236,7 @@ class GazeboWorldManager(WorldManager):
         translation = transform.transform.translation
         rotation = transform.transform.rotation
         pose = Pose()
-        # NOTE: a small offset is added to the x-coordinate to avoid collision with the link
-        pose.position = Point(x=translation.x+0.001, y=translation.y, z=translation.z)
+        pose.position = Point(x=translation.x, y=translation.y, z=translation.z)
         pose.orientation = Quaternion(
             x=rotation.x, y=rotation.y, z=rotation.z, w=rotation.w
         )

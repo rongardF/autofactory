@@ -299,6 +299,7 @@ def main(args=None) -> None:
     :type args: list[str] | None
     """
     init(args=args)
+    call_shutdown = True
     node = VolumetricDispensingTool()
     executor = MultiThreadedExecutor(num_threads=5)
     executor.add_node(node)
@@ -306,5 +307,7 @@ def main(args=None) -> None:
         executor.spin()
     except KeyboardInterrupt:
         node.get_logger().info('Keyboard interrupt received, shutting down.')
+        call_shutdown = False
     finally:
-        shutdown()
+        if call_shutdown:
+            shutdown()

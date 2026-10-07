@@ -119,7 +119,7 @@ class ToolMount(LifecycleNode):
 
             self._tool_mounted_publisher = self.create_lifecycle_publisher(
                 ToolInfo,
-                'tool_mounted',
+                '~/tool_mounted',
                 QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
             )
         except ValidationError as e:
@@ -171,7 +171,7 @@ class ToolMount(LifecycleNode):
         # create services for locking/unlocking the tool mount
         self._lock_service = self.create_service(
             SetBool,
-            'lock',
+            '~/lock',
             self._lock_callback,
         )
 

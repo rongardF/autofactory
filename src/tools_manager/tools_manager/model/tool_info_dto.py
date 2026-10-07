@@ -117,14 +117,20 @@ class ToolInfoDto(BaseModel):
     @property
     def tool_lifted_frame(self) -> str:
         """Get the name of the frame for the tool lifted pose."""
+        if self.index < 0:
+            raise ValueError("Tool is not assigned to a valid slot.")
         return f'slot{self.index}_lifted_link'
 
     @property
     def tool_attached_frame(self) -> str:
         """Get the name of the frame for the tool attached pose."""
+        if self.index < 0:
+            raise ValueError("Tool is not assigned to a valid slot.")
         return f'slot{self.index}_attached_link'
 
     @property
     def tool_slide_in_frame(self) -> str:
         """Get the name of the frame for the tool slide in pose."""
+        if self.index < 0:
+            raise ValueError("Tool is not assigned to a valid slot.")
         return f'slot{self.index}_slide_in_link'

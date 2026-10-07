@@ -212,8 +212,6 @@ class Moveit2WorldManager(WorldManager):
         :returns: The populated ``AttachedCollisionObject`` message.
         """
         identity = Pose()
-        # NOTE: a small offset is added to the x-coordinate to avoid collision with the link
-        identity.position.x = 0.001
         identity.orientation.w = 1.0
 
         collision_object = CollisionObject()
