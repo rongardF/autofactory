@@ -248,7 +248,9 @@ class ToolMount(LifecycleNode):
         tool_info = self._tool_mount_controller.get_mounted_tool_info()
         if tool_info is not None:
             tool_info_msg = ToolInfoDto.to_msg(tool_info)
-            self._tool_mounted_publisher.publish(tool_info_msg)
+        else:
+            tool_info_msg = ToolInfoDto.to_msg(ToolInfoDto())  # publish empty ToolInfo when nothing is mounted
+        self._tool_mounted_publisher.publish(tool_info_msg)
     # endregion: callbacks
 
 

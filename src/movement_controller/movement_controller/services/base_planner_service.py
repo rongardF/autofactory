@@ -177,6 +177,11 @@ class BasePlannerService:
         state.joint_state.name = list(jt.joint_names)
         state.joint_state.position = list(last_point.positions)
         state.joint_state.velocity = [0.0] * len(jt.joint_names)
+        # Mark as a diff so attached collision objects (e.g. a mounted tool) in
+        # the live planning scene are retained when this state seeds the next
+        # group's plan. Without is_diff=True the empty attached_collision_objects
+        # list would strip the mounted tool for the chained plan request.
+        state.is_diff = True
         self._logger.debug(
             f'Extracted end state for joints {list(jt.joint_names)}: '
             f'positions={list(last_point.positions)}'

@@ -649,7 +649,7 @@ class ToolsManager(LifecycleNode):
                 return response
 
             # allow collisions between tool-mount, endtool and tool-rack for the duration of the mount operation
-            if not self._planner_service.allow_collisions(model_id=tool_sn, allowed=True, tool_mount_link='tool_mount_tcp', slot_link='tool_rack'):   
+            if not self._planner_service.allow_collisions(model_id=tool_sn, allowed=True, tool_mount_link='tool_mount_tcp', slot_link='tool_rack_link'):   
                 response.success = False
                 response.message = "Failed to allow collisions between tool-mount, endtool and tool-rack."
                 goal_handle.abort()
@@ -743,7 +743,7 @@ class ToolsManager(LifecycleNode):
                 return response
 
             # re-enable collisions between tool-mount and tool-rack after the mount operation
-            self._planner_service.allow_collisions(model_id=tool_sn, allowed=False, tool_mount_link='tool_mount_tcp', slot_link='tool_rack')
+            self._planner_service.allow_collisions(model_id=tool_sn, allowed=False, tool_mount_link='tool_mount_tcp', slot_link='tool_rack_link')
 
             # reconfigure endtool as mounted
             self._endtool_mounted(tool_sn, True)
@@ -835,7 +835,7 @@ class ToolsManager(LifecycleNode):
                 return response
 
             # allow collisions between tool-mount, endtool and tool-rack for the duration of the mount operation
-            if not self._planner_service.allow_collisions(model_id=tool_sn, allowed=True, tool_mount_link='tool_mount_tcp', slot_link='tool_rack'):   
+            if not self._planner_service.allow_collisions(model_id=tool_sn, allowed=True, tool_mount_link='tool_mount_tcp', slot_link='tool_rack_link'):   
                 response.success = False
                 response.message = "Failed to allow collisions between tool-mount, endtool and tool-rack."
                 goal_handle.abort()
@@ -917,7 +917,7 @@ class ToolsManager(LifecycleNode):
                 return response
 
             # re-enable collisions between tool-mount and tool-rack after the mount operation
-            self._planner_service.allow_collisions(model_id=tool_sn, allowed=False, tool_mount_link='tool_mount_tcp', slot_link='tool_rack')
+            self._planner_service.allow_collisions(model_id=tool_sn, allowed=False, tool_mount_link='tool_mount_tcp', slot_link='tool_rack_link')
 
             # reconfigure endtool as mounted
             self._endtool_mounted(tool_sn, False)
