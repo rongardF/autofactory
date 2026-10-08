@@ -19,6 +19,9 @@
             <geometry>
                 <mesh filename="file://$(find tools_manager)/model/tool_mount/meshes/visual.dae"/>
             </geometry>
+            <material name="tool_mount_grey">
+                <color rgba="0.5 0.5 0.5 1"/>
+            </material>
         </visual>
         <collision>
             <origin xyz="0 0 0" rpy="0 0 0"/>

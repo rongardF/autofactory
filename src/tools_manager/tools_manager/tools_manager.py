@@ -565,7 +565,11 @@ class ToolsManager(LifecycleNode):
         self.tool_rack_slots = SlotsDto.from_slots_msg(msg)
 
     def _mounted_callback(self, msg: ToolInfo) -> None:
-        self.tool_mounted = ToolInfoDto.from_msg(msg)
+        tool_mounted = ToolInfoDto.from_msg(msg)
+        if tool_mounted.tool_sn:
+            self.tool_mounted = tool_mounted
+        else:
+            self.tool_mounted = None
 
     def _cancel_tool_action_callback(self, goal_handle) -> bool:
         self.get_logger().info(f'Cancel request received for goal: {goal_handle}')
@@ -711,6 +715,9 @@ class ToolsManager(LifecycleNode):
                 response.message = f"Tool-mount failed to detect the mounted tool with serial number '{tool_sn}'."
                 goal_handle.abort()
                 return response
+
+            # wait for a bit to ensure that the tool is fully mounted and detected
+            self.get_clock().sleep_for(Duration(seconds=1.0))  
 
             try:
                 # detach tool from rack in planning scene and attach to tool-mount

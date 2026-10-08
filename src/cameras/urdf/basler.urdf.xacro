@@ -45,6 +45,9 @@
               <box size="0.05 0.05 0.05"/>
           </xacro:unless>
         </geometry>
+        <material name="tool_rack_grey">
+            <color rgba="0.5 0.5 0.5 1"/>
+        </material>
       </visual>
       <collision>
         <origin xyz="0 0 0" rpy="0 0 0"/>
