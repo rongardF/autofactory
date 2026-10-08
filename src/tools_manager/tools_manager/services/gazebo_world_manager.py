@@ -242,6 +242,35 @@ class GazeboWorldManager(WorldManager):
         )
         return pose
 
+    @staticmethod
+    def _apply_rotation(
+        pose: Pose, rotation: tuple[float, float, float, float]
+    ) -> Pose:
+        """Rotate a pose's orientation by a local ``(x, y, z, w)`` quaternion.
+
+        The rotation is applied in the pose's own frame, i.e. the resulting
+        orientation is ``pose.orientation`` composed (Hamilton product) with
+        ``rotation`` on the right.
+
+        :param pose: Pose whose orientation is rotated (modified in place).
+        :param rotation: ``(x, y, z, w)`` quaternion to apply.
+        :returns: The same ``pose`` with its orientation updated.
+        """
+        x1, y1, z1, w1 = (
+            pose.orientation.x,
+            pose.orientation.y,
+            pose.orientation.z,
+            pose.orientation.w,
+        )
+        x2, y2, z2, w2 = rotation
+        pose.orientation = Quaternion(
+            x=w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+            y=w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+            z=w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+            w=w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+        )
+        return pose
+
     def _detach_best_effort(self, link_name: str, model_id: str) -> None:
         """Request a detach without failing when no confirmation arrives.
 
@@ -356,11 +385,11 @@ class GazeboWorldManager(WorldManager):
 
         return future.result()
 
-    def spawn_model(self, tool: ToolInfoDto, link_name: str):
+    def spawn_model(self, tool: ToolInfoDto, link_name: str, rotation: tuple[float, float, float, float] | None = None):
         try:
             model_id = tool.tool_sn
             model_path = self._generate_model_path(tool)
-            slot_link = tool.tool_attached_frame
+            slot_link = self._tools_manager_config.get_tool_slot_data(tool.tool_sn).tool_attached_frame
             tag_data = tool.to_tag_data().decode()  # Convert bytes to string for XACRO
             sdf = self._generate_sdf_content(model_path, model_id, slot_link, tag_data)
 
@@ -369,6 +398,8 @@ class GazeboWorldManager(WorldManager):
                 raise ModelSpawnError(
                     f'Failed to look up world pose of link {link_name} for model {model_id}'
                 )
+            if rotation is not None:
+                pose = self._apply_rotation(pose, rotation)
 
             factory = EntityFactory()
             factory.name = model_id

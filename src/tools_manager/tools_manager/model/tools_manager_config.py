@@ -184,8 +184,6 @@ class ToolsManagerConfigDTO(BaseModel):
             if entry.tool_sn == tool_sn:
                 if entry.parameters is not None:
                     return entry.parameters
-                else:
-                    return {}
 
         return {}
 
@@ -200,6 +198,32 @@ class ToolsManagerConfigDTO(BaseModel):
                 return entry.metadata
 
         return None
+
+    def get_tool_slot_number(self, tool_sn: str) -> int:
+        """Get the slot number for a given tool serial number.
+
+        raises ValueError if the tool serial number is not found in any slot.
+        :param tool_sn: Serial number of the tool.
+        :returns: The slot number for the tool.
+        """
+        for entry in self.slots:
+            if entry.tool_sn == tool_sn:
+                return entry.index
+
+        raise ValueError(f'tool serial number {tool_sn} not found in any slot')
+
+    def get_tool_slot_data(self, tool_sn: str) -> ToolSlotDTO:
+        """Get the slot data for a given tool serial number.
+
+        raises ValueError if the tool serial number is not found in any slot.
+        :param tool_sn: Serial number of the tool.
+        :returns: The slot data for the tool.
+        """
+        for entry in self.slots:
+            if entry.tool_sn == tool_sn:
+                return entry
+
+        raise ValueError(f'tool serial number {tool_sn} not found in any slot')
 
     def get_simulated_tag_data(self, tool_sn: str) -> bytes|None:
         """Get the simulated RFID tag data for a given tool serial number.

@@ -71,7 +71,7 @@
         <joint name="tool_mount_to_rfid_scanner_joint" type="fixed">
             <parent link="tool_mount_tcp"/>
             <child link="rfid_scanner_link"/>
-            <origin xyz="0.0778 0 -0.033" rpy="0 0 0"/>
+            <origin xyz="0 0 -0.033" rpy="0 0 0"/>
         </joint>
 
         <!--
@@ -88,7 +88,7 @@
             <plugin filename="rfid_sim_systems"
                     name="autofactory::rfid::RfidReader">
                 <link>rfid_scanner_link</link>
-                <range>0.1</range>
+                <range>0.05</range>
                 <update_rate>10</update_rate>
                 <detected_topic>/tool_mount_rfid_scanner/detected</detected_topic>
                 <content_topic>/tool_mount_rfid_scanner/tag_data</content_topic>

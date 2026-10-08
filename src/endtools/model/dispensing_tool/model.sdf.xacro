@@ -50,7 +50,7 @@
       <joint name="rfid_tag_link_joint" type="fixed">
           <parent>dispensing_tool_origin</parent>
           <child>rfid_tag_link</child>
-          <pose>0.0506 0 -0.033 0 0 0</pose>
+          <pose>-0.0506 0 -0.033 0 0 0</pose>
       </joint>
 
       <link name="tool_tcp_uncalibrated"/>

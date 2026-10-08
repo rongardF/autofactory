@@ -364,6 +364,7 @@ class ToolsManager(LifecycleNode):
                 self.get_logger().info(f'Launching and spawning endtool node and model for mounted tool: {tool_mounted.tool_sn}')
                 tool_parameters = self._config.tools_manager_config.get_tool_parameters(tool_mounted.tool_sn)
                 tool_metadata = self._config.tools_manager_config.get_tool_metadata(tool_mounted.tool_sn)
+                slot_index = self._config.tools_manager_config.get_tool_slot_number(tool_mounted.tool_sn)
 
                 if tool_parameters.get("node_name", None) is None or tool_metadata is None:
                     raise ActivationFailedException(
@@ -380,7 +381,9 @@ class ToolsManager(LifecycleNode):
                         "simulated": self._config.simulated, # NOTE: over-writting these parameters 
                         "use_sim_time": self._config.simulated,
                         "tool_sn": tool_mounted.tool_sn,
-                        "mounted": "true"
+                        "mounted": "true",
+                        "tool_rack_link": f'slot{slot_index}_attached_link',
+                        "tool_mount_link": "tool_mount_tcp"
                     },
                 )
                 endtool_node_manager = NodeStateManager(
@@ -396,10 +399,10 @@ class ToolsManager(LifecycleNode):
                         f'for tool {tool_mounted.tool_sn}.'
                     )
                 
-                self._planner_service.spawn_model(tool_mounted, link_name="tool_mount_tcp")
+                self._planner_service.spawn_model(tool_mounted, link_name="tool_mount_tcp", rotation=(0.0, 0.0, 1.0, 0.0))
     
                 if self._config.simulated and self._gazebo_service is not None:
-                    self._gazebo_service.spawn_model(tool_mounted, link_name="tool_mount_tcp")
+                    self._gazebo_service.spawn_model(tool_mounted, link_name="tool_mount_tcp", rotation=(0.0, 0.0, 1.0, 0.0))
 
             self.get_logger().info('Creating interfaces for tools manager')
             # creating tool mount lock service client
@@ -628,7 +631,7 @@ class ToolsManager(LifecycleNode):
             # get the parent frames for moving with 'tool_mount_tcp' frame/link; all frames are
             # defined in such a way that movement pose required is all zeros - this means that
             # 'tool_mount_tcp' frame must align with the target frame and then we are in correct pose
-            result = self._get_frames_and_unity_pose(tool_info)
+            result = self._get_frames_and_pose(tool_info)
             if result is None:
                 response.success = False
                 response.message = f"Tool with serial number '{tool_sn}' is not on the rack."
@@ -716,8 +719,9 @@ class ToolsManager(LifecycleNode):
                 goal_handle.abort()
                 return response
 
-            # wait for a bit to ensure that the tool is fully mounted and detected
-            self.get_clock().sleep_for(Duration(seconds=1.0))  
+            # wait for a bit to ensure that the tool is fully mounted and detected (otherwise it will
+            # be attached while the tool-mount is moving and tool will be attached with incorrect pose
+            self.get_clock().sleep_for(Duration(seconds=0.5))  
 
             try:
                 # detach tool from rack in planning scene and attach to tool-mount
@@ -817,7 +821,7 @@ class ToolsManager(LifecycleNode):
             # get the parent frames for moving with 'tool_mount_tcp' frame/link; all frames are
             # defined in such a way that movement pose required is all zeros - this means that
             # 'tool_mount_tcp' frame must align with the target frame and then we are in correct pose
-            result = self._get_frames_and_unity_pose(slot_info)
+            result = self._get_frames_and_pose(slot_info)
             if result is None:
                 response.success = False
                 response.message = f"Tool with serial number '{tool_sn}' is not mounted."
@@ -1050,24 +1054,24 @@ class ToolsManager(LifecycleNode):
 
         return future.result()
 
-    def _get_frames_and_unity_pose(self, tool_info: ToolInfoDto|ToolSlotDTO) -> tuple[SlotFramesDto, Pose]|None:
+    def _get_frames_and_pose(self, tool_info: ToolInfoDto|ToolSlotDTO) -> tuple[SlotFramesDto, Pose]|None:
         frames_dto = SlotFramesDto(
             tool_slide_in_frame=tool_info.tool_slide_in_frame,
             tool_attached_frame=tool_info.tool_attached_frame,
             tool_lifted_frame=tool_info.tool_lifted_frame
         )
 
-        # prepear pose rotated 180 degrees about the Z axis (no translation) FIXME: rename - not unity anymore
-        unity_pose = Pose()  
-        unity_pose.position.x = 0.0001
-        unity_pose.position.y = 0.0
-        unity_pose.position.z = 0.0
-        unity_pose.orientation.x = 0.0
-        unity_pose.orientation.y = 0.0
-        unity_pose.orientation.z = 1.0
-        unity_pose.orientation.w = 0.0
+        # prepear pose rotated 180 degrees about the Z axis (no translation)
+        pose = Pose()  
+        pose.position.x = 0.0001
+        pose.position.y = 0.0
+        pose.position.z = 0.0
+        pose.orientation.x = 0.0
+        pose.orientation.y = 0.0
+        pose.orientation.z = 1.0
+        pose.orientation.w = 0.0
 
-        return frames_dto, unity_pose
+        return frames_dto, pose
 
     def _endtool_mounted(self, tool_sn: str, mounted: bool) -> None:
         """Reconfigure a launched endtool node to reflect its mounted state.

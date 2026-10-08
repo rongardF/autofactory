@@ -5,7 +5,7 @@ from tools_manager.model.tool_info_dto import ToolInfoDto
 
 class WorldManager(ABC):
     @abstractmethod
-    def spawn_model(self, tool: ToolInfoDto, link_name: str):
+    def spawn_model(self, tool: ToolInfoDto, link_name: str, rotation: tuple[float, float, float, float] | None = None):
         """
         Add a tool model into the world, attached to the link specified.
 

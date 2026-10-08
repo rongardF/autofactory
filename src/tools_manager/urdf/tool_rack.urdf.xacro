@@ -17,7 +17,7 @@
     tool_lifted_origin_rpy:='0 0 0'
     tool_slide_in_origin_xyz:='0.0656 -0.1025 0.287'
     tool_slide_in_origin_rpy:='0 0 0'
-    rfid_scanner_origin_xyz:='-0.05 0.0 -0.06'
+    rfid_scanner_origin_xyz:='-0.05 0.0 -0.03'
     rfid_scanner_origin_rpy:='0 0 0'
     ">
 
@@ -90,7 +90,7 @@
             <plugin filename="rfid_sim_systems"
                     name="autofactory::rfid::RfidReader">
                 <link>slot${index}_rfid_scanner_link</link>
-                <range>0.15</range>
+                <range>0.08</range>
                 <update_rate>10</update_rate>
                 <detected_topic>/slot${index}_rfid_scanner/detected</detected_topic>
                 <content_topic>/slot${index}_rfid_scanner/tag_data</content_topic>

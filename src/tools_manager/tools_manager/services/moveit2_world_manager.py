@@ -39,7 +39,7 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.client import Client as ServiceClient
 from rclpy.node import Node
 
-from geometry_msgs.msg import Point, Pose
+from geometry_msgs.msg import Point, Pose, Quaternion
 from moveit_msgs.msg import (
     AllowedCollisionEntry,
     AllowedCollisionMatrix,
@@ -198,31 +198,46 @@ class Moveit2WorldManager(WorldManager):
         link_name: str,
         operation: bytes,
         mesh: Mesh | None = None,
+        rotation: tuple[float, float, float, float] | None = None,
     ) -> AttachedCollisionObject:
         """Build an ``AttachedCollisionObject`` diff message.
 
-        The object sits at the origin of ``link_name`` (zero pose). When ``mesh``
-        is ``None`` the geometry is left empty so MoveIt reuses the existing
-        object's shapes (used for transfers and removals).
+        The object sits at the origin of ``link_name``. Its orientation relative
+        to the link is ``rotation`` (an ``(x, y, z, w)`` quaternion) when given,
+        otherwise the identity (no rotation). When ``mesh`` is ``None`` the
+        geometry is left empty so MoveIt reuses the existing object's shapes
+        (used for transfers and removals).
 
         :param model_id: Unique model ID (equal to the tool serial number).
         :param link_name: Link the object is attached to.
         :param operation: ``CollisionObject`` operation (``ADD`` or ``REMOVE``).
         :param mesh: Mesh geometry to attach, or ``None`` to reuse existing.
+        :param rotation: Optional ``(x, y, z, w)`` quaternion giving the object's
+            orientation relative to ``link_name``; ``None`` means no rotation.
         :returns: The populated ``AttachedCollisionObject`` message.
         """
-        identity = Pose()
-        identity.orientation.w = 1.0
+        object_pose = Pose()
+        if rotation is not None:
+            object_pose.orientation = Quaternion(
+                x=float(rotation[0]),
+                y=float(rotation[1]),
+                z=float(rotation[2]),
+                w=float(rotation[3]),
+            )
+        else:
+            object_pose.orientation.w = 1.0
 
         collision_object = CollisionObject()
         collision_object.id = model_id
         collision_object.header.frame_id = link_name
         collision_object.header.stamp = self._node.get_clock().now().to_msg()
         collision_object.operation = operation
-        collision_object.pose = identity
+        collision_object.pose = object_pose
         if mesh is not None:
+            mesh_pose = Pose()
+            mesh_pose.orientation.w = 1.0
             collision_object.meshes = [mesh]
-            collision_object.mesh_poses = [identity]
+            collision_object.mesh_poses = [mesh_pose]
 
         attached = AttachedCollisionObject()
         attached.link_name = link_name
@@ -351,7 +366,7 @@ class Moveit2WorldManager(WorldManager):
 
         return future.result()
 
-    def spawn_model(self, tool: ToolInfoDto, link_name: str):
+    def spawn_model(self, tool: ToolInfoDto, link_name: str, rotation: tuple[float, float, float, float] | None = None):
         try:
             mesh = self._generate_mesh(self._generate_model_path(tool))
             attached = self._build_attached_object(
@@ -359,6 +374,7 @@ class Moveit2WorldManager(WorldManager):
                 link_name,
                 CollisionObject.ADD,
                 mesh=mesh,
+                rotation=rotation,
             )
             if not self._apply_attached_object(attached, f'spawn model {tool.tool_sn}'):
                 raise ModelSpawnError(f'Failed to spawn model {tool.tool_sn} in MoveIt2 planning scene')
