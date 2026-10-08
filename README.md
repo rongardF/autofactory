@@ -13,7 +13,7 @@ Run following command to launch the station launch system in simulation without 
 
 bash
 ```
-ros2 launch station station.launch.py simulated:=true gazebo_gui:=false model:=ur10e
+ros2 launch station station.launch.py simulated:=true model:=ur10e
 ```
 
 Run following command to launch the station launch system with real hardware (no Gazebo GUI):
@@ -40,6 +40,34 @@ bash
 ```
 ros2 topic echo /laser_sensors/captron_orl2/x_axis_triggered
 ros2 topic echo /laser_sensors/captron_orl2/y_axis_triggered
+```
+
+# Automated tool changer
+
+There is an automated tool changer implemented to switch between endtools. Below is quick start and demo.
+
+Enable the nodes (will also spwn the endtools):
+
+bash
+```
+ros2 lifecycle set /movement_controller configure
+ros2 lifecycle set /movement_controller activate
+ros2 lifecycle set /tools_manager configure
+ros2 lifecycle set /tools_manager activate
+```
+
+To mount the tool on SLOT 1 (tool serial number 'abc123'):
+
+bash
+```
+ros2 action send_goal /tools_manager/mount_tool tools_manager/action/MountTool "{tool_sn: 'abc123'}"
+```
+
+To un-mount the tool to SLOT 1 (tool serial number 'abc123'):
+
+bash
+```
+ros2 action send_goal /tools_manager/unmount_tool tools_manager/action/UnmountTool "{tool_sn: 'abc123'}"
 ```
 
 # Example scripts
