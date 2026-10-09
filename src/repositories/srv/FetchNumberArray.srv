@@ -1,0 +1,5 @@
+string  key
+---
+bool              found  # true only if a live entry of this type exists for the key
+bool              expired  # true if an entry existed but had expired (then treated as not found)
+NumberArrayCache  data   # populated only when found == true

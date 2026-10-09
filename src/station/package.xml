@@ -11,6 +11,7 @@
 
   <exec_depend>movement_controller</exec_depend>
   <exec_depend>cameras</exec_depend>
+  <exec_depend>repositories</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
 

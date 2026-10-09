@@ -1,0 +1,4 @@
+BooleanCache data
+---
+bool    success          # true if the value was stored
+string  error_message    # empty on success, human-readable reason on failure

@@ -1,0 +1,5 @@
+string  key
+---
+bool    success          # true if the operation completed without error (including key already absent)
+bool    deleted          # true only if a live entry existed and was removed
+string  error_message    # empty on success, human-readable reason on failure

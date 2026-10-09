@@ -50,6 +50,7 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
 # --------------------------------------------------------------------------
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/StopDispensing.srv"
+  "srv/SetTcp.srv"
   SKIP_INSTALL
 )
 
