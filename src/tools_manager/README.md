@@ -7,9 +7,6 @@ choreography: moving the robot, operating the quick-release lock, and keeping
 both the **MoveIt 2 planning scene** and the **Gazebo world** in sync with
 reality.
 
-This document describes the behaviour **as implemented in the code**, so it can
-be used to verify that the package does what is intended.
-
 ---
 
 ## Nodes (executables)
