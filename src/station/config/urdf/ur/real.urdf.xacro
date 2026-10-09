@@ -10,7 +10,8 @@
 
   <xacro:include filename="$(find cameras)/urdf/basler.urdf.xacro"/>
   <xacro:include filename="$(find laser_sensors)/urdf/cross_laser.urdf.xacro"/>
-  <xacro:include filename="$(find endtools)/urdf/dispensing_tool.urdf.xacro"/>
+  <xacro:include filename="$(find tools_manager)/urdf/tool_mount.urdf.xacro"/>
+  <xacro:include filename="$(find tools_manager)/urdf/tool_rack.urdf.xacro"/>
 
   <!-- possible 'ur_type' values: ur3, ur5, ur10, ur3e, ur5e, ur7e, ur10e, ur12e, ur16e, ur8long, ur15, ur18, ur20, ur30 -->
   <!-- the default value should raise an error in case this was called without defining the type -->
@@ -99,6 +100,9 @@
       <geometry>
         <mesh filename="file://$(find station)/config/model/station/meshes/station_visual.dae"/>
       </geometry>
+      <material name="tool_rack_grey">
+          <color rgba="0.5 0.5 0.5 1"/>
+      </material>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -118,6 +122,16 @@
     <parent link="world"/>
     <child link="station"/>
   </joint>
+
+  <!-- tool rack attached to station -->
+  <xacro:tool_rack
+    parent="station"
+    simulated="false"
+    rack_origin_xyz="-0.03 -0.427 0.9"
+    rack_origin_rpy="0 0 0"
+    number_of_slots="2"
+    slot_spacing="-0.25"
+  />
 
   <xacro:cross_laser parent="station" name="captron" simulated="true" tf_prefix="$(arg tf_prefix)">
     <origin xyz="0.35 0.45 0.95" rpy="0 0 3.14"/>
@@ -141,38 +155,16 @@
   </xacro:ur_robot>
 
   <!-- tool mount attached to tool0 -->
-  <link name="tool_mount_link">
-    <visual>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="file://$(find station)/config/model/tool_mount/meshes/tool_mount_visual.dae"/>
-      </geometry>
-    </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="file://$(find station)/config/model/tool_mount/meshes/tool_mount_collision.stl"/>
-      </geometry>
-    </collision>
-    <inertial>
-      <mass value="0.5"/>
-      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
-    </inertial>
-  </link>
+  <xacro:tool_mount
+    parent="tool0"
+    simulated="false"
+    mount_origin_xyz="0 0 0.0272"
+    mount_origin_rpy="0 -1.5708 -1.5708"
+  />
 
-  <joint name="tool_mount_joint" type="fixed">
-    <parent link="$(arg tf_prefix)tool0"/>
-    <child link="tool_mount_link"/>
-    <origin xyz="0 0 0" rpy="-1.57 -1.57 0"/>
-  </joint>
-
-  <xacro:basler_camera parent="tool_mount_link" name="basler" simulated="false" tf_prefix="$(arg tf_prefix)">
-    <origin xyz="-0.03 0.025 -0.057" rpy="1.57 0 1.57"/>
+  <xacro:basler_camera parent="tool_mount_tcp" name="basler" simulated="false" tf_prefix="$(arg tf_prefix)">
+    <origin xyz="-0.110 0.02 -0.0575" rpy="0.0 0 0.0"/>
   </xacro:basler_camera>
-
-  <xacro:dispensing parent="tool_mount_link" name="dispensing" simulated="false" tf_prefix="$(arg tf_prefix)">
-    <origin xyz="0.0475 0 0" rpy="0 0 0"/>
-  </xacro:dispensing>
 
   <link name="conveyor">
     <visual>

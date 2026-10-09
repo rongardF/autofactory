@@ -1,0 +1,7 @@
+int32 index
+string tool_sn
+string tool_type
+string tool_part_number
+string tool_part_revision
+string material_part_number
+string material_part_revision

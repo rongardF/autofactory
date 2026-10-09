@@ -8,3 +8,7 @@
 
 # ── Config / validation ────────────────────────────────────────────────────
 pydantic==2.13.4
+
+# ── 3D mesh processing ─────────────────────────────────────────────────────
+# Parses STL models into shape_msgs/Mesh for MoveIt planning-scene objects.
+trimesh==4.4.3

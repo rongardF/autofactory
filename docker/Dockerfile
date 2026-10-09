@@ -41,6 +41,15 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY requirements.txt requirements-dev.txt ./
 RUN pip install --no-cache-dir -r requirements-dev.txt
 
+# ── Shared Gazebo CMake helpers ─────────────────────────────────────────────
+# gz_register_models() lets each ROS 2 package register its Gazebo model
+# directory on GZ_SIM_RESOURCE_PATH (via an ament environment hook) without
+# vendoring a copy of the helper. Packages locate it through GZ_CMAKE_MODULE_DIR:
+#   list(APPEND CMAKE_MODULE_PATH "$ENV{GZ_CMAKE_MODULE_DIR}")
+#   include(gz_register_models)
+COPY docker/cmake/gz_register_models.cmake /usr/local/share/cmake/gz/
+ENV GZ_CMAKE_MODULE_DIR=/usr/local/share/cmake/gz
+
 # ── Entrypoint ─────────────────────────────────────────────────────────────
 COPY docker/ros_entrypoint.sh /ros_entrypoint.sh
 RUN chmod +x /ros_entrypoint.sh

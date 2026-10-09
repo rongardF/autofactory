@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>tools_manager</name>
+  <version>0.0.0</version>
+  <description>TODO: Package description</description>
+  <maintainer email="dev@movement-controller.local">root</maintainer>
+  <license>BSD-3</license>
+
+  <!-- Build tool -->
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+
+  <!-- Interface generation -->
+  <buildtool_depend>rosidl_default_generators</buildtool_depend>
+
+  <!-- Runtime interface support -->
+  <exec_depend>rosidl_default_runtime</exec_depend>
+
+  <!-- Interface field dependencies (actions require action_msgs) -->
+  <depend>action_msgs</depend>
+  <depend>endtools</depend>
+  <depend>rfid_sim</depend>
+
+  <!-- Python runtime -->
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>python3-pydantic</exec_depend>
+
+  <!-- Message / service runtime dependencies -->
+  <exec_depend>rcl_interfaces</exec_depend>
+  <exec_depend>lifecycle_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
+  <exec_depend>builtin_interfaces</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>ros_gz_interfaces</exec_depend>
+
+  <!-- Marks this package as containing ROS2 interface definitions -->
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <!-- Test dependencies -->
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

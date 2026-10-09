@@ -19,6 +19,14 @@ install(
   DESTINATION share/${PROJECT_NAME}
 )
 
+# Register this package's Gazebo models on GZ_SIM_RESOURCE_PATH.
+# gz_register_models is baked into the container image (see docker/cmake).
+# config/model contains the station/, textured_ground/, tool_mount/, conveyor/
+# and calibration_board/ model:// folders.
+list(APPEND CMAKE_MODULE_PATH "$ENV{GZ_CMAKE_MODULE_DIR}")
+include(gz_register_models)
+gz_register_models(config/model)
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights

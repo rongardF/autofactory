@@ -193,6 +193,8 @@ def _build_ur_launch_arguments(
         arguments["gazebo_gui"] = gazebo_gui
         arguments["world_file"] = world_file
         arguments["gazebo_sim_resource_path"] = gz_resource_path
+        arguments["world_name"] = "default"
+        arguments["station_model_name"] = "station"
     return arguments
 
 
@@ -476,7 +478,7 @@ def setup_robot_nodes(context, *args, **kwargs):
         parameters=[
             speed_and_acceleration_constraints,
             {
-                "use_sim_time": sim_time_used,
+                "use_sim_time": is_simulated,
             },
         ],
     )

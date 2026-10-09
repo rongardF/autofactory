@@ -1,0 +1,40 @@
+slots:
+  - index: 1
+    tool_sn: "abc123"
+    metadata:
+      launch_file: "volumetric_dispenser_launch.py"
+      model: "dispensing_tool"
+    parameters:
+      node_name: "dispenser_abc123"
+      flowrate: 1.0
+      tcp_frame_id: "tool0"
+      tcp:
+        - 0.0837
+        - 0.0
+        - -0.267
+        - 1.570797
+        - 0.0
+        - 1.570797
+  - index: 2
+    tool_sn: "def123"
+    metadata:
+      launch_file: "volumetric_dispenser_launch.py"
+      model: "dispensing_tool"
+    parameters:
+      node_name: "dispenser_def123"
+      flowrate: 1.0
+      tcp_frame_id: "tool0"
+      tcp:
+        - 0.0837
+        - 0.0
+        - -0.267
+        - 1.570797
+        - 0.0
+        - 1.570797
+simulation_setup:
+  tool_rack:
+    - index: 1
+      tag_data: null
+    - index: 2
+      tag_data: 64656631323300202020202020202020564f4c5f44495350454e5345520020204b5243313233002020202020202020205231410020202020202020202020202053584e3132330020202020202020202052314100202020202020202020202020
+  tool_mount: 61626331323300202020202020202020564f4c5f44495350454e5345520020204b5243313233002020202020202020205231410020202020202020202020202053584e3132330020202020202020202052314100202020202020202020202020

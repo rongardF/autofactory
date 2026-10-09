@@ -28,7 +28,7 @@
 #
 # Author: Denis Stogl
 
-from os import environ
+from os import environ, pathsep
 from launch import LaunchDescription
 
 from ament_index_python.packages import get_package_share_directory
@@ -63,10 +63,17 @@ def launch_setup(context, *args, **kwargs):
     initial_joint_controller = LaunchConfiguration("initial_joint_controller")
     gazebo_gui = LaunchConfiguration("gazebo_gui")
     world_file = LaunchConfiguration("world_file")
+    station_model_name = LaunchConfiguration("station_model_name")
 
-    # set GZ_SIM_RESOURCE_PATH to the models directory of the package
+    # Prepend the launch-provided resource path to any existing
+    # GZ_SIM_RESOURCE_PATH (e.g. entries added by package ament environment
+    # hooks) instead of overwriting it, so package-registered models stay
+    # resolvable.
     gazebo_sim_resource_path = LaunchConfiguration("gazebo_sim_resource_path").perform(context)
-    environ["GZ_SIM_RESOURCE_PATH"] = str(gazebo_sim_resource_path)
+    existing_resource_path = environ.get("GZ_SIM_RESOURCE_PATH", "")
+    environ["GZ_SIM_RESOURCE_PATH"] = pathsep.join(
+        path for path in (gazebo_sim_resource_path, existing_resource_path) if path
+    )
 
     initial_joint_controllers = PathJoinSubstitution(
         [FindPackageShare("movement_controller"), "config", "ur", controllers_file]
@@ -147,7 +154,7 @@ def launch_setup(context, *args, **kwargs):
             "-string",
             robot_description_content,
             "-name",
-            "ur",
+            station_model_name,
             "-allow_renaming",
             "true",
         ],
@@ -170,6 +177,7 @@ def launch_setup(context, *args, **kwargs):
     gz_sim_bridge = Node(
         package="ros_gz_bridge",
         executable="parameter_bridge",
+        name="gz_ros_bridge_clock",
         arguments=[
             "/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock",
         ],
@@ -300,6 +308,20 @@ def generate_launch_description():
             "world_file",
             default_value="/workspaces/autofactory/world/default.world",
             description="Gazebo world file (absolute path or filename from the gazebosim worlds collection) containing a custom world.",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "station_model_name",
+            default_value="station",
+            description="Name of the station model in Gazebo.",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "world_name",
+            default_value="default",
+            description="Name of the Gazebo world to load.",
         )
     )
 

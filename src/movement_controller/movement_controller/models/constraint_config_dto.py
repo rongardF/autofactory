@@ -80,6 +80,22 @@ class ConstraintConfigDTO(BaseModel):
         default=0.0,
         description='Node-level max joint acceleration cap. 0.0 = unconstrained. Goals with path.joint_acceleration exceeding this are rejected at _goal_callback.',
     )
+    default_rotational_velocity: float = Field(
+        default=0.2,
+        description='Default rotational velocity for the robot (radians per second).',
+    )
+    default_cartesian_velocity: float = Field(
+        default=0.2,
+        description='Default cartesian velocity for the robot (meters per second).',
+    )
+    default_rotational_acceleration: float = Field(
+        default=2.0,
+        description='Default rotational acceleration for the robot (radians per second squared).',
+    )
+    default_cartesian_acceleration: float = Field(
+        default=1.0,
+        description='Default cartesian acceleration for the robot (meters per second squared).',
+    )
 
     @model_validator(mode='after')
     def _validate_workspace_bounds(self) -> 'ConstraintConfigDTO':

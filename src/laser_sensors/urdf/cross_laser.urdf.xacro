@@ -19,6 +19,9 @@
         <geometry>
             <mesh filename="file://${laser_sensors_model_base}/captron/meshes/sensor_visual.dae"/>
         </geometry>
+        <material name="tool_rack_grey">
+            <color rgba="0.5 0.5 0.5 1"/>
+        </material>
       </visual>
       <collision>
         <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -62,6 +65,11 @@
       returns +inf (never interrupted) while an object in the window returns a
       range <= window_size. The node's 'detection_distance' parameter (default
       0.04 m) decides the interruption threshold.
+
+      TODO: currently the laser beams are infinetly thin, but real laser has finite thickness
+            of about 1mm; we should model this by having multiple parallel rays that create
+            a cylinderical detection volume, and then the node should report the minimum range if
+            any of the rays are interrupted.
     -->
     <xacro:if value="${simulated}">
       <gazebo reference="${name}_laser_sensor_link">

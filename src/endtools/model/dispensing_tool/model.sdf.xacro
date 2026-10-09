@@ -1,0 +1,112 @@
+<?xml version="1.0" ?>
+<sdf version="1.6" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="dispensing_tool"
+      params="
+        model_name:=abc123
+        station_model_name:=station
+        tool_mount_link:=tool_mount_tcp
+        tool_rack_link:=slot1_attached_link
+        tag_data:=6162633132330020202020202020202044495350454E53494E470020202020204B5243313233002020202020202020205231410020202020202020202020202053584E3132330020202020202020202052314100202020202020202020202020
+      ">
+
+    <model name="${model_name}">
+      <link name="dispensing_tool_origin">
+        <inertial>
+          <mass> 7.063783650845496  </mass>
+          <inertia>
+            <ixx>  0.00011207748967739463 </ixx>
+            <ixy> 1.032237834897387e-07 </ixy>
+            <ixz>  2.690965380322996e-05 </ixz>
+            <iyy>  0.0001003825439622742 </iyy>
+            <iyz>  -2.3925238308720508e-08 </iyz>
+            <izz>  3.538789883197751e-05 </izz>
+          </inertia>
+        </inertial>
+        <collision name="collision.stl">
+          <geometry>
+            <mesh>
+              <uri>model://dispensing_tool/meshes/collision.stl</uri>
+            </mesh>
+          </geometry>
+        </collision>
+        <visual name="visual.dae">
+          <geometry>
+            <mesh>
+              <uri>model://dispensing_tool/meshes/visual.dae</uri>
+            </mesh>
+          </geometry>
+          <material>
+              <ambient>1 0 0 1</ambient>
+              <diffuse>1 0 0 1</diffuse>
+          </material>
+        </visual>
+      </link>
+
+      <link name="rfid_tag_link"/>
+
+      <joint name="rfid_tag_link_joint" type="fixed">
+          <parent>dispensing_tool_origin</parent>
+          <child>rfid_tag_link</child>
+          <pose>-0.0506 0 -0.033 0 0 0</pose>
+      </joint>
+
+      <!--
+      IMPORTANT (gz-sim 8.11.0): this plugin STARTS ATTACHED. Its
+      internal attachRequested flag defaults to true, so a fixed joint
+      is created on the very first simulation step at the parts'
+      INITIAL relative pose. There is no <start_detached> option in
+      this version; <attach_topic> only RE-attaches after a detach.
+
+      Parent_link must be a DIRECT link of the model hosting this
+      plugin
+      -->
+      <plugin filename="gz-sim-detachable-joint-system"
+              name="gz::sim::systems::DetachableJoint">
+          <parent_link>dispensing_tool_origin</parent_link>
+          <child_model>${station_model_name}</child_model>
+          <child_link>${tool_mount_link}</child_link>
+          <attach_topic>/${tool_mount_link}/${model_name}/attach</attach_topic>
+          <detach_topic>/${tool_mount_link}/${model_name}/detach</detach_topic>
+          <output_topic>/${tool_mount_link}/${model_name}/state</output_topic>
+      </plugin>
+
+      <plugin filename="gz-sim-detachable-joint-system"
+              name="gz::sim::systems::DetachableJoint">
+          <parent_link>dispensing_tool_origin</parent_link>
+          <child_model>${station_model_name}</child_model>
+          <child_link>${tool_rack_link}</child_link>
+          <attach_topic>/${tool_rack_link}/${model_name}/attach</attach_topic>
+          <detach_topic>/${tool_rack_link}/${model_name}/detach</detach_topic>
+          <output_topic>/${tool_rack_link}/${model_name}/state</output_topic>
+      </plugin>
+
+      <plugin filename="rfid_sim_systems"
+              name="autofactory::rfid::RfidTag">
+        <id>${model_name}</id>
+        <link>rfid_tag_link</link>
+        <data encoding="hex">${tag_data}</data>
+      </plugin>
+    </model>
+
+  </xacro:macro>
+
+  <xacro:arg name="model_name"                  default="abc123"/>
+  <xacro:arg name="station_model_name"          default="station"/>
+  <xacro:arg name="tool_mount_link"             default="tool_mount_tcp"/>
+  <xacro:arg name="tool_rack_link"              default="slot1_attached_link"/>
+  <xacro:arg name="tag_data"                    default="6162633132330020202020202020202044495350454E53494E470020202020204B5243313233002020202020202020205231410020202020202020202020202053584E3132330020202020202020202052314100202020202020202020202020"/>
+
+  <!-- Instantiate the macro so `xacro dispensing_tool.sdf.xacro` emits a complete model.
+       Each macro parameter is fed from its matching $(arg ...) so values passed
+       on the xacro command line take effect. Include this file elsewhere and
+       call <xacro:dispensing_tool .../> directly if you prefer to pass values inline. -->
+  <xacro:dispensing_tool
+      model_name="$(arg model_name)"
+      station_model_name="$(arg station_model_name)"
+      tool_mount_link="$(arg tool_mount_link)"
+      tool_rack_link="$(arg tool_rack_link)"
+      tag_data="$(arg tag_data)"
+  />
+
+</sdf>
