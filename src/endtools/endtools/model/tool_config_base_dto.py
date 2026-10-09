@@ -46,11 +46,17 @@ class ToolConfigBaseDTO(BaseModel):
 
     tcp_frame_id: str = Field(
         default='tool0',
-        description='TCP frame ID. Will be used to publish "tool_calibrated_tcp" frame when active.',
+        description='Parent frame for the published TCP frames. Both the '
+        '"{tool_sn}_calibrated_tcp" and "{tool_sn}_uncalibrated_tcp" frames are '
+        'published relative to this frame.',
     )
     tcp: list[float] = Field(
         default=[0.0837, 0.0, -0.267, 1.570797, 0.0, 1.570797],
         description='Calibrated tip pose relative to tcp_frame_id as [x, y, z, roll, pitch, yaw] (m, rad).',
+    )
+    tcp_uncalibrated: list[float] = Field(
+        default=[0.0837, 0.0, -0.267, 1.570797, 0.0, 1.570797],
+        description='Nominal (uncalibrated) tip pose relative to tcp_frame_id as [x, y, z, roll, pitch, yaw] (m, rad).',
     )
     
     simulated: bool = Field(
@@ -62,7 +68,7 @@ class ToolConfigBaseDTO(BaseModel):
         description='Whether the tool is mounted. Drives mount/unmount side-effects; read only at configure time.',
     )
 
-    @field_validator('tcp')
+    @field_validator('tcp', 'tcp_uncalibrated')
     @classmethod
     def _validate_tcp_length(cls, value: list[float]) -> list[float]:
         """Ensure the TCP transform has exactly 6 elements [x, y, z, roll, pitch, yaw]."""
@@ -74,5 +80,10 @@ class ToolConfigBaseDTO(BaseModel):
 
     @property
     def calibrated_tcp_frame_id(self) -> str:
-        """Return the calibrated TCP frame ID based on the tool type and serial number."""
+        """Return the calibrated TCP frame ID based on the tool serial number."""
         return f"{self.tool_sn}_calibrated_tcp"
+
+    @property
+    def uncalibrated_tcp_frame_id(self) -> str:
+        """Return the uncalibrated TCP frame ID based on the tool serial number."""
+        return f"{self.tool_sn}_uncalibrated_tcp"

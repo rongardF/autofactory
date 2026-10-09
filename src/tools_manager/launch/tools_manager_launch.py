@@ -45,6 +45,7 @@ def _bridge_setup(context, *args, **kwargs):
         Node(
             package='ros_gz_bridge',
             executable='parameter_bridge',
+            name='gz_ros_bridge_tools_manager',
             arguments=bridge_arguments,
             output='screen',
         )

@@ -9,7 +9,7 @@ colcon build
 
 # Launching
 
-Run following command to launch the station launch system in simulation without Gazebo GUI:
+Run following command to launch the station launch system in simulation with Gazebo GUI:
 
 bash
 ```

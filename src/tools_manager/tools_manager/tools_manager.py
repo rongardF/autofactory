@@ -869,6 +869,10 @@ class ToolsManager(LifecycleNode):
                 goal_handle.abort()
                 return response
 
+            # wait for a bit to ensure that the tool is fully unmounted (otherwise it will
+            # be detached while the tool-mount is moving and tool will be unmounted with incorrect pose
+            self.get_clock().sleep_for(Duration(seconds=0.5))  
+
             try:
                 # detach tool from mount in planning scene and attach to tool-rack slot
                 self._planner_service.attach_to_link(model_id=tool_sn, link_name=result[0].tool_attached_frame)

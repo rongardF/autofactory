@@ -35,13 +35,11 @@ from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle.node import LifecycleState, TransitionCallbackReturn
 from rclpy.publisher import Publisher
 from rclpy.qos import QoSProfile, DurabilityPolicy
-from rclpy.subscription import Subscription
 
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 
-from tf2_msgs.msg import TFMessage
-from tf2_ros import TransformBroadcaster
+from tf2_ros import StaticTransformBroadcaster
 
 from endtools.srv import StopDispensing
 
@@ -52,7 +50,7 @@ from endtools.service import (
     SimulatedDispenserController,
     HardwareDispenserController
 )
-from endtools.utils import compose_calibrated_tcp_transform
+from endtools.utils import build_tcp_transform
 
 
 class VolumetricDispensingTool(LifecycleNode):
@@ -89,7 +87,12 @@ class VolumetricDispensingTool(LifecycleNode):
         self.declare_parameter(
             'tcp',
             [0.0837, 0.0, -0.267, 1.570797, 0.0, 1.570797],
-            ParameterDescriptor(description='Tool TCP pose against "tcp_frame_id" frame'),
+            ParameterDescriptor(description='Calibrated tool TCP pose against "tcp_frame_id" frame'),
+        )
+        self.declare_parameter(
+            'tcp_uncalibrated',
+            [0.0837, 0.0, -0.267, 1.570797, 0.0, 1.570797],
+            ParameterDescriptor(description='Nominal (uncalibrated) tool TCP pose against "tcp_frame_id" frame'),
         )
         self.declare_parameter(
             'mounted',
@@ -106,8 +109,7 @@ class VolumetricDispensingTool(LifecycleNode):
         self._start_service: Service|None = None
         self._stop_service: Service|None = None
         self._is_mounted_publisher: Publisher|None = None
-        self._parent_frame_subscriber: Subscription|None = None
-        self._tf_broadcaster: TransformBroadcaster|None = None
+        self._static_tf_broadcaster: StaticTransformBroadcaster|None = None
 
         # callback groups
         self._service_callback_group = ReentrantCallbackGroup()
@@ -125,6 +127,7 @@ class VolumetricDispensingTool(LifecycleNode):
                 tool_sn=self.get_parameter('tool_sn').get_parameter_value().string_value,
                 tcp_frame_id=self.get_parameter('tcp_frame_id').get_parameter_value().string_value,
                 tcp=list(self.get_parameter('tcp').get_parameter_value().double_array_value),
+                tcp_uncalibrated=list(self.get_parameter('tcp_uncalibrated').get_parameter_value().double_array_value),
                 mounted=self.get_parameter('mounted').get_parameter_value().bool_value,
                 flow_rate=self.get_parameter('flowrate').get_parameter_value().double_value,
                 simulated=self.get_parameter('simulated').get_parameter_value().bool_value,
@@ -135,6 +138,27 @@ class VolumetricDispensingTool(LifecycleNode):
                 String, '~/mounted', QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
             )
             self._is_mounted_publisher.publish(String(data=str(self._config.mounted).lower()))
+
+            # Broadcast the calibrated and uncalibrated TCP frames as static
+            # transforms relative to tcp_frame_id
+            # TODO: these should be broadcast only when tool is mounted!!
+            self._static_tf_broadcaster = StaticTransformBroadcaster(self)
+            stamp = self.get_clock().now().to_msg()
+            self._static_tf_broadcaster.sendTransform([
+                build_tcp_transform(
+                    self._config.tcp_frame_id,
+                    self._config.calibrated_tcp_frame_id,
+                    self._config.tcp,
+                    stamp,
+                ),
+                build_tcp_transform(
+                    self._config.tcp_frame_id,
+                    self._config.uncalibrated_tcp_frame_id,
+                    self._config.tcp_uncalibrated,
+                    stamp,
+                ),
+            ])
+
             if self._config.simulated:
                 self.get_logger().info('Running in simulation mode; using SimulatedDispenserController.')
                 self._controller = SimulatedDispenserController(self)
@@ -175,18 +199,6 @@ class VolumetricDispensingTool(LifecycleNode):
             StopDispensing, '~/dispense_stop', self._handle_dispense_stop,
             callback_group=self._service_callback_group,
         )
-        # broadcast the calibrated TCP frame onto /tf using the standard broadcaster
-        self._tf_broadcaster = TransformBroadcaster(self)
-        # subscribe to /tf; when the parent (tcp_frame_id) frame is updated we
-        # re-compute the calibrated TCP frame and broadcast it. /tf conventionally
-        # uses a depth-100 volatile QoS.
-        self._parent_frame_subscriber = self.create_subscription(
-            TFMessage,
-            '/tf',
-            self._handle_tf_message,
-            QoSProfile(depth=100),
-            callback_group=self._publisher_callback_group,
-        )
 
         return TransitionCallbackReturn.SUCCESS
 
@@ -197,10 +209,6 @@ class VolumetricDispensingTool(LifecycleNode):
 
         self.destroy_service(self._start_service) if self._start_service else None
         self.destroy_service(self._stop_service) if self._stop_service else None
-        self.destroy_subscription(self._parent_frame_subscriber) if self._parent_frame_subscriber else None
-        if self._tf_broadcaster is not None:
-            self.destroy_publisher(self._tf_broadcaster.pub_tf)
-            self._tf_broadcaster = None
         self._controller.teardown() if self._controller else None
 
         return TransitionCallbackReturn.SUCCESS
@@ -212,6 +220,9 @@ class VolumetricDispensingTool(LifecycleNode):
 
         self._config = None
         self.destroy_publisher(self._is_mounted_publisher) if self._is_mounted_publisher else None
+        if self._static_tf_broadcaster is not None:
+            self.destroy_publisher(self._static_tf_broadcaster.pub_tf)
+            self._static_tf_broadcaster = None
         self._controller = None
 
         return TransitionCallbackReturn.SUCCESS
@@ -222,22 +233,6 @@ class VolumetricDispensingTool(LifecycleNode):
     # endregion: lifecycle callbacks
 
     # region: callbacks
-    def _handle_tf_message(self, message: TFMessage) -> None:
-        """Re-broadcast the calibrated TCP frame when the parent frame updates.
-
-        Iterates the incoming ``/tf`` transforms and, for any transform whose
-        child frame matches the configured ``tcp_frame_id`` (the tool flange),
-        composes it with the static TCP offset (the ``tcp`` matrix) and
-        broadcasts the resulting calibrated TCP frame back onto ``/tf``.
-        """
-        if self._config is None or self._tf_broadcaster is None:
-            return
-
-        for transform in message.transforms:
-            if transform.child_frame_id == self._config.tcp_frame_id:
-                composed = compose_calibrated_tcp_transform(self._config, transform)
-                self._tf_broadcaster.sendTransform(composed)
-
     def _handle_dispense_start(self, _: Trigger.Request, response: Trigger.Response):
         """Handle the dispense start service request."""
         if self._controller is None:

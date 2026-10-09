@@ -37,8 +37,6 @@ import math
 from builtin_interfaces.msg import Time
 from geometry_msgs.msg import TransformStamped
 
-from endtools.model.dispensing_tool_config_dto import DispensingToolConfigDTO
-
 
 def rpy_to_quaternion(
     roll: float, pitch: float, yaw: float
@@ -73,112 +71,32 @@ def rpy_to_quaternion(
     return (x, y, z, w)
 
 
-def quaternion_multiply(
-    q1: tuple[float, float, float, float],
-    q2: tuple[float, float, float, float],
-) -> tuple[float, float, float, float]:
-    """Multiply two quaternions ``q1 ⊗ q2`` (Hamilton product).
-
-    Both quaternions are expressed as ``(x, y, z, w)``.
-
-    :param q1: Left-hand quaternion ``(x, y, z, w)``.
-    :param q2: Right-hand quaternion ``(x, y, z, w)``.
-    :returns: The product quaternion ``(x, y, z, w)``.
-    :rtype: tuple[float, float, float, float]
-    """
-    x1, y1, z1, w1 = q1
-    x2, y2, z2, w2 = q2
-
-    x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
-    y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
-    z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
-    w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
-
-    return (x, y, z, w)
-
-
-def _rotate_vector(
-    q: tuple[float, float, float, float], v: tuple[float, float, float]
-) -> tuple[float, float, float]:
-    """Rotate a 3D vector by a quaternion ``(x, y, z, w)``.
-
-    :param q: Rotation quaternion ``(x, y, z, w)``.
-    :param v: Vector to rotate ``(x, y, z)``.
-    :returns: The rotated vector ``(x, y, z)``.
-    :rtype: tuple[float, float, float]
-    """
-    qx, qy, qz, qw = q
-    vx, vy, vz = v
-
-    # t = 2 * cross(q_xyz, v)
-    tx = 2.0 * (qy * vz - qz * vy)
-    ty = 2.0 * (qz * vx - qx * vz)
-    tz = 2.0 * (qx * vy - qy * vx)
-
-    # v' = v + qw * t + cross(q_xyz, t)
-    rx = vx + qw * tx + (qy * tz - qz * ty)
-    ry = vy + qw * ty + (qz * tx - qx * tz)
-    rz = vz + qw * tz + (qx * ty - qy * tx)
-
-    return (rx, ry, rz)
-
-
-def compose_calibrated_tcp_transform(
-    config: DispensingToolConfigDTO, parent_transform: TransformStamped
+def build_tcp_transform(
+    parent_frame_id: str,
+    child_frame_id: str,
+    offset: list[float],
+    stamp: Time,
 ) -> TransformStamped:
-    """Compose an incoming parent-frame transform with the static TCP offset.
+    """Build a fixed ``parent_frame_id -> child_frame_id`` transform.
 
-    Given a transform ``base -> tcp_frame_id`` published on ``/tf`` (the
-    ``parent_transform``), this returns the transform ``base ->
-    calibrated_tcp_frame_id`` by applying the configured TCP offset (the ``tcp``
-    matrix) to the parent transform. The resulting transform keeps the parent
-    transform's ``header`` (frame_id and stamp) and re-parents the calibrated
-    TCP frame under the same base frame.
+    The ``offset`` is a ``[x, y, z, roll, pitch, yaw]`` pose (m, rad) expressed
+    in ``parent_frame_id``. The resulting transform re-parents ``child_frame_id``
+    directly under ``parent_frame_id``.
 
-    :param config: Tool configuration holding the ``tcp`` offset and frame IDs.
-    :param parent_transform: Incoming ``base -> tcp_frame_id`` transform.
-    :returns: The composed ``base -> calibrated_tcp_frame_id`` transform.
+    :param parent_frame_id: Parent frame the offset is expressed in.
+    :param child_frame_id: Name of the child frame to publish.
+    :param offset: Pose offset ``[x, y, z, roll, pitch, yaw]`` (m, rad).
+    :param stamp: Timestamp to stamp the transform with.
+    :returns: The ``parent_frame_id -> child_frame_id`` transform.
     :rtype: TransformStamped
     """
-    x, y, z, roll, pitch, yaw = config.tcp
-    q_offset = rpy_to_quaternion(roll, pitch, yaw)
-
-    t_parent = parent_transform.transform.translation
-    r_parent = parent_transform.transform.rotation
-    q_parent = (r_parent.x, r_parent.y, r_parent.z, r_parent.w)
-
-    # base -> calibrated_tcp rotation is the parent rotation composed with offset
-    qx, qy, qz, qw = quaternion_multiply(q_parent, q_offset)
-
-    # base -> calibrated_tcp translation is the parent translation plus the
-    # offset translation expressed in the base frame (rotated by parent rotation)
-    ox, oy, oz = _rotate_vector(q_parent, (x, y, z))
-
-    composed = TransformStamped()
-    composed.header.stamp = parent_transform.header.stamp
-    composed.header.frame_id = parent_transform.header.frame_id
-    composed.child_frame_id = config.calibrated_tcp_frame_id
-    composed.transform.translation.x = t_parent.x + ox
-    composed.transform.translation.y = t_parent.y + oy
-    composed.transform.translation.z = t_parent.z + oz
-    composed.transform.rotation.x = qx
-    composed.transform.rotation.y = qy
-    composed.transform.rotation.z = qz
-    composed.transform.rotation.w = qw
-
-    return composed
-
-
-def build_tcp_transform(
-    config: DispensingToolConfigDTO, stamp: Time
-) -> TransformStamped:
-    x, y, z, roll, pitch, yaw = config.tcp
+    x, y, z, roll, pitch, yaw = offset
     qx, qy, qz, qw = rpy_to_quaternion(roll, pitch, yaw)
 
     transform = TransformStamped()
     transform.header.stamp = stamp
-    transform.header.frame_id = config.tcp_frame_id
-    transform.child_frame_id = config.calibrated_tcp_frame_id
+    transform.header.frame_id = parent_frame_id
+    transform.child_frame_id = child_frame_id
     transform.transform.translation.x = x
     transform.transform.translation.y = y
     transform.transform.translation.z = z

@@ -177,6 +177,7 @@ def launch_setup(context, *args, **kwargs):
     gz_sim_bridge = Node(
         package="ros_gz_bridge",
         executable="parameter_bridge",
+        name="gz_ros_bridge_clock",
         arguments=[
             "/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock",
         ],

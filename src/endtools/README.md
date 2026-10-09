@@ -104,13 +104,12 @@ The node is spun with a `MultiThreadedExecutor(num_threads=5)` and uses
 
 Pure functions (no ROS node needed, so unit-testable):
 - `rpy_to_quaternion` — intrinsic RPY (ZYX composition) → quaternion `(x,y,z,w)`.
-- `quaternion_multiply` — Hamilton product.
-- `compose_calibrated_tcp_transform(config, parent_transform)` — takes an
-  incoming `base → tcp_frame_id` transform and returns `base →
-  <tool_sn>_calibrated_tcp` by rotating/translating the `tcp` offset into the
-  parent frame. Keeps the parent's stamp and `frame_id`.
-- `build_tcp_transform` — builds the static `tcp_frame_id → calibrated_tcp`
-  transform directly (not used by the node's `/tf` path).
+- `build_tcp_transform(parent_frame_id, child_frame_id, offset, stamp)` — builds a
+  fixed `parent_frame_id → child_frame_id` transform from a
+  `[x, y, z, roll, pitch, yaw]` offset. The node calls this twice (once for the
+  calibrated TCP, once for the uncalibrated TCP) and publishes both as **static**
+  transforms relative to `tcp_frame_id` from `on_configure` (i.e. they are
+  available as soon as the node reaches the *inactive* state).
 
 ---
 
@@ -122,7 +121,6 @@ package). Key points:
 - One visual (`visual.dae`, red material) and one collision (`collision.stl`).
 - A `rfid_tag_link` carrying an `autofactory::rfid::RfidTag` plugin whose
   `<data>` is the hex-encoded tool tag payload (`tag_data` arg).
-- An uncalibrated TCP link at `tcp_origin_xyz/rpy`.
 - **Two `gz-sim-detachable-joint-system` plugins** — one welding the tool to the
   **tool-mount** link, one to the **tool-rack slot** link. Each exposes
   `/<link>/<model>/{attach,detach,state}` Gazebo topics.
