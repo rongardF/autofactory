@@ -8,13 +8,6 @@ slots:
       node_name: "dispenser_abc123"
       flowrate: 1.0
       tcp_frame_id: "tool0"
-      tcp:
-        - 0.0837
-        - 0.0
-        - -0.267
-        - 1.570797
-        - 0.0
-        - 1.570797
   - index: 2
     tool_sn: "def123"
     metadata:
@@ -24,13 +17,6 @@ slots:
       node_name: "dispenser_def123"
       flowrate: 1.0
       tcp_frame_id: "tool0"
-      tcp:
-        - 0.0837
-        - 0.0
-        - -0.267
-        - 1.570797
-        - 0.0
-        - 1.570797
 simulation_setup:
   tool_rack:
     - index: 1

@@ -42,6 +42,20 @@ ros2 topic echo /laser_sensors/captron_orl2/x_axis_triggered
 ros2 topic echo /laser_sensors/captron_orl2/y_axis_triggered
 ```
 
+# Repositories package
+
+There is a `repositories` package that contains ROS2 nodes that implementa n interface to various repositories like `station_cache`, `manifest`, `images` etc.
+
+## Station cache
+
+The station cache node is meant to provide a cloud-based cache memory for stations to store values that must survive station/nodes restarts (e.g. endtool TCP values). To use the node it must be configured and activated.
+
+bash
+```
+ros2 lifecycle set /station_cache configure
+ros2 lifecycle set /station_cache activate
+```
+
 # Automated tool changer
 
 There is an automated tool changer implemented to switch between endtools. Below is quick start and demo.

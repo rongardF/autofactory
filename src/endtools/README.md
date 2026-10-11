@@ -14,8 +14,9 @@ be used to verify that the package does what is intended.
 
 | Artifact | Type | Purpose |
 |----------|------|---------|
-| `volumetric_dispensing_tool` | Lifecycle node (executable) | Controls one dispensing tool, exposes dispense start/stop services, broadcasts the calibrated TCP frame. |
+| `volumetric_dispensing_tool` | Lifecycle node (executable) | Controls one dispensing tool, exposes dispense start/stop and set_tcp services, broadcasts the calibrated TCP frame, and publishes the calibrated TCP's expiry time. |
 | `srv/StopDispensing.srv` | Service | Stop request/response carrying dispensed volume + duration. |
+| `srv/SetTcp.srv` | Service | Set the calibrated TCP at runtime; persists it to `station_cache`. |
 | `launch/volumetric_dispenser_launch.py` | Launch file | Starts the node and (in sim) the Gazebo↔ROS bridge for its detachable joints. |
 | `model/dispensing_tool/` | Gazebo model | XACRO→SDF model with two detachable joints and an RFID tag plugin. |
 
@@ -42,9 +43,11 @@ transitions; nothing is created in `__init__` except parameter declarations.
 |------|---------|---------|
 | `tool_type` | `"dispensing"` | Read-only tool type tag. Parsed into `ToolTypeEnum`. |
 | `simulated` | `True` | Selects `SimulatedDispenserController` vs `HardwareDispenserController`. |
-| `tool_sn` | `"dispensing_ABC123"` | Tool serial number; also the base of the calibrated TCP frame name. |
+| `tool_sn` | `"dispensing_ABC123"` | Tool serial number; also the base of the calibrated TCP frame name and the TCP cache key. |
 | `tcp_frame_id` | `"tool0"` | Parent frame the TCP offset is applied to (the flange). |
-| `tcp` | `[0.0837, 0.0, -0.267, 1.570797, 0.0, 1.570797]` | Calibrated tip pose `[x, y, z, roll, pitch, yaw]` (m, rad). |
+| `tcp_uncalibrated` | `[0.0837, 0.0, -0.267, 1.570797, 0.0, 1.570797]` | Nominal (uncalibrated) tip pose `[x, y, z, roll, pitch, yaw]` (m, rad). Used as the fallback when no cached TCP is available. |
+| `station_cache_name` | `"station_cache"` | Node name of the `station_cache` node providing the TCP store/fetch services. |
+| `tcp_valid_period` | `86400.0` | Default validity period (seconds) for a cached TCP value. Clipped to a hard maximum of 3 days (see below). |
 | `mounted` | `False` | Whether the tool is currently on the tool-mount. **Gates activation.** |
 | `flowrate` | `1.0` | Volumetric flow rate (cc/s) used by the mock to integrate volume. |
 
@@ -52,13 +55,34 @@ transitions; nothing is created in `__init__` except parameter declarations.
 
 **`on_configure`**
 1. Reads all parameters into a frozen `DispensingToolConfigDTO` (Pydantic
-   validates: `tcp` must have 6 elements, `flow_rate >= 0`).
+   validates: `tcp_uncalibrated` must have 6 elements, `flow_rate >= 0`).
 2. Creates a **latched** (`TRANSIENT_LOCAL`, depth 1) publisher `~/mounted` and
    immediately publishes the mounted state as a lowercased string
    (`"true"`/`"false"`).
-3. Instantiates the controller — `SimulatedDispenserController` when
+3. Creates the `station_cache` service clients (`store_number_array` /
+   `fetch_number_array`) used by the `tool_tcp` property to persist and
+   retrieve the calibrated TCP under the key `dispenser_<tool_sn>_tcp`.
+4. Publishes the calibrated and uncalibrated TCP frames as **static**
+   transforms via a single **latched** (`TRANSIENT_LOCAL`, depth 1,
+   `KEEP_LAST`) `/tf_static` publisher held for the node lifetime (the
+   calibrated frame uses the current `tool_tcp`: the cached value or the
+   uncalibrated fallback). The node keeps its own map of transforms keyed by
+   `child_frame_id` and re-publishes the full set on every update, so a later
+   `set_tcp` **replaces** the previously latched value for a frame instead of
+   being dropped as a duplicate.
+5. Creates the `~/set_tcp` service (`endtools/SetTcp`), which is available in
+   **both** the inactive (configured) and active states.
+6. Creates a **latched** (`TRANSIENT_LOCAL`, depth 1, `KEEP_LAST`)
+   `~/tcp_expiration` publisher (`builtin_interfaces/Time`) and publishes the
+   absolute expiry instant of the currently used calibrated TCP. The expiry is
+   taken from the live `station_cache` entry backing the TCP; when the tool is
+   falling back to the uncalibrated TCP (no live cached entry) the **current
+   time** is published so the TCP is treated as already expired. Like
+   `~/set_tcp`, this publisher is available in both the configured and active
+   states (created on configure, destroyed on cleanup).
+7. Instantiates the controller — `SimulatedDispenserController` when
    `simulated`, otherwise `HardwareDispenserController`.
-4. Any `ValidationError` (or other exception) → `FAILURE`.
+8. Any `ValidationError` (or other exception) → `FAILURE`.
 
 **`on_activate`** (refuses to activate unless the tool is actually mounted)
 1. Fails if config is missing, **`mounted` is `False`**, or the controller is `None`.
@@ -66,18 +90,17 @@ transitions; nothing is created in `__init__` except parameter declarations.
 3. Creates services:
    - `~/dispense_start` — `std_srvs/Trigger`
    - `~/dispense_stop` — `endtools/StopDispensing`
-4. Creates a `tf2_ros.TransformBroadcaster` and subscribes to `/tf` (depth 100).
-   Whenever a `/tf` transform arrives whose `child_frame_id == tcp_frame_id`, it
-   composes that transform with the static `tcp` offset and broadcasts the
-   calibrated TCP frame `"<tool_sn>_calibrated_tcp"` back onto `/tf`.
 
-**`on_deactivate`** destroys the two services, the `/tf` subscription and the
-broadcaster publisher, and calls `controller.teardown()`.
+**`on_deactivate`** destroys the two dispense services and calls
+`controller.teardown()`.
 
-**`on_cleanup`** clears config, destroys the `~/mounted` publisher, drops the controller.
+**`on_cleanup`** clears config, destroys the `~/set_tcp` service, the `~/mounted`
+publisher, the latched `/tf_static` publisher (and clears the cached transform
+map), the latched `~/tcp_expiration` publisher, and the `station_cache` clients,
+resets the cached TCP and its expiration, and drops the controller.
 
 The node is spun with a `MultiThreadedExecutor(num_threads=5)` and uses
-`ReentrantCallbackGroup`s so service and `/tf` callbacks can run concurrently.
+`ReentrantCallbackGroup`s so service callbacks can run concurrently.
 
 ### Dispense start / stop flow
 
@@ -99,6 +122,34 @@ The node is spun with a `MultiThreadedExecutor(num_threads=5)` and uses
 - `setup`/`teardown` store/clear config only.
 - `start_dispensing()` and `stop_dispensing()` **raise `NotImplementedError`**
   (hardware I/O is a TODO).
+
+### Setting the TCP (`~/set_tcp`)
+
+- **`~/set_tcp`** (`endtools/SetTcp`): available in both the **configured** and
+  **active** states (created on configure, destroyed on cleanup). The request
+  carries `tcp` (`[x, y, z, roll, pitch, yaw]`, must have 6 elements) and an
+  optional `tcp_valid_period` (seconds; `<= 0` means use the node default). The
+  resolved validity period (request override or node default) is **clipped to a
+  hard maximum of 3 days** — the dispensing tool TCP must always expire, so any
+  larger value is clamped and a warning is logged. The value is stored in
+  `station_cache` under `dispenser_<tool_sn>_tcp` **first**; only on a successful
+  store is the cached value updated, the static TF re-published, and the latched
+  `~/tcp_expiration` re-published with the new expiry. A failed store leaves the
+  TCP, TF, and expiration unchanged, logs a warning, and returns `success=False`.
+- Reading `tool_tcp` fetches from `station_cache` when unset; if the entry is
+  missing or expired it falls back to `tcp_uncalibrated` and logs a warning.
+
+### Publishing the TCP expiry (`~/tcp_expiration`)
+
+- **`~/tcp_expiration`** (`builtin_interfaces/Time`, latched): broadcasts the
+  absolute instant at which the currently used calibrated TCP expires. Published
+  on configure and re-published on every successful `~/set_tcp`.
+- The expiry comes from the live `station_cache` entry (`valid_till`) backing
+  the TCP. If there is no live calibrated TCP (the tool is using the
+  uncalibrated fallback), the **publish time** is sent so consumers treat the
+  TCP as already expired.
+- Because the TCP validity period is always clipped to at most 3 days, the
+  published expiry is never further than 3 days into the future.
 
 ### Calibrated TCP math (`utils/transformations.py`)
 
@@ -135,9 +186,9 @@ The macro parameters (`model_name`, `station_model_name`, `tool_mount_link`,
 
 ## Launch (`volumetric_dispenser_launch.py`)
 
-Launch arguments: `simulated`, `tool_sn`, `tcp_frame_id`, `tcp`, `mounted`,
-`flowrate`, `tool_rack_link` (required), `tool_mount_link` (default
-`tool_mount_tcp`).
+Launch arguments: `simulated`, `tool_sn`, `tcp_frame_id`, `tcp_uncalibrated`,
+`station_cache_name`, `tcp_valid_period`, `mounted`, `flowrate`,
+`tool_rack_link` (required), `tool_mount_link` (default `tool_mount_tcp`).
 
 It starts:
 1. The `volumetric_dispensing_tool` node with the parameters above

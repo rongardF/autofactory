@@ -50,10 +50,6 @@ class ToolConfigBaseDTO(BaseModel):
         '"{tool_sn}_calibrated_tcp" and "{tool_sn}_uncalibrated_tcp" frames are '
         'published relative to this frame.',
     )
-    tcp: list[float] = Field(
-        default=[0.0837, 0.0, -0.267, 1.570797, 0.0, 1.570797],
-        description='Calibrated tip pose relative to tcp_frame_id as [x, y, z, roll, pitch, yaw] (m, rad).',
-    )
     tcp_uncalibrated: list[float] = Field(
         default=[0.0837, 0.0, -0.267, 1.570797, 0.0, 1.570797],
         description='Nominal (uncalibrated) tip pose relative to tcp_frame_id as [x, y, z, roll, pitch, yaw] (m, rad).',
@@ -68,13 +64,13 @@ class ToolConfigBaseDTO(BaseModel):
         description='Whether the tool is mounted. Drives mount/unmount side-effects; read only at configure time.',
     )
 
-    @field_validator('tcp', 'tcp_uncalibrated')
+    @field_validator('tcp_uncalibrated')
     @classmethod
     def _validate_tcp_length(cls, value: list[float]) -> list[float]:
         """Ensure the TCP transform has exactly 6 elements [x, y, z, roll, pitch, yaw]."""
         if len(value) != 6:
             raise ValueError(
-                f'tcp must have exactly 6 elements [x, y, z, roll, pitch, yaw], got {len(value)}'
+                f'tcp_uncalibrated must have exactly 6 elements [x, y, z, roll, pitch, yaw], got {len(value)}'
             )
         return value
 
