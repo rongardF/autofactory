@@ -269,8 +269,15 @@ class StationCache(LifecycleNode):
             self._sweep_timer = self.create_timer(
                 self._config.expiry_sweep_interval_sec, self._sweep
             )
+            self.get_logger().debug(
+                'Started expiry sweep timer '
+                f'(interval={self._config.expiry_sweep_interval_sec}s).'
+            )
 
-        self.get_logger().info('Activated station_cache (services available).')
+        self.get_logger().info(
+            f'Activated station_cache ({len(self._cache_services)} services '
+            'available).'
+        )
         return TransitionCallbackReturn.SUCCESS
 
     def on_deactivate(self, state: State) -> TransitionCallbackReturn:
@@ -420,9 +427,12 @@ class StationCache(LifecycleNode):
 
     def _destroy_services(self) -> None:
         """Destroy every live service and clear the tracking list."""
+        count = len(self._cache_services)
         for service in self._cache_services:
             self.destroy_service(service)
         self._cache_services = []
+        if count:
+            self.get_logger().debug(f'Destroyed {count} cache services.')
 
     # endregion: service surface
 
@@ -447,11 +457,15 @@ class StationCache(LifecycleNode):
             raises across the boundary.
         """
         if self._backend is None:
+            self.get_logger().warning('store rejected: node is not active.')
             response.success = False
             response.error_message = 'node is not active'
             return response
 
         data = request.data
+        self.get_logger().info(
+            f"store '{getattr(data, 'key', '')}' (type={value_type.value})."
+        )
         try:
             expire = bool(data.expire_at_valid_till)
             valid_till = time_msg_to_datetime(data.valid_till) if expire else None
@@ -470,11 +484,15 @@ class StationCache(LifecycleNode):
             response.error_message = 'cloud mode not implemented'
             return response
         except Exception as exc:  # noqa: BLE001 - convert to failure result
-            self.get_logger().error(f'store failed: {exc}')
+            self.get_logger().error(f"store '{getattr(data, 'key', '')}' failed: {exc}")
             response.success = False
             response.error_message = str(exc)
             return response
 
+        self.get_logger().info(
+            f"stored '{entry.key}' (type={value_type.value}, "
+            f'expires={entry.expire_at_valid_till}).'
+        )
         response.success = True
         response.error_message = ''
         return response
@@ -501,8 +519,12 @@ class StationCache(LifecycleNode):
         response.found = False
         response.expired = False
         if self._backend is None:
+            self.get_logger().warning('fetch rejected: node is not active.')
             return response
 
+        self.get_logger().info(
+            f"fetch '{request.key}' (type={value_type.value})."
+        )
         try:
             entry, expired = self._backend.fetch(request.key, self._now())
         except NotImplementedError:
@@ -516,12 +538,21 @@ class StationCache(LifecycleNode):
         # reported as a plain miss (found=false, expired=false), regardless of
         # whether that other-typed entry was live or expired.
         if entry is None or entry.value_type is not value_type:
+            self.get_logger().info(
+                f"fetch '{request.key}' miss (type={value_type.value})."
+            )
             return response
 
         if expired:
+            self.get_logger().info(
+                f"fetch '{request.key}' expired (type={value_type.value})."
+            )
             response.expired = True
             return response
 
+        self.get_logger().info(
+            f"fetch '{request.key}' hit (type={value_type.value})."
+        )
         response.found = True
         response.data = self._entry_to_msg(entry, msg_factory)
         return response
@@ -543,9 +574,11 @@ class StationCache(LifecycleNode):
         response.deleted = False
         response.error_message = ''
         if self._backend is None:
+            self.get_logger().warning('delete rejected: node is not active.')
             response.error_message = 'node is not active'
             return response
 
+        self.get_logger().debug(f"delete '{request.key}'.")
         try:
             response.deleted = self._backend.delete(request.key)
         except NotImplementedError:
@@ -553,10 +586,13 @@ class StationCache(LifecycleNode):
             response.error_message = 'cloud mode not implemented'
             return response
         except Exception as exc:  # noqa: BLE001 - convert to failure result
-            self.get_logger().error(f'delete failed: {exc}')
+            self.get_logger().error(f"delete '{request.key}' failed: {exc}")
             response.error_message = str(exc)
             return response
 
+        self.get_logger().debug(
+            f"deleted '{request.key}' (existed={response.deleted})."
+        )
         response.success = True
         return response
 
@@ -568,6 +604,8 @@ class StationCache(LifecycleNode):
             self._backend.sweep_expired(self._now())
         except Exception as exc:  # noqa: BLE001 - never let the timer crash
             self.get_logger().error(f'expiry sweep failed: {exc}')
+        else:
+            self.get_logger().debug('Expiry sweep completed.')
 
     # endregion: store/fetch/delete handlers
 

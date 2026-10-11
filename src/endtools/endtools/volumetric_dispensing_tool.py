@@ -25,6 +25,8 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+from typeguard import value
+
 from rclpy import init, shutdown
 from pydantic import ValidationError
 from rcl_interfaces.msg import ParameterDescriptor
@@ -36,12 +38,14 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle.node import LifecycleState, TransitionCallbackReturn
 from rclpy.publisher import Publisher
-from rclpy.qos import QoSProfile, DurabilityPolicy
+from rclpy.qos import QoSProfile, DurabilityPolicy, HistoryPolicy
 
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 
-from tf2_ros import StaticTransformBroadcaster
+from builtin_interfaces.msg import Time
+from geometry_msgs.msg import TransformStamped
+from tf2_msgs.msg import TFMessage
 
 from repositories.msg import NumberArrayCache
 from repositories.srv import FetchNumberArray, StoreNumberArray
@@ -60,6 +64,11 @@ from endtools.utils import build_tcp_transform
 
 class VolumetricDispensingTool(LifecycleNode):
 
+    # Hard upper bound (seconds) on how long a calibrated TCP may remain valid.
+    # The dispensing tool TCP must always expire, so both the default and any
+    # ``set_tcp`` requested validity period are clipped to this 3-day ceiling.
+    _MAX_TCP_VALID_PERIOD_S: float = 3.0 * 24 * 60 * 60
+
     def __init__(self, node_name: str = 'volumetric_dispensing_tool') -> None:
         super().__init__(node_name)
 
@@ -70,6 +79,12 @@ class VolumetricDispensingTool(LifecycleNode):
         # The current calibrated TCP pose. ``None`` until it is either fetched
         # from the station cache or explicitly set via the ``set_tcp`` service.
         self._tool_tcp: list[float]|None = None
+
+        # Absolute expiry instant of the currently used calibrated TCP. ``None``
+        # while the tool is falling back to the uncalibrated TCP (no live cache
+        # entry); in that case the current time is published so the TCP is
+        # treated as already expired.
+        self._tcp_expiration: Time|None = None
 
         # region: parameters
         self.declare_parameter(
@@ -124,7 +139,9 @@ class VolumetricDispensingTool(LifecycleNode):
         self._stop_service: Service|None = None
         self._set_tcp_service: Service|None = None
         self._is_mounted_publisher: Publisher|None = None
-        self._static_tf_broadcaster: StaticTransformBroadcaster|None = None
+        self._static_tf_publisher: Publisher|None = None
+        self._static_transforms: dict[str, TransformStamped] = {}
+        self._tcp_expiration_publisher: Publisher|None = None
 
         # station_cache service clients (created on configure, destroyed on cleanup)
         self._store_tcp_client: Client|None = None
@@ -149,7 +166,10 @@ class VolumetricDispensingTool(LifecycleNode):
         if self._tool_tcp is None:
             fetched = self._fetch_tcp_from_cache()
             if fetched is not None:
-                self._tool_tcp = fetched
+                value, valid_till = fetched
+                self.get_logger().info(f'Fetched TCP from station_cache: {value}')
+                self._tool_tcp = value
+                self._tcp_expiration = valid_till
             else:
                 key = self._config.tcp_cache_key if self._config else '<unconfigured>'
                 self.get_logger().warning(
@@ -158,39 +178,29 @@ class VolumetricDispensingTool(LifecycleNode):
                 )
                 return list(self._config.tcp_uncalibrated) if self._config else []
         return self._tool_tcp
-
-    @tool_tcp.setter
-    def tool_tcp(self, value: list[float]) -> None:
-        """Set the calibrated TCP, persisting it in station_cache first.
-
-        The value is stored in the cache before ``_tool_tcp`` is updated and the
-        static TF is re-published. If the cache store fails, ``_tool_tcp`` and
-        the TF are left unchanged and a :class:`RuntimeError` is raised.
-        """
-        if self._config is None:
-            raise RuntimeError('Cannot set TCP before the node is configured')
-        if not self._store_tcp_in_cache(value, self._config.tcp_valid_period):
-            self.get_logger().warning(
-                f'Failed to store TCP in station_cache for key {self._config.tcp_cache_key!r}.'
-            )
-            raise RuntimeError('Failed to store TCP in station_cache')
-        self._tool_tcp = list(value)
-        self._publish_tcp_transforms()
     # endregion: tool_tcp property
 
     # region: tcp helpers
     def _publish_tcp_transforms(self) -> None:
         """Broadcast the calibrated and uncalibrated TCP frames as static TF.
 
+        Transforms are kept in a map keyed by ``child_frame_id`` and the full
+        set is re-published on every update via the latched ``/tf_static``
+        publisher. Re-setting the TCP therefore replaces the previously latched
+        value for a frame (the latest value always wins).
+
         The frames are only published while the tool is mounted; when the tool
         is not mounted no TCP frames are broadcast.
         """
-        if self._static_tf_broadcaster is None or self._config is None:
+        self.get_logger().info('Publishing TCP transforms')
+        if self._static_tf_publisher is None or self._config is None:
+            self.get_logger().warning('Cannot publish TCP transforms: publisher or config is None.')
             return
         if not self._config.mounted:
+            self.get_logger().info('Tool is not mounted; skipping TCP transform broadcast.')
             return
         stamp = self.get_clock().now().to_msg()
-        self._static_tf_broadcaster.sendTransform([
+        for transform in (
             build_tcp_transform(
                 self._config.tcp_frame_id,
                 self._config.calibrated_tcp_frame_id,
@@ -203,7 +213,11 @@ class VolumetricDispensingTool(LifecycleNode):
                 self._config.tcp_uncalibrated,
                 stamp,
             ),
-        ])
+        ):
+            self._static_transforms[transform.child_frame_id] = transform
+        self._static_tf_publisher.publish(
+            TFMessage(transforms=list(self._static_transforms.values()))
+        )
 
     def _store_tcp_in_cache(self, tcp: list[float], valid_period: float) -> bool:
         """Store ``tcp`` in station_cache under the tool's TCP key.
@@ -211,6 +225,7 @@ class VolumetricDispensingTool(LifecycleNode):
         :returns: True if the value was stored successfully, False otherwise.
         """
         if self._store_tcp_client is None or self._config is None:
+            self.get_logger().warning('Cannot store TCP: client or config is None.')
             return False
         if not self._store_tcp_client.wait_for_service(timeout_sec=5.0):
             self.get_logger().warning('station_cache store_number_array service unavailable.')
@@ -231,14 +246,19 @@ class VolumetricDispensingTool(LifecycleNode):
             return False
         return response is not None and bool(response.success)
 
-    def _fetch_tcp_from_cache(self) -> list[float]|None:
+    def _fetch_tcp_from_cache(self) -> tuple[list[float], Time]|None:
         """Fetch the cached TCP for this tool from station_cache.
 
-        :returns: The cached TCP, or None if missing, expired, or unavailable.
+        :returns: A ``(tcp, valid_till)`` tuple for the live cached entry, or
+            None if missing, expired, or unavailable.
         """
+        self.get_logger().info('Fetching TCP from station_cache')
         if self._fetch_tcp_client is None or self._config is None:
+            self.get_logger().warning('Cannot fetch TCP: client or config is None.')
             return None
-        if not self._fetch_tcp_client.wait_for_service(timeout_sec=5.0):
+        # NOTE: timeout must take into account that other nodes usually wait 5.0
+        # seconds for endtool node transitions
+        if not self._fetch_tcp_client.wait_for_service(timeout_sec=3.0):
             self.get_logger().warning('station_cache fetch_number_array service unavailable.')
             return None
 
@@ -250,8 +270,44 @@ class VolumetricDispensingTool(LifecycleNode):
             self.get_logger().warning(f'station_cache fetch call failed: {e}')
             return None
         if response is not None and response.found:
-            return list(response.data.value)
+            return list(response.data.value), response.data.valid_till
+
+        self.get_logger().info(f'TCP not found in station_cache for key {self._config.tcp_cache_key!r}.')
         return None
+
+    def _clip_valid_period(self, valid_period: float) -> float:
+        """Clip a TCP cache validity period to the hard maximum of 3 days.
+
+        The dispensing tool TCP must always expire, so any default or requested
+        validity period above the ceiling is clamped and a warning is logged.
+
+        :param valid_period: Requested validity period in seconds.
+        :returns: The validity period clipped to at most 3 days.
+        """
+        if valid_period > self._MAX_TCP_VALID_PERIOD_S:
+            self.get_logger().warning(
+                f'Requested TCP validity period of {valid_period}s exceeds the '
+                f'maximum of {self._MAX_TCP_VALID_PERIOD_S}s (3 days); clipping '
+                f'to the maximum.'
+            )
+            return self._MAX_TCP_VALID_PERIOD_S
+        return valid_period
+
+    def _publish_tcp_expiration(self) -> None:
+        """Publish the absolute expiry instant of the currently used TCP.
+
+        The expiry is taken from the live ``station_cache`` entry backing the
+        current calibrated TCP. When no live calibrated TCP is in use (the tool
+        has fallen back to the uncalibrated TCP), the current time is published
+        so consumers treat the TCP as already expired.
+        """
+        if self._tcp_expiration_publisher is None:
+            return
+        # Resolve the current TCP so its expiration (``_tcp_expiration``) is
+        # populated from the cache; the fallback path leaves it unset.
+        _ = self.tool_tcp
+        expiration = self._tcp_expiration or self.get_clock().now().to_msg()
+        self._tcp_expiration_publisher.publish(expiration)
     # endregion: tcp helpers
 
     # region: lifecycle callbacks
@@ -261,7 +317,6 @@ class VolumetricDispensingTool(LifecycleNode):
             return TransitionCallbackReturn.FAILURE
 
         try:
-            tcp_valid_period = self.get_parameter('tcp_valid_period').get_parameter_value().double_value
             self._config = DispensingToolConfigDTO(
                 tool_type=ToolTypeEnum(self.get_parameter('tool_type').get_parameter_value().string_value),
                 tool_sn=self.get_parameter('tool_sn').get_parameter_value().string_value,
@@ -270,8 +325,7 @@ class VolumetricDispensingTool(LifecycleNode):
                 mounted=self.get_parameter('mounted').get_parameter_value().bool_value,
                 flow_rate=self.get_parameter('flowrate').get_parameter_value().double_value,
                 simulated=self.get_parameter('simulated').get_parameter_value().bool_value,
-                default_tcp_valid_period=tcp_valid_period,
-                tcp_valid_period=tcp_valid_period,
+                default_tcp_valid_period=self.get_parameter('tcp_valid_period').get_parameter_value().double_value,
             )
 
             # Resolve the station_cache service name. The TCP cache key and
@@ -296,11 +350,27 @@ class VolumetricDispensingTool(LifecycleNode):
             self._is_mounted_publisher.publish(String(data=str(self._config.mounted).lower()))
 
             # Broadcast the calibrated and uncalibrated TCP frames as static
-            # transforms relative to tcp_frame_id. The calibrated frame uses the
-            # current tool_tcp (cached value or uncalibrated fallback). Frames
-            # are only published while the tool is mounted.
-            self._static_tf_broadcaster = StaticTransformBroadcaster(self)
+            # transforms relative to tcp_frame_id. 
+            self._static_transforms = {}
+            self._static_tf_publisher = self.create_publisher(
+                TFMessage, '/tf_static',
+                QoSProfile(
+                    depth=1,
+                    durability=DurabilityPolicy.TRANSIENT_LOCAL,
+                    history=HistoryPolicy.KEEP_LAST,
+                ),
+            )
             self._publish_tcp_transforms()
+
+            self._tcp_expiration_publisher = self.create_publisher(
+                Time, '~/tcp_expiration',
+                QoSProfile(
+                    depth=1,
+                    durability=DurabilityPolicy.TRANSIENT_LOCAL,
+                    history=HistoryPolicy.KEEP_LAST,
+                ),
+            )
+            self._publish_tcp_expiration()
 
             # The set_tcp service is available in both the inactive (configured)
             # and active states; it is destroyed on cleanup.
@@ -372,9 +442,14 @@ class VolumetricDispensingTool(LifecycleNode):
         self.destroy_service(self._set_tcp_service) if self._set_tcp_service else None
         self._set_tcp_service = None
         self.destroy_publisher(self._is_mounted_publisher) if self._is_mounted_publisher else None
-        if self._static_tf_broadcaster is not None:
-            self.destroy_publisher(self._static_tf_broadcaster.pub_tf)
-            self._static_tf_broadcaster = None
+        if self._static_tf_publisher is not None:
+            self.destroy_publisher(self._static_tf_publisher)
+            self._static_tf_publisher = None
+        self._static_transforms = {}
+        if self._tcp_expiration_publisher is not None:
+            self.destroy_publisher(self._tcp_expiration_publisher)
+            self._tcp_expiration_publisher = None
+        self._tcp_expiration = None
         if self._store_tcp_client is not None:
             self.destroy_client(self._store_tcp_client)
             self._store_tcp_client = None
@@ -396,9 +471,11 @@ class VolumetricDispensingTool(LifecycleNode):
         """Handle the set_tcp service request.
 
         Validates the TCP length, resolves the cache validity period (request
-        override or node default), and assigns the ``tool_tcp`` property, which
-        persists the value in station_cache and re-publishes the static TF.
+        override or node default) clipped to the 3-day maximum, persists the
+        value in station_cache, and re-publishes both the static TF and the
+        latched TCP expiration.
         """
+        self.get_logger().info(f'Received set_tcp request: {request}')
         tcp = list(request.tcp)
         if len(tcp) != 6:
             response.success = False
@@ -413,15 +490,23 @@ class VolumetricDispensingTool(LifecycleNode):
             return response
 
         period = request.tcp_valid_period if request.tcp_valid_period > 0.0 else self._config.default_tcp_valid_period
-        try:
-            self._config = self._config.model_copy(update={'tcp_valid_period': period})
-            self.tool_tcp = tcp
-            response.success = True
-            response.error_message = ""
-        except Exception as e:
+        period = self._clip_valid_period(period)
+        if not self._store_tcp_in_cache(tcp, period):
+            message = f'Failed to store TCP in station_cache for key {self._config.tcp_cache_key!r}.'
+            self.get_logger().warning(message)
             response.success = False
-            response.error_message = str(e)
+            response.error_message = message
+            return response
+        
+        self._tool_tcp = tcp
+        self._tcp_expiration = (self.get_clock().now() + Duration(seconds=period)).to_msg()
+        self._publish_tcp_transforms()
+        self._publish_tcp_expiration()
 
+        self.get_logger().info(f'Successfully set TCP to {tcp} with validity period {period} seconds.')
+        response.success = True
+        response.error_message = ""
+        
         return response
 
     def _handle_dispense_start(self, _: Trigger.Request, response: Trigger.Response):

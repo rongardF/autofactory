@@ -17,11 +17,6 @@ class DispensingToolConfigDTO(ToolConfigBaseDTO):
         description='Default validity period (seconds) for a cached TCP value. '
         'Used as the fallback when a set_tcp request does not provide its own period.',
     )
-    tcp_valid_period: float = Field(
-        default=86400.0,
-        description='Validity period (seconds) applied to the next TCP cache store. '
-        'Initialised to default_tcp_valid_period and overridden per set_tcp request.',
-    )
 
     @field_validator('flow_rate')
     @classmethod
