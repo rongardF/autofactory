@@ -94,12 +94,62 @@ ros2 run rqt_image_view rqt_image_view /cameras/basler_camera/image_raw
 
 ### Read laser cross sensor triggers
 
-For real or simulated sensors:
+For real or simulated sensors, configure and activate the node first:
+
+```bash
+ros2 lifecycle set /laser_sensors/captron_orl2 configure
+ros2 lifecycle set /laser_sensors/captron_orl2 activate
+```
 
 ```bash
 ros2 topic echo /laser_sensors/captron_orl2/x_axis_triggered
 ros2 topic echo /laser_sensors/captron_orl2/y_axis_triggered
 ```
+
+# Repositories package
+
+There is a `repositories` package that contains ROS2 nodes that implementa n interface to various repositories like `station_cache`, `manifest`, `images` etc.
+
+## Station cache
+
+The station cache node is meant to provide a cloud-based cache memory for stations to store values that must survive station/nodes restarts (e.g. endtool TCP values). To use the node it must be configured and activated.
+
+bash
+```
+ros2 lifecycle set /station_cache configure
+ros2 lifecycle set /station_cache activate
+```
+
+# Automated tool changer
+
+There is an automated tool changer implemented to switch between endtools. Below is quick start and demo.
+
+Enable the nodes (will also spwn the endtools):
+
+bash
+```
+ros2 lifecycle set /movement_controller configure
+ros2 lifecycle set /movement_controller activate
+ros2 lifecycle set /station_cache configure
+ros2 lifecycle set /station_cache activate
+ros2 lifecycle set /tools_manager configure
+ros2 lifecycle set /tools_manager activate
+```
+
+To mount the tool on SLOT 1 (tool serial number 'abc123'):
+
+bash
+```
+ros2 action send_goal /tools_manager/mount_tool tools_manager/action/MountTool "{tool_sn: 'abc123'}"
+```
+
+To un-mount the tool to SLOT 1 (tool serial number 'abc123'):
+
+bash
+```
+ros2 action send_goal /tools_manager/unmount_tool tools_manager/action/UnmountTool "{tool_sn: 'abc123'}"
+```
+
 
 ## Run movement examples
 
@@ -203,7 +253,7 @@ for noninteractive Bash commands. No post-create script is needed.
 
 ### Codex and robotics extensions
 
-Both Dev Container configurations install Codex (`openai.chatgpt`) and the
+The Dev Container configuration installs Codex (`openai.chatgpt`) and the
 Robotics Developer Environment pack (`Ranch-Hand-Robotics.rde-pack`), replacing
 the deprecated Microsoft ROS extension.
 
@@ -242,8 +292,8 @@ actual OpenGL access, rather than assuming GPU visibility implies rendering.
 ### Generated configuration and networking
 
 Host detection generates ignored files under `.devcontainer/.generated/`,
-including an X11 cookie when required. Never commit this directory. This setup supports a local Docker daemon, uses container networking for
-ROS nodes. The root `docker-compose.yml` is reserved for production.
+including an X11 cookie when required. Never commit this directory. This setup
+requires a local Docker daemon and uses container networking for ROS nodes. The root `docker-compose.yml` is reserved for production.
 ROS discovery across the host or other machines requires separate DDS/network
 configuration.
 
@@ -257,7 +307,7 @@ The Dockerfile uses named stages, each inheriting the previous stage:
 - `python-dependencies`: Python virtual environment and pinned packages.
 - `development`: graphics configuration, the `ros` account, and entrypoints.
 
-Both Compose configurations build the `development` target. To build an earlier
+The development Compose configuration builds the `development` target. To build an earlier
 stage independently, use, for example:
 
 ```bash

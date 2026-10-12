@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="tool_rack_srdf">
+
+  <!--
+    Disable collision between the tool rack body and the link it is mounted on.
+
+    NOTE: disable_collisions is an SRDF concept. MoveIt only reads these rules
+    from the SRDF, never from the URDF, so this macro must be invoked from the
+    assembled SRDF (default_setup.srdf.xacro), not from tool_rack.urdf.xacro.
+  -->
+  <xacro:macro name="tool_rack_srdf" params="parent:=station">
+    <disable_collisions link1="tool_rack_link" link2="${parent}" reason="Adjacent"/>
+  </xacro:macro>
+
+</robot>

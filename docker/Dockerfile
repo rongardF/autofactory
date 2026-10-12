@@ -58,6 +58,13 @@ RUN --mount=type=cache,id=autofactory-apt,target=/var/cache/apt,sharing=locked \
     ros-jazzy-cv-bridge=4.1.0-1noble.20260911.143610 \
     ros-jazzy-diagnostic-updater=4.2.7-1noble.20260912.163704 \
     ros-jazzy-geometry-msgs=5.3.8-1noble.20260911.102920 \
+    ros-jazzy-gz-common-vendor=0.0.10-1noble.20260905.033536 \
+    ros-jazzy-gz-math-vendor=0.0.11-1noble.20260905.031649 \
+    ros-jazzy-gz-msgs-vendor=0.0.8-1noble.20260905.033532 \
+    ros-jazzy-gz-plugin-vendor=0.0.5-1noble.20260820.145930 \
+    ros-jazzy-gz-sim-vendor=0.0.13-1noble.20260905.073557 \
+    ros-jazzy-gz-transport-vendor=0.0.9-1noble.20260905.065154 \
+    ros-jazzy-ros-gz-interfaces=1.0.24-1noble.20260911.110630 \
     ros-jazzy-gz-ros2-control=1.2.20-1noble.20261006.040504 \
     ros-jazzy-image-geometry=4.1.0-1noble.20260911.143731 \
     ros-jazzy-image-transport=5.1.8-1noble.20260912.165731 \
@@ -162,6 +169,15 @@ ARG USER_UID=1000
 ARG USER_GID=1000
 COPY docker/create-dev-user.sh /usr/local/bin/create-dev-user
 RUN bash /usr/local/bin/create-dev-user "${USERNAME}" "${USER_UID}" "${USER_GID}"
+
+# ── Shared Gazebo CMake helpers ─────────────────────────────────────────────
+# gz_register_models() lets each ROS 2 package register its Gazebo model
+# directory on GZ_SIM_RESOURCE_PATH (via an ament environment hook) without
+# vendoring a copy of the helper. Packages locate it through GZ_CMAKE_MODULE_DIR:
+#   list(APPEND CMAKE_MODULE_PATH "$ENV{GZ_CMAKE_MODULE_DIR}")
+#   include(gz_register_models)
+COPY docker/cmake/gz_register_models.cmake /usr/local/share/cmake/gz/
+ENV GZ_CMAKE_MODULE_DIR=/usr/local/share/cmake/gz
 
 # ── Entrypoint ─────────────────────────────────────────────────────────────
 COPY docker/autofactory-desktop.sh /usr/local/bin/autofactory-desktop

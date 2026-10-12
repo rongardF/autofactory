@@ -26,5 +26,6 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 from movement_controller.utils.trajectory_grouper import TrajectoryGrouper
+from movement_controller.utils.tool_frame_resolver import ToolFrameResolver
 
-__all__ = ['TrajectoryGrouper']
+__all__ = ['TrajectoryGrouper', 'ToolFrameResolver']

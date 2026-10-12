@@ -177,6 +177,11 @@ class BasePlannerService:
         state.joint_state.name = list(jt.joint_names)
         state.joint_state.position = list(last_point.positions)
         state.joint_state.velocity = [0.0] * len(jt.joint_names)
+        # Mark as a diff so attached collision objects (e.g. a mounted tool) in
+        # the live planning scene are retained when this state seeds the next
+        # group's plan. Without is_diff=True the empty attached_collision_objects
+        # list would strip the mounted tool for the chained plan request.
+        state.is_diff = True
         self._logger.debug(
             f'Extracted end state for joints {list(jt.joint_names)}: '
             f'positions={list(last_point.positions)}'
@@ -211,11 +216,31 @@ class BasePlannerService:
             return 1.0, 1.0
 
         if path_dto.motion_type in [MotionTypeEnum.LIN, MotionTypeEnum.CIRC]:
+            # A cartesian_speed of -1.0 is a sentinel meaning "use the node-level
+            # default cartesian velocity" for LIN/CIRC motions.
+            effective_cartesian_speed = path_dto.cartesian_speed
+            if effective_cartesian_speed == -1.0:
+                effective_cartesian_speed = self._constraint_config.default_cartesian_velocity
+                self._logger.debug(
+                    f'cartesian_speed is -1.0 for path {path_dto.path_id}; '
+                    f'using default cartesian velocity {effective_cartesian_speed} m/s'
+                )
+
+            # A cartesian_acceleration of -1.0 is a sentinel meaning "use the
+            # node-level default cartesian acceleration" for LIN/CIRC motions.
+            effective_cartesian_acceleration = path_dto.cartesian_acceleration
+            if effective_cartesian_acceleration == -1.0:
+                effective_cartesian_acceleration = self._constraint_config.default_cartesian_acceleration
+                self._logger.debug(
+                    f'cartesian_acceleration is -1.0 for path {path_dto.path_id}; '
+                    f'using default cartesian acceleration {effective_cartesian_acceleration} m/s²'
+                )
+
             if self._constraint_config.max_cartesian_speed > 0.0:
                 self._logger.debug("Max cartesian speed is set, calculating scaling factor")
                 vel_scaling_factor = min(
                     1.0,
-                    path_dto.cartesian_speed / self._constraint_config.max_cartesian_speed
+                    effective_cartesian_speed / self._constraint_config.max_cartesian_speed
                 )
             else:
                 vel_scaling_factor = 1.0
@@ -224,22 +249,42 @@ class BasePlannerService:
                 self._logger.debug("Max cartesian acceleration is set, calculating scaling factor")
                 acc_scaling_factor = min(
                     1.0,
-                    path_dto.cartesian_acceleration / self._constraint_config.max_cartesian_acceleration
+                    effective_cartesian_acceleration / self._constraint_config.max_cartesian_acceleration
                 )
             else:
                 acc_scaling_factor = 1.0
 
             self._logger.debug(
-                f'Calculated scaling factors for path {path_dto.path_id} with cartesian speed {path_dto.cartesian_speed}: '
+                f'Calculated scaling factors for path {path_dto.path_id} with cartesian speed {effective_cartesian_speed}: '
                 f'velocity_scaling_factor={vel_scaling_factor}, acceleration_scaling_factor={acc_scaling_factor}'
             )
             return vel_scaling_factor, acc_scaling_factor
         else:
+            # A joint_speed of -1.0 is a sentinel meaning "use the node-level
+            # default rotational velocity" for PTP motions.
+            effective_joint_speed = path_dto.joint_speed
+            if effective_joint_speed == -1.0:
+                effective_joint_speed = self._constraint_config.default_rotational_velocity
+                self._logger.debug(
+                    f'joint_speed is -1.0 for path {path_dto.path_id}; '
+                    f'using default rotational velocity {effective_joint_speed} rad/s'
+                )
+
+            # A joint_acceleration of -1.0 is a sentinel meaning "use the
+            # node-level default rotational acceleration" for PTP motions.
+            effective_joint_acceleration = path_dto.joint_acceleration
+            if effective_joint_acceleration == -1.0:
+                effective_joint_acceleration = self._constraint_config.default_rotational_acceleration
+                self._logger.debug(
+                    f'joint_acceleration is -1.0 for path {path_dto.path_id}; '
+                    f'using default rotational acceleration {effective_joint_acceleration} rad/s²'
+                )
+
             if self._constraint_config.max_joint_speed > 0.0:
                 self._logger.debug("Max joint speed is set, calculating scaling factor")
                 vel_scaling_factor = min(
                     1.0,
-                    path_dto.joint_speed / self._constraint_config.max_joint_speed
+                    effective_joint_speed / self._constraint_config.max_joint_speed
                 )
             else:
                 vel_scaling_factor = 1.0
@@ -248,13 +293,13 @@ class BasePlannerService:
                 self._logger.debug("Max joint acceleration is set, calculating scaling factor")
                 acc_scaling_factor = min(
                     1.0,
-                    path_dto.joint_acceleration / self._constraint_config.max_joint_acceleration
+                    effective_joint_acceleration / self._constraint_config.max_joint_acceleration
                 )
             else:
                 acc_scaling_factor = 1.0
 
             self._logger.debug(
-                f'Calculated scaling factors for path {path_dto.path_id} with joint speed {path_dto.joint_speed}: '
+                f'Calculated scaling factors for path {path_dto.path_id} with joint speed {effective_joint_speed}: '
                 f'velocity_scaling_factor={vel_scaling_factor}, acceleration_scaling_factor={acc_scaling_factor}'
             )
             return vel_scaling_factor, acc_scaling_factor

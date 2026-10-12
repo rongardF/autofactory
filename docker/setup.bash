@@ -7,6 +7,8 @@ fi
 
 # Activate Python before ROS so colcon uses the project virtual environment.
 . /opt/venv/bin/activate
+# Prefer project Python packages for nodes using the system Python interpreter.
+export PYTHONPATH="/opt/venv/lib/python3.12/site-packages:${PYTHONPATH:-}"
 . /opt/ros/jazzy/setup.bash
 
 # The workspace overlay becomes available after the first colcon build.

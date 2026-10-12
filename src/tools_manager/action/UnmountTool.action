@@ -1,0 +1,6 @@
+string tool_sn
+---
+bool success
+string message
+---
+string state

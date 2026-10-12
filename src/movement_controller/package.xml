@@ -31,6 +31,11 @@
   <exec_depend>rclpy</exec_depend>
   <exec_depend>python3-pydantic</exec_depend>
 
+  <!-- TF2 (tool-frame resolution to robot-model links) -->
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>tf2_geometry_msgs</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+
   <!-- MoveIt2 -->
   <exec_depend>moveit_ros_planning_interface</exec_depend>
   <exec_depend>moveit_msgs</exec_depend>

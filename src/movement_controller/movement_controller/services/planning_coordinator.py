@@ -40,6 +40,7 @@ from moveit_msgs.msg import PlanningSceneComponents, RobotState
 from moveit_msgs.srv import GetPlanningScene
 
 from movement_controller.enums.motion_type_enum import MotionTypeEnum
+from movement_controller.exceptions import FrameResolutionError
 from movement_controller.models import (
     ConstraintConfigDTO,
     PlanResultDTO,
@@ -49,6 +50,7 @@ from movement_controller.models import (
 from movement_controller.services.base_planner_service import BasePlannerService
 from movement_controller.services.ompl_planner_service import OmplPlannerService
 from movement_controller.services.pilz_planner_service import PilzPlannerService
+from movement_controller.utils import ToolFrameResolver
 
 
 class PlanningCoordinator(BasePlannerService):
@@ -83,6 +85,7 @@ class PlanningCoordinator(BasePlannerService):
         super().__init__(node, moveit_group_name)
         self._pilz = PilzPlannerService(node, moveit_group_name)
         self._ompl = OmplPlannerService(node, moveit_group_name)
+        self._frame_resolver = ToolFrameResolver(node)
         self._scene_client: Client | None = None
         self._plan_queue: Queue[PlanResultDTO | StopIteration] | None = None
         self._cancel_event: Event | None = None
@@ -158,6 +161,12 @@ class PlanningCoordinator(BasePlannerService):
                 return
 
             robot_state = response.scene.robot_state
+            # Treat the seed state as a diff against the live planning scene so
+            # that attached collision objects (e.g. a mounted tool) are retained
+            # by MoveIt. With is_diff=False an empty attached_collision_objects
+            # list would strip the mounted tool from the per-request planning
+            # scene, causing the planner to ignore it and plan colliding paths.
+            robot_state.is_diff = True
             self._logger.debug(
                 f'Planning scene retrieved; robot joint state names: '
                 f'{list(robot_state.joint_state.name)}'
@@ -220,6 +229,7 @@ class PlanningCoordinator(BasePlannerService):
         )
         self._pilz.on_activate()
         self._ompl.on_activate()
+        self._frame_resolver.on_activate()
         self._cancel_event = None
         self._plan_queue = None
         self._session = None
@@ -233,6 +243,7 @@ class PlanningCoordinator(BasePlannerService):
             self._scene_client = None
         self._pilz.on_deactivate()
         self._ompl.on_deactivate()
+        self._frame_resolver.on_deactivate()
         self._session = None
         self._logger.debug('PlanningCoordinator deactivated')
 
@@ -306,6 +317,15 @@ class PlanningCoordinator(BasePlannerService):
         )
         self._cancel_event = Event()
         self._plan_queue = Queue()
+
+        try:
+            groups = self._resolve_groups(groups)
+        except FrameResolutionError as e:
+            err_msg = f'tool frame resolution failed - {e}'
+            self._logger.error(err_msg)
+            self._abort(err_msg)
+            return True
+
         self._session = PlanningSessionDTO(groups=groups)
 
         self._logger.debug('Waiting for get_planning_scene service (timeout=5.0s)')
@@ -322,6 +342,27 @@ class PlanningCoordinator(BasePlannerService):
         self._plan_queue = None
         self._session = None
         return False
+
+    def _resolve_groups(
+        self, groups: list[list[TrajectoryPathDTO]]
+    ) -> list[list[TrajectoryPathDTO]]:
+        """Resolve each path's ``tool_frame`` to a robot-model link.
+
+        TF tool frames (e.g. a calibrated TCP) are rewritten to the nearest URDF
+        link with the target pose recomposed through the rigid offset; paths
+        already referencing a model link (or with no tool frame) pass through
+        unchanged.
+
+        :param groups: Groups of paths to resolve.
+        :type groups: list[list[TrajectoryPathDTO]]
+        :returns: Groups with tool frames resolved to robot-model links.
+        :rtype: list[list[TrajectoryPathDTO]]
+        :raises FrameResolutionError: If any path's tool frame cannot be resolved.
+        """
+        return [
+            [self._frame_resolver.resolve(path) for path in group]
+            for group in groups
+        ]
 
     def iterate_planned_trajectories(self) -> Iterator[PlanResultDTO]:
         """Yield one :class:`~movement_controller.models.PlanResultDTO` per group as planning completes.

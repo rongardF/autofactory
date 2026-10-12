@@ -1,0 +1,6 @@
+# SetTcp.srv — set the calibrated TCP for the tool at runtime
+float64[]  tcp                       # [x, y, z, roll, pitch, yaw] (m, rad); must have exactly 6 elements
+float64    tcp_valid_period -1.0     # cache validity in seconds; <= 0 means use the node's default
+---
+bool       success                   # True if the TCP was set (and stored in the cache)
+string     error_message             # Populated when success is False
