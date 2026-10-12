@@ -40,7 +40,7 @@ def generate_launch_description():
     simulated = LaunchConfiguration("simulated", default="true")
     tool_sn = LaunchConfiguration("tool_sn", default="unknown")
     tcp_frame_id = LaunchConfiguration("tcp_frame_id", default="tool0")
-    tcp_uncalibrated = LaunchConfiguration("tcp_uncalibrated", default="[0.0837, 0.0, -0.267, 1.570797, 0.0, 1.570797]")
+    tcp_uncalibrated = LaunchConfiguration("tcp_uncalibrated", default="[0.0, -0.267, 0.1315, -1.5707963267948966, -3.141592653589793, 0.0]")
     station_cache_name = LaunchConfiguration("station_cache_name", default="station_cache")
     tcp_valid_period = LaunchConfiguration("tcp_valid_period", default="86400.0")
     mounted = LaunchConfiguration("mounted", default="false")
@@ -51,7 +51,7 @@ def generate_launch_description():
         DeclareLaunchArgument("simulated", default_value="true", description="Whether the tool is simulated."),
         DeclareLaunchArgument("tool_sn", default_value="unknown", description="Tool serial number."),
         DeclareLaunchArgument("tcp_frame_id", default_value="tool0", description="TCP frame ID."),
-        DeclareLaunchArgument("tcp_uncalibrated", default_value="[0.0837, 0.0, -0.267, 1.570797, 0.0, 1.570797]", description="Nominal (uncalibrated) TCP transform as [x, y, z, roll, pitch, yaw] (m, rad)."),
+        DeclareLaunchArgument("tcp_uncalibrated", default_value="[0.0, -0.267, 0.1315, -1.5707963267948966, -3.141592653589793, 0.0]", description="Nominal (uncalibrated) TCP transform as [x, y, z, roll, pitch, yaw] (m, rad)."),
         DeclareLaunchArgument("station_cache_name", default_value="station_cache", description="Node name of the station_cache node providing the TCP cache services."),
         DeclareLaunchArgument("tcp_valid_period", default_value="86400.0", description="Default validity period (seconds) for a cached TCP value."),
         DeclareLaunchArgument("mounted", default_value="false", description="Whether the tool is mounted."),
