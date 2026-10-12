@@ -1,63 +1,17 @@
-# docker-compose.yml
-# Usage:
-#   dev  (workstation):  docker compose --profile dev up
-#   prod (workstation):   docker compose --profile prod up
-#   Shell into workstation:              docker compose exec workstation bash
+# Production runtime only. Development uses .devcontainer/compose.yaml.
+# Supply a prebuilt workstation:prod image containing the compiled workspace
+# and its production command; docker/Dockerfile currently builds a dev image.
+# Usage: WORKSTATION_ID=station-01 docker compose up -d
 
 services:
-
-  # ── Dev workstation ──────────────────────────────────────────────────────
-  # Full source mount; dev tools included; runs as root for ease of development.
-  workstation:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-      network: host
-    image: workstation:dev
-    network_mode: host # Required: DDS multicast/unicast discovery
-    privileged: true
-    environment:
-      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42}
-      - RCUTILS_LOGGING_USE_STDOUT=0 # rclpy logs to stderr; JSON goes to stdout
-      - MONGO_URI=${MONGO_URI:-mongodb://localhost:27017}
-      - WORKSTATION_ID=${WORKSTATION_ID:-dev-workstation-01}
-      - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST # Limit DDS discovery to this machine
-      - DISPLAY=$DISPLAY
-      - QT_X11_NO_MITSHM=1
-      - XAUTHORITY=$XAUTH
-      - QSG_RENDER_LOOP=basic # Use basic Qt Quick render loop; avoids threading issues in containers
-      - GZ_SIM_GUI_CONFIG_PATH=/workspaces/autofactory/config/gz/gui.config
-      - GZ_IP=127.0.0.1 # Pin gz-transport to loopback; avoids network interface confusion in containers
-      - NVIDIA_VISIBLE_DEVICES=all # Requires NVIDIA Container Toolkit on host (nvidia-ctk runtime configure)
-      - NVIDIA_DRIVER_CAPABILITIES=graphics,utility,compute
-    volumes:
-      - .:/workspaces/autofactory:rw # Live source mount (symlink-install works)
-      - /tmp/.X11-unix:/tmp/.X11-unix:rw
-    stdin_open: true
-    tty: true
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [ gpu ]
-    profiles:
-      - dev
-
-  # ── Prod workstation ─────────────────────────────────────────────────────
-  # No source mount; runs from baked image; non-root user.
-  # Build the image first: docker build -t workstation:prod .
   workstation-prod:
     image: workstation:prod
     network_mode: host
-    user: "1000:1000" # Non-root: matches UID of 'user' in Dockerfile
+    user: "1000:1000" # Matches the default ros account in the image.
     environment:
-      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42}
-      - RCUTILS_LOGGING_USE_STDOUT=0
-      - WORKSTATION_ID=${WORKSTATION_ID:-}
-      - APP_PROFILE=prod # entrypoint uses this to enforce required-var check
-      - ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-42}
+      RCUTILS_LOGGING_USE_STDOUT: "0"
+      WORKSTATION_ID: ${WORKSTATION_ID:?Set WORKSTATION_ID for production}
+      APP_PROFILE: prod
+      ROS_AUTOMATIC_DISCOVERY_RANGE: LOCALHOST
     restart: unless-stopped
-    profiles:
-      - prod

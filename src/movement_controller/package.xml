@@ -54,6 +54,7 @@
   <!-- Marks this package as containing ROS2 interface definitions -->
   <member_of_group>rosidl_interface_packages</member_of_group>
   <exec_depend>rqt_graph</exec_depend>
+  <exec_depend>rviz2</exec_depend>
 
   <!-- Test dependencies -->
   <test_depend>ament_cmake_pytest</test_depend>
