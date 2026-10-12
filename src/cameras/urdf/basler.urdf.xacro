@@ -98,7 +98,7 @@
         <parent link="${name}_camera_link"/>
         <child link="camera_tcp_uncalibrated"/>
         <xacro:if value="${camera_model == 'basler'}">
-            <origin xyz="0.0188 0.0395 -0.0695" rpy="0 0 0"/>
+            <origin xyz="0.0188 0.0395 -0.0695" rpy="0 1.5707963267948966 0"/>
         </xacro:if>
         <xacro:unless value="${is_known_model}">
             <origin xyz="0 0 0" rpy="0 0 0"/>
