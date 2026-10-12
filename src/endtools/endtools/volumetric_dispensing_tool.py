@@ -110,7 +110,7 @@ class VolumetricDispensingTool(LifecycleNode):
         )
         self.declare_parameter(
             'tcp_uncalibrated',
-            [0.0837, 0.0, -0.267, 1.570797, 0.0, 1.570797],
+            [0.0, -0.267, 0.1315, -1.5707963267948966, -3.141592653589793, 0.0],
             ParameterDescriptor(description='Nominal (uncalibrated) tool TCP pose against "tcp_frame_id" frame'),
         )
         self.declare_parameter(

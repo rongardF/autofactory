@@ -46,7 +46,7 @@
     <joint name="${name}_orl2_intersection_joint" type="fixed">
       <parent link="${name}_laser_sensor_link"/>
       <child link="${name}_orl2_intersection"/>
-      <origin xyz="0 -0.0425 0.02591" rpy="0 0 0"/>
+      <origin xyz="0 -0.0425 0.02591" rpy="0 0 -3.141592653589793"/>
     </joint>
 
     <!--
