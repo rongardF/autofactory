@@ -1,2 +1,3 @@
 from movement_controller.exceptions.invalid_start_state_error import InvalidStartStateError
 from movement_controller.exceptions.execution_failed_error import ExecutionFailedError
+from movement_controller.exceptions.frame_resolution_error import FrameResolutionError
