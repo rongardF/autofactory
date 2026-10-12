@@ -34,7 +34,15 @@ ros2 run rqt_image_view rqt_image_view /cameras/basler_camera/image_raw
 
 # Laser cross sensor triggers
 
-To read the laser cross sensor outputs (real or simulated):
+To read the laser cross sensor outputs (real or simulated), first configure and activate node:
+
+bash
+```
+ros2 lifecycle set /laser_sensors/captron_orl2 configure
+ros2 lifecycle set /laser_sensors/captron_orl2 activate
+```
+
+Then echo out the topics:
 
 bash
 ```
@@ -66,6 +74,8 @@ bash
 ```
 ros2 lifecycle set /movement_controller configure
 ros2 lifecycle set /movement_controller activate
+ros2 lifecycle set /station_cache configure
+ros2 lifecycle set /station_cache activate
 ros2 lifecycle set /tools_manager configure
 ros2 lifecycle set /tools_manager activate
 ```
