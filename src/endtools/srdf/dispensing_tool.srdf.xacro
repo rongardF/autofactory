@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<robot xmlns:xacro="http://wiki.ros.org/xacro" name="dispensing_tool_srdf">
-
-  <xacro:macro name="dispensing_tool_srdf" params="parent name:=dispensing_tool tf_prefix:=''">
-    <disable_collisions link1="${name}_endtool_link" link2="${tf_prefix}${parent}" reason="Adjacent" />
-  </xacro:macro>
-
-</robot>

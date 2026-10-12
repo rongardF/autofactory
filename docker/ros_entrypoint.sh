@@ -15,6 +15,7 @@ fi
 # used by colcon and all downstream commands; --system-site-packages ensures
 # rclpy and other ROS 2 apt packages remain visible inside the venv)
 . /opt/venv/bin/activate
+export PYTHONPATH="/opt/venv/lib/python3.12/site-packages:${PYTHONPATH}"
 
 # Source ROS 2 base setup
 . /opt/ros/jazzy/setup.bash

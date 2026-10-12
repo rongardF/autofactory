@@ -158,6 +158,12 @@ class PlanningCoordinator(BasePlannerService):
                 return
 
             robot_state = response.scene.robot_state
+            # Treat the seed state as a diff against the live planning scene so
+            # that attached collision objects (e.g. a mounted tool) are retained
+            # by MoveIt. With is_diff=False an empty attached_collision_objects
+            # list would strip the mounted tool from the per-request planning
+            # scene, causing the planner to ignore it and plan colliding paths.
+            robot_state.is_diff = True
             self._logger.debug(
                 f'Planning scene retrieved; robot joint state names: '
                 f'{list(robot_state.joint_state.name)}'

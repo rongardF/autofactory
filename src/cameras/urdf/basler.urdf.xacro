@@ -45,6 +45,9 @@
               <box size="0.05 0.05 0.05"/>
           </xacro:unless>
         </geometry>
+        <material name="tool_rack_grey">
+            <color rgba="0.5 0.5 0.5 1"/>
+        </material>
       </visual>
       <collision>
         <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -81,76 +84,85 @@
       </xacro:unless>
     </link>
 
+    <disable_collisions link1="${parent}" link2="${name}_camera_link" reason="Adjacent" />
+
     <joint name="${name}_camera_joint" type="fixed">
       <parent link="${tf_prefix}${parent}"/>
       <child link="${name}_camera_link"/>
       <xacro:insert_block name="origin"/>
     </joint>
 
-    <!-- Gazebo plugin for camera sensor: https://sdformat.org/spec/1.12/sensor/#sensor_camera -->
-        <xacro:if value="${simulated}">
-            <gazebo reference="${name}_camera_link">
-                <sensor name="${name}_camera_sensor" type="camera">
-                    <xacro:if value="${camera_model == 'basler'}">
-                        <pose>0.0700233 -0.127701 -0.0225334 0 0 -1.57</pose>
-                    </xacro:if>
-                    <!-- Fallback sensor pose for unknown camera models -->
-                    <xacro:unless value="${is_known_model}">
-                        <pose>0 0 0 0 0 0</pose>
-                    </xacro:unless>
-                    <always_on>true</always_on>
-                    <update_rate>${update_rate}</update_rate>
-                    <visualize>true</visualize>
-                    <topic>simulated_camera/image_raw</topic>
-                    <gz_frame_id>${tf_prefix}${parent}</gz_frame_id>
-                    <camera name="${name}_camera">
-                        <camera_info_topic>simulated_camera/camera_info</camera_info_topic>
-                        <xacro:if value="${camera_model == 'basler'}">
-                            <horizontal_fov>1.249</horizontal_fov> <!-- ~60 degrees -->
-                            <image>
-                                <width>3840</width>
-                                <height>2160</height>
-                                <format>R8G8B8</format>
-                            </image>
-                        </xacro:if>
-                        <!-- Fallback optics for unknown camera models -->
-                        <xacro:unless value="${is_known_model}">
-                            <horizontal_fov>1.0472</horizontal_fov> <!-- ~60 degrees -->
-                            <image>
-                                <width>640</width>
-                                <height>480</height>
-                                <format>R8G8B8</format>
-                            </image>
-                        </xacro:unless>
-                        <clip>
-                            <near>0.01</near>
-                            <far>50.0</far>
-                        </clip>
-                        <noise>
-                            <type>gaussian</type>
-                            <mean>0.0</mean>
-                            <stddev>0.007</stddev>
-                        </noise>
-                        <!-- Lens distortion (Brown-Conrady / plumb-bob model, same as OpenCV).
-                        k1/k2/k3: radial coefficients  (negative k1 = barrel distortion).
-                        p1/p2:    tangential coefficients.
-                        center:   normalised distortion centre (0.5 0.5 = optical centre).
-                        Tune these to match the real Basler lens calibration output. -->
-                        <xacro:if value="${camera_model == 'basler'}">
-                            <distortion>
-                                <k1>-0.2477771909786335</k1>
-                                <k2>0.126037678472415</k2>
-                                <k3>-0.0010056044464992401</k3>
-                                <p1>0.000391226451080845</p1>
-                                <p2>-0.04092116227683235</p2>
-                                <center>0.5 0.5</center>
-                            </distortion>
-                        </xacro:if>
-                        <optical_frame_id>${tf_prefix}${parent}</optical_frame_id>
-                    </camera>
-                </sensor>
-            </gazebo>
+    <link name="camera_tcp_uncalibrated"/>
+
+    <joint name="camera_tcp_uncalibrated_joint" type="fixed">
+        <parent link="${name}_camera_link"/>
+        <child link="camera_tcp_uncalibrated"/>
+        <xacro:if value="${camera_model == 'basler'}">
+            <origin xyz="0.0188 0.0395 -0.0695" rpy="0 0 0"/>
         </xacro:if>
-    </xacro:macro>
+        <xacro:unless value="${is_known_model}">
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+        </xacro:unless>
+    </joint>
+
+    <!-- Gazebo plugin for camera sensor: https://sdformat.org/spec/1.12/sensor/#sensor_camera -->
+    <xacro:if value="${simulated}">
+          <gazebo reference="camera_tcp_uncalibrated">
+              <sensor name="${name}_camera_sensor" type="camera">
+                <pose>0 0 0 0 0 0</pose>
+              <always_on>true</always_on>
+              <update_rate>${update_rate}</update_rate>
+              <visualize>true</visualize>
+              <topic>simulated_camera/image_raw</topic>
+              <gz_frame_id>${tf_prefix}${parent}</gz_frame_id>
+              <camera name="${name}_camera">
+                  <camera_info_topic>simulated_camera/camera_info</camera_info_topic>
+                  <xacro:if value="${camera_model == 'basler'}">
+                      <horizontal_fov>1.0472</horizontal_fov> <!-- ~60 degrees -->
+                      <image>
+                      <width>1920</width>
+                      <height>1080</height>
+                      <format>R8G8B8</format>
+                      </image>
+                  </xacro:if>
+                  <!-- Fallback optics for unknown camera models -->
+                  <xacro:unless value="${is_known_model}">
+                      <horizontal_fov>1.0472</horizontal_fov> <!-- ~60 degrees -->
+                      <image>
+                      <width>640</width>
+                      <height>480</height>
+                      <format>R8G8B8</format>
+                      </image>
+                  </xacro:unless>
+                  <clip>
+                  <near>0.01</near>
+                  <far>50.0</far>
+                  </clip>
+                  <noise>
+                  <type>gaussian</type>
+                  <mean>0.0</mean>
+                  <stddev>0.007</stddev>
+                  </noise>
+                  <!-- Lens distortion (Brown-Conrady / plumb-bob model, same as OpenCV).
+                      k1/k2/k3: radial coefficients  (negative k1 = barrel distortion).
+                      p1/p2:    tangential coefficients.
+                      center:   normalised distortion centre (0.5 0.5 = optical centre).
+                      Tune these to match the real Basler lens calibration output. -->
+                  <xacro:if value="${camera_model == 'basler'}">
+                      <distortion>
+                          <k1>-0.2477771909786335</k1>
+                          <k2>0.126037678472415</k2>
+                          <k3>-0.0010056044464992401</k3>
+                          <p1>0.000391226451080845</p1>
+                          <p2>-0.04092116227683235</p2>
+                          <center>0.5 0.5</center>
+                      </distortion>
+                  </xacro:if>
+                  <optical_frame_id>${tf_prefix}${parent}</optical_frame_id>
+              </camera>
+              </sensor>
+          </gazebo>
+      </xacro:if>
+  </xacro:macro>
 
 </robot>

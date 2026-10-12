@@ -10,6 +10,10 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>ament_cmake_python</buildtool_depend>
 
+  <depend>pylon_ros2_camera_interfaces</depend>
+  <depend>pylon_ros2_camera_component</depend>
+  <depend>pylon_ros2_camera_wrapper</depend>
+
   <exec_depend>rclpy</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>launch</exec_depend>

@@ -22,6 +22,13 @@ install(
   DESTINATION share/${PROJECT_NAME}
 )
 
+# Register this package's Gazebo models on GZ_SIM_RESOURCE_PATH.
+# gz_register_models is baked into the container image (see docker/cmake).
+# config/model contains the basler/ model:// folder.
+list(APPEND CMAKE_MODULE_PATH "$ENV{GZ_CMAKE_MODULE_DIR}")
+include(gz_register_models)
+gz_register_models(config/model)
+
 # Install the simulated camera node so it is discoverable as
 # `ros2 run cameras basler_camera` and via the launch file.
 install(PROGRAMS

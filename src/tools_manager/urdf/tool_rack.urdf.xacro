@@ -1,0 +1,172 @@
+<?xml version="1.0"?>
+<tool_rack xmlns:xacro="http://wiki.ros.org/xacro">
+
+  <!--
+    Single slot: a group of 3 links rigidly attached to
+    `parent`. `index` makes the link/joint names unique so the macro can be
+    instantiated many times. Each of the 3 links has its own configurable origin.
+  -->
+  <xacro:macro name="tool_slot" params="
+    simulated:=true
+    index:='2'
+    parent:='tool_rack_link'
+    y_offset:='0'
+    tool_attached_origin_xyz:='0.0256 -0.1025 0.287'
+    tool_attached_origin_rpy:='0 0 0'
+    tool_lifted_origin_xyz:='0.0256 -0.1025 0.4'
+    tool_lifted_origin_rpy:='0 0 0'
+    tool_slide_in_origin_xyz:='0.0656 -0.1025 0.287'
+    tool_slide_in_origin_rpy:='0 0 0'
+    rfid_scanner_origin_xyz:='-0.05 0.0 -0.03'
+    rfid_scanner_origin_rpy:='0 0 0'
+    ">
+
+    <link name="slot${index}_attached_link">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <mass value="1e-6"/>
+            <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+        </inertial>
+    </link>
+    <joint name="slot${index}_attached_joint" type="fixed">
+        <parent link="${parent}"/>
+        <child link="slot${index}_attached_link"/>
+        <origin xyz="${tool_attached_origin_xyz.split()[0]} ${float(tool_attached_origin_xyz.split()[1]) + float(y_offset)} ${tool_attached_origin_xyz.split()[2]}" rpy="${tool_attached_origin_rpy}"/>
+    </joint>
+
+    <!--
+        Keep 'slot${index}_attached_link' as a real SDF <link> so the tool
+        model's Gazebo DetachableJoint can resolve it via model.LinkByName().
+        Without preserveFixedJoint the URDF->SDF converter lumps this
+        fixed-joint child into its parent and demotes it to a <frame>, which
+        the plugin cannot find (resulting in "Child Link slot${index}_attached_link
+        could not be found"). A tiny inertial block is required too: SDFormat
+        ignores preserveFixedJoint on a massless link and lumps it regardless.
+    -->
+    <gazebo reference="slot${index}_attached_joint">
+        <preserveFixedJoint>true</preserveFixedJoint>
+    </gazebo>
+
+    <link name="slot${index}_lifted_link"/>
+    <joint name="slot${index}_lifted_joint" type="fixed">
+        <parent link="${parent}"/>
+        <child link="slot${index}_lifted_link"/>
+        <origin xyz="${tool_lifted_origin_xyz.split()[0]} ${float(tool_lifted_origin_xyz.split()[1]) + float(y_offset)} ${tool_lifted_origin_xyz.split()[2]}" rpy="${tool_lifted_origin_rpy}"/>
+    </joint>
+
+    <link name="slot${index}_slide_in_link"/>
+    <joint name="slot${index}_slide_in_joint" type="fixed">
+        <parent link="${parent}"/>
+        <child link="slot${index}_slide_in_link"/>
+        <origin xyz="${tool_slide_in_origin_xyz.split()[0]} ${float(tool_slide_in_origin_xyz.split()[1]) + float(y_offset)} ${tool_slide_in_origin_xyz.split()[2]}" rpy="${tool_slide_in_origin_rpy}"/>
+    </joint>
+
+    <xacro:if value="${simulated}">
+        <link name="slot${index}_rfid_scanner_link">
+            <inertial>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <mass value="1e-6"/>
+                <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+            </inertial>
+        </link>
+
+        <joint name="slot${index}_to_rfid_scanner_joint" type="fixed">
+            <parent link="slot${index}_attached_link"/>
+            <child link="slot${index}_rfid_scanner_link"/>
+            <origin xyz="${rfid_scanner_origin_xyz}" rpy="${rfid_scanner_origin_rpy}"/>
+        </joint>
+
+        <!--
+            Keep the RFID frame as a real SDF <link> so the RfidReader plugin can
+            resolve it via model.LinkByName(). Without preserveFixedJoint the URDF->SDF
+            converter lumps this massless fixed-joint child into its parent and turns it
+            into a <frame>, which the plugin cannot find (link resolver returns null).
+        -->
+        <gazebo reference="slot${index}_to_rfid_scanner_joint">
+            <preserveFixedJoint>true</preserveFixedJoint>
+        </gazebo>
+
+        <gazebo>
+            <plugin filename="rfid_sim_systems"
+                    name="autofactory::rfid::RfidReader">
+                <link>slot${index}_rfid_scanner_link</link>
+                <range>0.08</range>
+                <update_rate>10</update_rate>
+                <detected_topic>/slot${index}_rfid_scanner/detected</detected_topic>
+                <content_topic>/slot${index}_rfid_scanner/tag_data</content_topic>
+                <reader_id>slot${index}_rfid_scanner</reader_id>
+            </plugin>
+        </gazebo>
+    </xacro:if>
+  </xacro:macro>
+
+  <!--
+    "Loop" over slots. Xacro has no native for-loop, so recursion is used:
+    the macro instantiates one slot then calls itself with index+1 until
+    index > count. Slot indices are 1-based (slot1, slot2, ...) to match the
+    1-based indices used in the tools_manager config and SlotInfo/ToolInfo
+    messages. Each slot is offset along X by `spacing`, with the first slot
+    (index 1) at zero offset.
+  -->
+  <xacro:macro name="tool_slots" params="parent simulated count spacing:=0.15 index:=1">
+    <xacro:if value="${index &lt;= count}">
+        <xacro:tool_slot
+            simulated="${simulated}"
+            index="${index}"
+            parent="${parent}"
+            y_offset="${(index - 1) * spacing}"/>
+        <xacro:tool_slots
+            simulated="${simulated}"
+            parent="${parent}"
+            count="${count}"
+            spacing="${spacing}"
+            index="${index + 1}"/>
+    </xacro:if>
+  </xacro:macro>
+
+  <xacro:macro name="tool_rack" params="
+    parent:=station
+    simulated:=true
+    rack_origin_xyz:='0 0 0'
+    rack_origin_rpy:='0 0 0'
+    number_of_slots:=2
+    slot_spacing:=0.15 
+    ">
+    <!--The 'slot_spacing' parameter controls the distance between consecutive slots (x-axis, in meters)-->
+    <link name="tool_rack_link">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="file://$(find tools_manager)/model/tool_rack/meshes/visual.dae"/>
+            </geometry>
+            <material name="tool_rack_grey">
+                <color rgba="0.5 0.5 0.5 1"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="file://$(find tools_manager)/model/tool_rack/meshes/collision.stl"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.5"/>
+            <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+        </inertial>
+    </link>
+
+    <!--
+      NOTE: Collision between 'tool_rack_link' and its parent is disabled in the
+      SRDF (see tools_manager/srdf/tool_rack.srdf.xacro), NOT here.
+      disable_collisions is an SRDF-only concept; MoveIt ignores it in the URDF.
+    -->
+    <joint name="tool_rack_joint" type="fixed">
+        <parent link="${parent}"/>
+        <child link="tool_rack_link"/>
+        <origin xyz="${rack_origin_xyz}" rpy="${rack_origin_rpy}"/>
+    </joint>
+
+    <!-- Instantiate N slots as children of the rack body -->
+    <xacro:tool_slots parent="tool_rack_link" simulated="${simulated}" count="${number_of_slots}" spacing="${slot_spacing}"/>
+  </xacro:macro>
+</tool_rack>

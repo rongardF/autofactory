@@ -1,0 +1,20 @@
+# ROS 2 <-> Gazebo bridge configuration for the rfid_sim demo world.
+#
+# Bridges the RfidReader plugin's Gazebo topics to ROS 2:
+#   * detection flag : gz.msgs.Boolean   -> std_msgs/msg/Bool
+#   * tag content     : gz.msgs.Dataframe -> ros_gz_interfaces/msg/Dataframe
+#
+# Adjust the topic names to match the <detected_topic>/<content_topic> set on
+# your RfidReader plugin instances.
+
+- ros_topic_name: "/rfid/reader0/detected"
+  gz_topic_name: "/rfid/reader0/detected"
+  ros_type_name: "std_msgs/msg/Bool"
+  gz_type_name: "gz.msgs.Boolean"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/rfid/reader0/content"
+  gz_topic_name: "/rfid/reader0/content"
+  ros_type_name: "ros_gz_interfaces/msg/Dataframe"
+  gz_type_name: "gz.msgs.Dataframe"
+  direction: GZ_TO_ROS

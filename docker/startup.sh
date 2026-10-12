@@ -70,4 +70,7 @@ grep -qF 'source /opt/ros/jazzy/setup.bash' ~/.bashrc \
 grep -qF 'install/setup.bash' ~/.bashrc \
   || echo "if [ -f ${WORKSPACE}/install/setup.bash ]; then source ${WORKSPACE}/install/setup.bash; fi" >> ~/.bashrc
 
+# add PYTHONPATH to .bashrc
+echo 'PYTHONPATH=/opt/venv/lib/python3.12/site-packages:$PYTHONPATH' >> ~/.bashrc
+
 echo "==> Devcontainer setup complete."

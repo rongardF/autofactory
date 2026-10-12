@@ -1,0 +1,131 @@
+<?xml version="1.0" ?>
+<!--
+  Copyright (c) 2025 FZI Forschungszentrum Informatik
+  SPDX-License-Identifier: BSD-3-Clause
+  Author: Ron Freimann
+
+  Demo world for the rfid_sim plugins.
+
+  A static reader sits at the origin with a 0.5 m spherical detection zone.
+  Tag A is placed inside the zone (0.2 m away) and should be detected; Tag B is
+  placed well outside (2.0 m away) and should be ignored. The reader publishes
+  its detection flag and the detected payload every cycle at 10 Hz.
+
+  Run:
+    gz sim -r $(ros2 pkg prefix rfid_sim)/share/rfid_sim/worlds/rfid_demo.sdf
+    ros2 launch rfid_sim rfid_bridge.launch.py
+    ros2 topic echo /rfid/reader0/detected
+    ros2 topic echo /rfid/reader0/content
+-->
+<sdf version="1.9">
+  <world name="rfid_demo">
+
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <plugin filename="gz-sim-physics-system"
+            name="gz::sim::systems::Physics">
+    </plugin>
+    <plugin filename="gz-sim-user-commands-system"
+            name="gz::sim::systems::UserCommands">
+    </plugin>
+    <plugin filename="gz-sim-scene-broadcaster-system"
+            name="gz::sim::systems::SceneBroadcaster">
+    </plugin>
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <plane><normal>0 0 1</normal><size>20 20</size></plane>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <plane><normal>0 0 1</normal><size>20 20</size></plane>
+          </geometry>
+          <material>
+            <ambient>0.8 0.8 0.8 1</ambient>
+            <diffuse>0.8 0.8 0.8 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- RFID reader: static, at the origin, 0.5 m detection sphere. -->
+    <model name="reader0">
+      <static>true</static>
+      <pose>0 0 0.5 0 0 0</pose>
+      <link name="reader_link">
+        <visual name="visual">
+          <geometry><box><size>0.05 0.05 0.05</size></box></geometry>
+          <material>
+            <ambient>0.1 0.3 0.9 1</ambient>
+            <diffuse>0.1 0.3 0.9 1</diffuse>
+          </material>
+        </visual>
+      </link>
+      <plugin filename="rfid_sim_systems"
+              name="autofactory::rfid::RfidReader">
+        <link>reader_link</link>
+        <range>0.5</range>
+        <update_rate>10</update_rate>
+        <detected_topic>/rfid/reader0/detected</detected_topic>
+        <content_topic>/rfid/reader0/content</content_topic>
+        <reader_id>reader0</reader_id>
+      </plugin>
+    </model>
+
+    <!-- Tag A: inside the detection zone (0.2 m from the reader). -->
+    <model name="tag_a">
+      <static>true</static>
+      <pose>0.2 0 0.5 0 0 0</pose>
+      <link name="tag_link">
+        <visual name="visual">
+          <geometry><sphere><radius>0.03</radius></sphere></geometry>
+          <material>
+            <ambient>0.1 0.8 0.1 1</ambient>
+            <diffuse>0.1 0.8 0.1 1</diffuse>
+          </material>
+        </visual>
+      </link>
+      <plugin filename="rfid_sim_systems"
+              name="autofactory::rfid::RfidTag">
+        <id>tag-A17</id>
+        <data encoding="hex">DEADBEEF36</data>
+      </plugin>
+    </model>
+
+    <!-- Tag B: outside the detection zone (2.0 m from the reader). -->
+    <model name="tag_b">
+      <static>true</static>
+      <pose>2.0 0 0.5 0 0 0</pose>
+      <link name="tag_link">
+        <visual name="visual">
+          <geometry><sphere><radius>0.03</radius></sphere></geometry>
+          <material>
+            <ambient>0.8 0.5 0.1 1</ambient>
+            <diffuse>0.8 0.5 0.1 1</diffuse>
+          </material>
+        </visual>
+      </link>
+      <plugin filename="rfid_sim_systems"
+              name="autofactory::rfid::RfidTag">
+        <id>tag-B42</id>
+        <data encoding="plain">PART-SN-000123</data>
+      </plugin>
+    </model>
+
+  </world>
+</sdf>
