@@ -148,7 +148,7 @@ def generate_launch_description() -> LaunchDescription:
                 [station_share, "config", "srdf", "default_setup.srdf.xacro"]
             ),
             "world_file": PathJoinSubstitution(
-                [station_share, "config", "world", "default.world"]
+                [station_share, "config", "world", "mock_product.world"]
             ),
             "gz_resource_path": PathJoinSubstitution(
                 [station_share, "config", "model"]

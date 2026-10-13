@@ -1,0 +1,38 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <model name="mock_product">
+    <link name="product_origin">
+      <inertial>
+        <mass>1</mass>
+      </inertial>
+      <collision name="collision">
+        <geometry>
+          <mesh>
+            <uri>model://mock_product/meshes/collision.stl</uri>
+            <scale>1 1 1</scale>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name="visual">
+	    <geometry>
+          <mesh>
+            <uri>model://mock_product/meshes/visual.glb</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <pbr>
+            <metal>
+              <albedo_map>model://mock_product/materials/basecolor.jpg</albedo_map>
+              <normal_map>model://mock_product/materials/normal_gl.png</normal_map>
+              <roughness_map>model://mock_product/materials/roughness.jpg</roughness_map>
+              <metalness_map>model://mock_product/materials/metalness.jpg</metalness_map>
+            </metal>
+          </pbr>
+        </material>
+        <meta> 
+            <layer> 1 </layer>
+        </meta>
+      </visual>
+    </link>
+  </model>
+</sdf>
