@@ -32,16 +32,24 @@ Bridges a Gazebo-provided camera into the same topic layout a real Basler
 camera streams and republishes them under the node's own name, so downstream
 consumers see identical topics whether the camera is real or simulated.
 
+Gazebo renders an ideal pinhole image, but its ogre2 render engine never
+applies the ``<distortion>`` lens model to the pixels -- it only exports the
+coefficients to ``CameraInfo``. To match a real Basler, this node bakes the
+Brown-Conrady (plumb_bob) distortion from ``CameraInfo`` into ``image_raw``.
+
 Subscribes to:
     * ``simulated_camera/image_raw``   (``sensor_msgs/Image``)
     * ``simulated_camera/camera_info`` (``sensor_msgs/CameraInfo``)
 
 Republishes to:
-    * ``<node-name>/image_raw``   (``sensor_msgs/Image``)
+    * ``<node-name>/image_raw``   (``sensor_msgs/Image``, distortion applied)
     * ``<node-name>/camera_info`` (``sensor_msgs/CameraInfo``)
 """
 
+import cv2
+import numpy as np
 import rclpy
+from cv_bridge import CvBridge
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 
@@ -54,6 +62,14 @@ class BaslerCamera(Node):
     def __init__(self, node_name: str = 'basler_camera') -> None:
         """Set up subscriptions to the simulated camera and republishers."""
         super().__init__(node_name)
+
+        self._bridge = CvBridge()
+        # Cached cv2.remap maps that bake lens distortion into each frame, plus
+        # the (w, h, K, D) signature they were built from so they are only
+        # rebuilt when the calibration actually changes.
+        self._map1: np.ndarray | None = None
+        self._map2: np.ndarray | None = None
+        self._calib_signature: tuple | None = None
 
         # Republish under the node's own name so real and simulated cameras
         # expose an identical topic layout to downstream consumers.
@@ -84,12 +100,53 @@ class BaslerCamera(Node):
         )
 
     def _image_callback(self, msg: Image) -> None:
-        """Republish an incoming simulated image frame."""
-        self._image_pub.publish(msg)
+        """Apply lens distortion to an incoming frame, then republish it."""
+        if self._map1 is None:
+            # No calibration yet, or distortion disabled: pass through untouched.
+            self._image_pub.publish(msg)
+            return
+
+        try:
+            frame = self._bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
+            distorted = cv2.remap(frame, self._map1, self._map2, cv2.INTER_LINEAR)
+            out = self._bridge.cv2_to_imgmsg(distorted, encoding=msg.encoding)
+            out.header = msg.header
+            self._image_pub.publish(out)
+        except Exception as e:  # noqa: BLE001 - never drop the stream on a bad frame
+            self.get_logger().error(f'Distortion failed, forwarding raw frame: {e}')
+            self._image_pub.publish(msg)
 
     def _camera_info_callback(self, msg: CameraInfo) -> None:
-        """Republish incoming simulated camera calibration info."""
+        """Republish calibration info and (re)build distortion maps as needed."""
         self._camera_info_pub.publish(msg)
+        self._update_distortion_maps(msg)
+
+    def _update_distortion_maps(self, msg: CameraInfo) -> None:
+        """Rebuild the cached remap grid when the calibration changes."""
+        signature = (msg.width, msg.height, tuple(msg.k), tuple(msg.d))
+        if signature == self._calib_signature:
+            return
+        self._calib_signature = signature
+
+        d = np.asarray(msg.d, dtype=np.float64)
+        if d.size == 0 or not np.any(d):
+            # No distortion to apply; forward frames unchanged.
+            self._map1 = None
+            self._map2 = None
+            self.get_logger().info('CameraInfo has no distortion; forwarding raw frames.')
+            return
+
+        k = np.asarray(msg.k, dtype=np.float64).reshape(3, 3)
+        # Backward map: for each output (distorted) pixel, sample the ideal
+        # Gazebo image at its undistorted location, so cv2.undistort(image, k, d)
+        # recovers the original pinhole frame -- i.e. a real Basler's optics.
+        map_x, map_y = cv2.initInverseRectificationMap(
+            k, d, np.eye(3), k, (msg.width, msg.height), cv2.CV_32FC1
+        )
+        self._map1, self._map2 = cv2.convertMaps(map_x, map_y, cv2.CV_16SC2)
+        self.get_logger().info(
+            f'Distortion maps built for {msg.width}x{msg.height} (plumb_bob).'
+        )
 
 
 def main(args: list[str] | None = None) -> None:

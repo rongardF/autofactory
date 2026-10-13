@@ -1,5 +1,7 @@
 # Ground plane 10x10 m, normal +Z, centered at origin.
 # UV coordinates run 0..20 so the albedo texture tiles every 0.5 m (20 tiles / 10 m).
+mtllib ground.mtl
+usemtl ground
 v -5.0 -5.0 0.0
 v  5.0 -5.0 0.0
 v  5.0  5.0 0.0

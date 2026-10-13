@@ -1,42 +1,16 @@
 {
   "name": "Workstation",
-  "build": {
-    "dockerfile": "../docker/Dockerfile",
-    "context": "..",
-    "options": [
-      "--network=host"
-    ]
-  },
   "workspaceFolder": "/workspaces/autofactory",
-  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/autofactory,type=bind,consistency=cached",
-  "runArgs": [
-    "--net=host",
-    "--pid=host",
-    "--ipc=host"
-    //"--device=/dev/dri"  - add this (and remove 'LIBGL_ALWAYS_SOFTWARE' env variable below) to use GPU/hardware acceleration
-  ],
-  "containerEnv": {
-    "ROS_DOMAIN_ID": "42",
-    "ROS_AUTOMATIC_DISCOVERY_RANGE": "LOCALHOST",
-    "RCUTILS_LOGGING_USE_STDOUT": "0",
-    "DISPLAY": "${localEnv:DISPLAY}",
-    "QT_X11_NO_MITSHM": "1",
-    "LIBGL_ALWAYS_SOFTWARE": "1",
-    "MESA_GL_VERSION_OVERRIDE": "3.3",
-    "MESA_GLSL_VERSION_OVERRIDE": "330",
-    "QSG_RENDER_LOOP": "basic",
-    "GZ_SIM_GUI_CONFIG_PATH": "/workspaces/autofactory/config/gz/gui.config",
-    "GZ_IP": "127.0.0.1"
-  },
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-python.python",
         "ms-python.pylance",
-        "ms-iot.vscode-ros",
+        "Ranch-Hand-Robotics.rde-pack",
         "ms-vscode-remote.remote-containers",
         "ms-azuretools.vscode-docker",
-        "github.copilot-chat"
+        "github.copilot-chat",
+        "openai.chatgpt"
       ],
       "settings": {
         "python.defaultInterpreterPath": "/opt/venv/bin/python3",
@@ -54,5 +28,20 @@
       }
     }
   },
-  "postCreateCommand": "bash /workspaces/autofactory/docker/startup.sh"
+  "dockerComposeFile": [
+    "compose.yaml",
+    ".generated/compose.json"
+  ],
+  "service": "devcontainer",
+  "initializeCommand": [
+    "python3",
+    ".devcontainer/scripts/configure.py"
+  ],
+  "overrideCommand": false,
+  "shutdownAction": "stopCompose",
+  "remoteUser": "ros",
+  "updateRemoteUserUID": true,
+  "remoteEnv": {
+    "CODEX_HOME": "/home/ros/.codex"
+  }
 }
