@@ -125,9 +125,12 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument(
             "world_file",
             default_value=PathJoinSubstitution(
-                [station_share, "config", "world", "calibration.world"]
+                [FindPackageShare("station"), "config", "world", "default.world"]
             ),
-            description="Path to the world file to load in Gazebo.",
+            description=(
+                "Gazebo world file, relative to the package share directory. "
+                "Only used when 'simulated' is true."
+            ),
         ),
     ]
 
