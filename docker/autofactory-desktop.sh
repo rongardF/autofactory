@@ -70,6 +70,11 @@ if [[ ${AUTOFACTORY_DISPLAY_MODE:-browser} == native ]] && timeout 5 xdpyinfo >/
 else
     browser
 fi
+# Ogre-Next enumerates EGL devices and picks the DRM node even when software rendering is
+# forced, which makes Mesa segfault. Hide the nodes whenever rendering is on the CPU.
+if [[ ${LIBGL_ALWAYS_SOFTWARE:-0} == 1 && -d /dev/dri ]]; then
+    rm -rf /dev/dri
+fi
 {
     printf 'export DISPLAY=%q\n' "$DISPLAY"
     for key in LIBGL_ALWAYS_SOFTWARE GALLIUM_DRIVER XAUTHORITY LD_LIBRARY_PATH; do
