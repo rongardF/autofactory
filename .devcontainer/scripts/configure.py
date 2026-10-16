@@ -19,6 +19,18 @@ def run(args, timeout=15):
         return None
 
 
+def remove_path(path):
+    """Delete a leftover path whether it is a file, symlink, or directory.
+
+    Docker auto-creates a bind-mount source as a directory when it is missing, so a
+    previous run can leave a directory where a cookie file is expected.
+    """
+    if path.is_dir() and not path.is_symlink():
+        shutil.rmtree(path, ignore_errors=True)
+    else:
+        path.unlink(missing_ok=True)
+
+
 def local_x11_socket(display):
     """Return the unix socket for a local display such as ':1', else None."""
     match = re.fullmatch(r':(\d+)(?:\.\d+)?', display)
@@ -101,7 +113,7 @@ def configure():
         authority = os.environ.get('XAUTHORITY', str(Path.home() / '.Xauthority'))
         cookies = run(['xauth', '-f', authority, 'nlist', display])
         cookie_file = GENERATED / 'Xauthority'
-        cookie_file.unlink(missing_ok=True)
+        remove_path(cookie_file)
         if cookies and cookies.returncode == 0 and cookies.stdout.strip():
             data = '\n'.join('ffff' + line[4:] for line in cookies.stdout.splitlines()) + '\n'
             result = subprocess.run(['xauth', '-f', str(cookie_file), 'nmerge', '-'],
