@@ -40,6 +40,18 @@ find_package(rclcpp_components REQUIRED)
 find_package(rcutils REQUIRED)
 find_package(pylon_ros2_camera_component REQUIRED)
 
+# The component public headers need these names in normal builds too.
+find_package(cv_bridge REQUIRED)
+find_package(image_geometry REQUIRED)
+
+if(cv_bridge_VERSION VERSION_GREATER_EQUAL 3.3.0)
+  add_compile_definitions(cv_bridge_HPP)
+endif()
+
+if(image_geometry_VERSION VERSION_GREATER_EQUAL 3.3.0)
+  add_compile_definitions(image_geometry_HPP)
+endif()
+
 set(CAMERA_WRAPPER_DEPENDENCIES
 	rclcpp
 	rclcpp_components
@@ -75,16 +87,6 @@ install(DIRECTORY launch
 
 if(BUILD_TESTING)
 
-  find_package(cv_bridge REQUIRED)
-  find_package(image_geometry REQUIRED)
-
-  if(cv_bridge_VERSION VERSION_GREATER_EQUAL 3.3.0)
-    add_compile_definitions(cv_bridge_HPP)
-  endif()
-
-  if(image_geometry_VERSION VERSION_GREATER_EQUAL 3.3.0)
-    add_compile_definitions(image_geometry_HPP)
-  endif()
 
   set(CAMERA_TEST_DEPENDENCIES
     ${CAMERA_WRAPPER_DEPENDENCIES}
