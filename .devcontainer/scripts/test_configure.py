@@ -15,13 +15,15 @@ spec.loader.exec_module(config)
 
 class HostSelection(unittest.TestCase):
     def select(self, system='Linux', release='generic', paths=(), env=None,
-               nvidia=False, probe_ok=True):
+               nvidia=False, probe_ok=True, snap=False, link_ok=True):
         original_exists = Path.exists
         def exists(path):
             return str(path) in paths or original_exists(path)
         def run(args, timeout=15):
             if args[:3] == ['docker', 'context', 'inspect']:
                 out = json.dumps([{'Endpoints': {'docker': {'Host': 'unix:///var/run/docker.sock'}}}])
+            elif args[1] == 'info' and '{{.DockerRootDir}}' in args[-1]:
+                out = '/var/snap/docker/common/var-lib-docker' if snap else '/var/lib/docker'
             elif args[1] == 'info':
                 out = json.dumps({'nvidia': {}} if nvidia else {})
             elif args[1] == 'run':
@@ -35,6 +37,7 @@ class HostSelection(unittest.TestCase):
              patch.object(config, 'run', side_effect=run), \
              patch.object(config.platform, 'system', return_value=system), \
              patch.object(config.platform, 'release', return_value=release), \
+             patch.object(config.os, 'link', side_effect=None if link_ok else OSError), \
              patch.object(Path, 'exists', exists), \
              patch.dict(os.environ, env or {}, clear=True):
             config.configure()
@@ -55,29 +58,59 @@ class HostSelection(unittest.TestCase):
         self.assertEqual(self.select()['environment']['AUTOFACTORY_DISPLAY_MODE'], 'browser')
 
     def test_linux_cpu_preserves_native_display(self):
-        value = self.select(paths=['/tmp/.X11-unix', '/dev/dri'],
+        value = self.select(paths=['/tmp/.X11-unix/X1', '/dev/dri'],
                             env={'DISPLAY': ':1', 'AUTOFACTORY_GPU': 'cpu'})
         self.assertEqual(value['environment']['DISPLAY'], ':1')
         self.assertNotIn('devices', value)
 
     def test_linux_dri(self):
-        value = self.select(paths=['/tmp/.X11-unix', '/dev/dri'], env={'DISPLAY': ':0'})
+        value = self.select(paths=['/tmp/.X11-unix/X0', '/dev/dri'], env={'DISPLAY': ':0'})
         self.assertEqual(value['devices'], ['/dev/dri:/dev/dri'])
 
+    def test_missing_display_socket_falls_back_to_browser(self):
+        value = self.select(paths=['/tmp/.X11-unix', '/dev/dri'], env={'DISPLAY': ':1'})
+        self.assertEqual(value['environment']['AUTOFACTORY_DISPLAY_MODE'], 'browser')
+        self.assertEqual(value['environment']['DISPLAY'], ':99')
+        self.assertNotIn('devices', value)
+
+    def test_snap_docker_mounts_linked_socket_dir(self):
+        value = self.select(paths=['/tmp/.X11-unix/X1', '/dev/dri'], env={'DISPLAY': ':1'}, snap=True)
+        self.assertEqual(value['environment']['AUTOFACTORY_DISPLAY_MODE'], 'native')
+        mount = next(v for v in value['volumes'] if v['target'] == '/tmp/.X11-unix')
+        self.assertTrue(mount['source'].endswith('/x11'))
+
+    def test_snap_docker_unlinkable_socket_falls_back_to_browser(self):
+        value = self.select(paths=['/tmp/.X11-unix/X1'], env={'DISPLAY': ':1'}, snap=True, link_ok=False)
+        self.assertEqual(value['environment']['AUTOFACTORY_DISPLAY_MODE'], 'browser')
+
+    def test_snap_docker_unlinkable_socket_rejects_forced_native(self):
+        with self.assertRaises(SystemExit):
+            self.select(paths=['/tmp/.X11-unix/X1'], snap=True, link_ok=False,
+                        env={'DISPLAY': ':1', 'AUTOFACTORY_DISPLAY': 'native'})
+
+    def test_remote_display_is_not_native(self):
+        value = self.select(paths=['/tmp/.X11-unix', '/dev/dri'], env={'DISPLAY': 'localhost:10.0'})
+        self.assertEqual(value['environment']['AUTOFACTORY_DISPLAY_MODE'], 'browser')
+
+    def test_native_mode_requires_display_socket(self):
+        with self.assertRaises(SystemExit):
+            self.select(paths=['/tmp/.X11-unix'],
+                        env={'DISPLAY': ':1', 'AUTOFACTORY_DISPLAY': 'native'})
+
     def test_nvidia_requires_successful_container_probe(self):
-        options = dict(paths=['/tmp/.X11-unix'], env={'DISPLAY': ':0'}, nvidia=True)
+        options = dict(paths=['/tmp/.X11-unix/X0'], env={'DISPLAY': ':0'}, nvidia=True)
         self.assertIn('deploy', self.select(**options))
         self.assertNotIn('deploy', self.select(**options, probe_ok=False))
 
     def test_wsl_uses_dxg_without_nvidia_toolkit(self):
         value = self.select(release='microsoft-standard-WSL2',
-                            paths=['/tmp/.X11-unix', '/dev/dxg', '/usr/lib/wsl'], env={'DISPLAY': ':0'})
+                            paths=['/tmp/.X11-unix/X0', '/dev/dxg', '/usr/lib/wsl'], env={'DISPLAY': ':0'})
         self.assertEqual(value['devices'], ['/dev/dxg:/dev/dxg'])
         self.assertEqual(value['environment']['GALLIUM_DRIVER'], 'd3d12')
         self.assertNotIn('deploy', value)
 
     def test_explicit_browser_skips_gpu(self):
-        value = self.select(paths=['/tmp/.X11-unix', '/dev/dri'], nvidia=True,
+        value = self.select(paths=['/tmp/.X11-unix/X0', '/dev/dri'], nvidia=True,
                             env={'DISPLAY': ':0', 'AUTOFACTORY_DISPLAY': 'browser'})
         self.assertEqual(value['environment']['DISPLAY'], ':99')
         self.assertNotIn('devices', value)

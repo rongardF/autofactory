@@ -37,6 +37,7 @@
     "python3",
     ".devcontainer/scripts/configure.py"
   ],
+  "postCreateCommand": "git config --global --add safe.directory ${containerWorkspaceFolder}",
   "overrideCommand": false,
   "shutdownAction": "stopCompose",
   "remoteUser": "ros",

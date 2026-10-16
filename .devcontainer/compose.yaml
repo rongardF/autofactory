@@ -5,6 +5,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
       target: development
+      network: host
     init: true
     entrypoint: ["/usr/local/bin/autofactory-desktop"]
     command: ["sleep", "infinity"]
@@ -17,7 +18,6 @@ services:
       QT_QPA_PLATFORM: xcb
       QT_X11_NO_MITSHM: "1"
       QSG_RENDER_LOOP: basic
-      GZ_SIM_GUI_CONFIG_PATH: /workspaces/autofactory/config/gz/gui.config
       GZ_IP: 127.0.0.1
     volumes:
       - ..:/workspaces/autofactory
