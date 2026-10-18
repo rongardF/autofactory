@@ -5,7 +5,9 @@ mkdir -p /run/autofactory /tmp/autofactory-desktop
 chmod 755 /tmp/autofactory-desktop
 # The container entrypoint stays root; VS Code and applications run as ros.
 # Copy the host cookie rather than changing ownership of a bind-mounted file.
-if [[ -n ${XAUTHORITY:-} && -f $XAUTHORITY ]]; then
+# On a restart BASH_ENV re-sources a stale rendering.sh that already points
+# XAUTHORITY at the destination; skip the self-copy so install does not abort.
+if [[ -n ${XAUTHORITY:-} && -f $XAUTHORITY && $XAUTHORITY != /run/autofactory/Xauthority ]]; then
     install -m 600 -o ros -g "$(id -gn ros)" "$XAUTHORITY" /run/autofactory/Xauthority
     export XAUTHORITY=/run/autofactory/Xauthority
 fi
@@ -69,6 +71,11 @@ if [[ ${AUTOFACTORY_DISPLAY_MODE:-browser} == native ]] && timeout 5 xdpyinfo >/
     if ! graphics_probe >/run/autofactory/glxinfo.log 2>&1; then browser; fi
 else
     browser
+fi
+# Ogre-Next enumerates EGL devices and picks the DRM node even when software rendering is
+# forced, which makes Mesa segfault. Hide the nodes whenever rendering is on the CPU.
+if [[ ${LIBGL_ALWAYS_SOFTWARE:-0} == 1 && -d /dev/dri ]]; then
+    rm -rf /dev/dri
 fi
 {
     printf 'export DISPLAY=%q\n' "$DISPLAY"
