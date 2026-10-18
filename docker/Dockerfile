@@ -12,9 +12,6 @@ RUN --mount=type=cache,id=autofactory-apt,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
     python3-pip=24.0+dfsg-1ubuntu1.3 \
     python3-venv=3.12.3-0ubuntu2.1 \
-    python3-colcon-common-extensions=0.3.0-100 \
-    python3-rosdep=0.27.0-1 \
-    ros-jazzy-nav2-lifecycle-manager=1.3.13-1noble.20260921.025008 \
     sudo=1.9.15p5-3ubuntu5.24.04.4 \
     mesa-utils=9.0.0-2 \
     x11-utils=7.7+6build2 \
@@ -42,6 +39,8 @@ FROM base AS ros-dependencies
 RUN --mount=type=cache,id=autofactory-apt,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=autofactory-apt-lists,target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
+    python3-colcon-common-extensions=0.3.0-100 \
+    python3-rosdep=0.27.0-1 \
     python3-numpy=1:1.26.4+ds-6ubuntu1 \
     python3-opencv=4.6.0+dfsg-13.1ubuntu1 \
     python3-pydantic=1.10.14-1 \
@@ -81,6 +80,7 @@ RUN --mount=type=cache,id=autofactory-apt,target=/var/cache/apt,sharing=locked \
     ros-jazzy-moveit-ros-visualization=2.12.4-1noble.20260915.204804 \
     ros-jazzy-moveit-servo=2.12.4-1noble.20261006.040508 \
     ros-jazzy-moveit-simple-controller-manager=2.12.4-1noble.20260915.194321 \
+    ros-jazzy-nav2-lifecycle-manager=1.3.13-1noble.20260921.025008 \
     ros-jazzy-pcl-ros=2.6.5-1noble.20260916.065720 \
     ros-jazzy-rcl-interfaces=2.0.4-1noble.20260911.093433 \
     ros-jazzy-rclcpp=28.1.22-1noble.20260911.105434 \
@@ -143,11 +143,15 @@ WORKDIR /workspaces/autofactory
 RUN python3 -m venv /opt/venv --system-site-packages
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY requirements.txt requirements-dev.txt ./
+COPY requirements.txt ./
 RUN --mount=type=cache,id=autofactory-pip,target=/root/.cache/pip \
-    pip install -r requirements-dev.txt
+    pip install -r requirements.txt
 
 FROM python-dependencies AS development
+
+COPY requirements-dev.txt ./
+RUN --mount=type=cache,id=autofactory-pip,target=/root/.cache/pip \
+    pip install -r requirements-dev.txt
 
 # Advertise GPU/graphics capabilities to the NVIDIA Container Toolkit so it
 # mounts the driver libraries and /dev/nvidia* devices at container start.

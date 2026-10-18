@@ -1,5 +1,5 @@
 # Development / CI tooling — pinned separately from runtime deps.
-# Installed in the Docker image (all profiles); not needed at runtime.
+# Installed in the development Docker stage; not needed at runtime.
 #
 # Versions chosen for Python 3.12 compatibility (Ubuntu 24.04 default).
 
