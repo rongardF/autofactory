@@ -1,0 +1,8 @@
+# Only container scripts and Python requirements are needed for image creation.
+**
+!docker/
+!docker/**
+!requirements.txt
+!requirements-dev.txt
+**/__pycache__/**
+**/*.pyc

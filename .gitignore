@@ -19,3 +19,7 @@ __pycache__/
 dev_notes.txt
 sandbox_*
 test_node_*
+.env
+
+# Generated per-host Dev Container display/GPU settings and X11 cookies
+.devcontainer/.generated/

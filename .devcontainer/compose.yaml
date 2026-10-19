@@ -1,0 +1,25 @@
+services:
+  devcontainer:
+    platform: linux/amd64
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: development
+      network: host
+    init: true
+    entrypoint: ["/usr/local/bin/autofactory-desktop"]
+    command: ["sleep", "infinity"]
+    shm_size: 1gb
+    environment:
+      BASH_ENV: /usr/local/share/autofactory/setup.bash
+      ROS_DOMAIN_ID: "42"
+      ROS_AUTOMATIC_DISCOVERY_RANGE: LOCALHOST
+      RCUTILS_LOGGING_USE_STDOUT: "0"
+      QT_QPA_PLATFORM: xcb
+      QT_X11_NO_MITSHM: "1"
+      QSG_RENDER_LOOP: basic
+      GZ_IP: 127.0.0.1
+    volumes:
+      - ..:/workspaces/autofactory
+    ports:
+      - "127.0.0.1:6080:6080"

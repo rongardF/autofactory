@@ -30,12 +30,11 @@
     </plugin>
  
     <!-- Plugin for handling sensors like the LIDAR -->
-    <!-- Using ogre (1.x) instead of ogre2 for better compatibility with software
-         rendering (llvmpipe / XRDP). Switch to ogre2 if GPU passthrough is available. -->
+    <!-- Ogre2 uses the NVIDIA GPU exposed through the NVIDIA Container Toolkit. -->
     <plugin
       filename="gz-sim-sensors-system"
       name="gz::sim::systems::Sensors">
-      <render_engine>ogre</render_engine>
+      <render_engine>ogre2</render_engine>
     </plugin>
  
     <!-- To add realistic gravity, do: 0.0 0.0 -9.8, otherwise do 0.0 0.0 0.0 -->

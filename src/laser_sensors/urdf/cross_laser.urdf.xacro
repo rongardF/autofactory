@@ -79,7 +79,7 @@
           <update_rate>${update_rate}</update_rate>
           <visualize>true</visualize>
           <topic>simulated_laser_cross/beam_x_axis</topic>
-          <gz_frame_id>${name}_laser_sensor_link</gz_frame_id>
+          <frame_id>${name}_laser_sensor_link</frame_id>
           <lidar>
             <scan>
               <horizontal>
@@ -109,7 +109,7 @@
           <update_rate>${update_rate}</update_rate>
           <visualize>true</visualize>
           <topic>simulated_laser_cross/beam_y_axis</topic>
-          <gz_frame_id>${name}_laser_sensor_link</gz_frame_id>
+          <frame_id>${name}_laser_sensor_link</frame_id>
           <lidar>
             <scan>
               <horizontal>
