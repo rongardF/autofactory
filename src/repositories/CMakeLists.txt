@@ -57,16 +57,58 @@ install(
 install(
   TARGETS
     ${PROJECT_NAME}__rosidl_generator_c
+    ${PROJECT_NAME}__rosidl_generator_cpp
     ${PROJECT_NAME}__rosidl_typesupport_c
     ${PROJECT_NAME}__rosidl_typesupport_cpp
     ${PROJECT_NAME}__rosidl_typesupport_fastrtps_c
     ${PROJECT_NAME}__rosidl_typesupport_fastrtps_cpp
     ${PROJECT_NAME}__rosidl_typesupport_introspection_c
     ${PROJECT_NAME}__rosidl_typesupport_introspection_cpp
+  EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
 )
+
+# Export the installed targets (namespace defaults to ${PROJECT_NAME}::) and
+# register them as typesupport targets so downstream `rosidl_generate_interfaces`
+# populates ${PROJECT_NAME}_TARGETS and links against them. SKIP_INSTALL omits
+# this, which breaks any package that references these interfaces in its own
+# interface files (runtime "undefined symbol" / "Could not import
+# 'rosidl_typesupport_c'" failure).
+ament_export_targets(export_${PROJECT_NAME})
+rosidl_export_typesupport_targets(__rosidl_generator_c
+  ${PROJECT_NAME}__rosidl_generator_c)
+rosidl_export_typesupport_targets(__rosidl_generator_cpp
+  ${PROJECT_NAME}__rosidl_generator_cpp)
+rosidl_export_typesupport_targets(__rosidl_typesupport_c
+  ${PROJECT_NAME}__rosidl_typesupport_c)
+rosidl_export_typesupport_targets(__rosidl_typesupport_cpp
+  ${PROJECT_NAME}__rosidl_typesupport_cpp)
+rosidl_export_typesupport_targets(__rosidl_typesupport_fastrtps_c
+  ${PROJECT_NAME}__rosidl_typesupport_fastrtps_c)
+rosidl_export_typesupport_targets(__rosidl_typesupport_fastrtps_cpp
+  ${PROJECT_NAME}__rosidl_typesupport_fastrtps_cpp)
+rosidl_export_typesupport_targets(__rosidl_typesupport_introspection_c
+  ${PROJECT_NAME}__rosidl_typesupport_introspection_c)
+rosidl_export_typesupport_targets(__rosidl_typesupport_introspection_cpp
+  ${PROJECT_NAME}__rosidl_typesupport_introspection_cpp)
+
+# The Python conversion library (lib${PROJECT_NAME}__rosidl_generator_py.so) is a
+# SEPARATE chain from the C typesupport libraries above, and SKIP_INSTALL drops its
+# install + export too. Downstream interface packages link it via the *unsuffixed*
+# ${PROJECT_NAME}_TARGETS variable; without it they fail at runtime with
+# "undefined symbol: <pkg>__msg__<type>__convert_from_py".
+# Installing it also keeps the Python extension modules from depending on build/.
+install(
+  TARGETS ${PROJECT_NAME}__rosidl_generator_py
+  EXPORT export_${PROJECT_NAME}__rosidl_generator_py
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
+rosidl_export_typesupport_targets("" ${PROJECT_NAME}__rosidl_generator_py)
+ament_export_targets(export_${PROJECT_NAME}__rosidl_generator_py)
 
 # Install the lifecycle node program so it is discoverable as
 # `ros2 run repositories station_cache`.
@@ -88,4 +130,9 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
+ament_export_dependencies(
+  rosidl_default_runtime
+  builtin_interfaces
+  service_msgs
+)
 ament_package()

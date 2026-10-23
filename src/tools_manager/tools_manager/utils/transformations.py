@@ -1,4 +1,4 @@
-# Copyright (c) 2026, Endtools Contributors
+# Copyright (c) 2026, Autofactory
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without

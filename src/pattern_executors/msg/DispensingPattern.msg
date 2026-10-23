@@ -1,0 +1,4 @@
+string pattern_id
+float64 flowrate_m3_s
+geometry_msgs/PoseStamped start_pose
+pattern_executors/DispensingMovement[] movements
