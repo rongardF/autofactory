@@ -234,8 +234,8 @@ def generate_launch_description() -> LaunchDescription:
             "simulated": simulated,
             "node_name": "dispensing_executor",
             "tool_sn": "abc123",
-            "endtool_node_name": "dispensing_abc123",
-            "movement_action_name": "execute_trajectory"
+            "endtool_node_name": "dispenser_abc123",
+            "movement_controller_node_name": "/movement_controller/execute_trajectory"
         }.items(),
     )
 

@@ -25,11 +25,11 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from rclpy import init, shutdown
+from rclpy import init, ok, shutdown
 from pydantic import ValidationError
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.qos import QoSProfile, DurabilityPolicy
-from rclpy.executors import MultiThreadedExecutor
+from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle.node import LifecycleState, TransitionCallbackReturn
 from rclpy.publisher import Publisher
@@ -225,6 +225,9 @@ def main(args=None) -> None:
     executor.add_node(node)
     try:
         executor.spin()
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
     finally:
         node.destroy_node()
-        shutdown()
+        if ok():
+            shutdown()

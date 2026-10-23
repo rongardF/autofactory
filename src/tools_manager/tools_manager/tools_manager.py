@@ -29,7 +29,7 @@ import os
 from threading import RLock
 from uuid import uuid4
 
-from rclpy import init, shutdown
+from rclpy import init, ok, shutdown
 from pydantic import ValidationError
 from ament_index_python.packages import get_package_share_directory, PackageNotFoundError
 from action_msgs.msg import GoalStatus
@@ -38,7 +38,7 @@ from rclpy.duration import Duration
 from rclpy.parameter import ParameterValue, ParameterType
 from rclpy.qos import QoSProfile, DurabilityPolicy
 from rclpy.action import ActionClient
-from rclpy.executors import MultiThreadedExecutor
+from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle.node import LifecycleState, TransitionCallbackReturn
 from rclpy.subscription import Subscription
@@ -1136,6 +1136,9 @@ def main(args=None) -> None:
     executor.add_node(node)
     try:
         executor.spin()
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
     finally:
         node.destroy_node()
-        shutdown()
+        if ok():
+            shutdown()

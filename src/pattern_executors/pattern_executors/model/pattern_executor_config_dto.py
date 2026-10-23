@@ -43,10 +43,10 @@ class PatternExecutorConfigDTO(BaseModel):
         min_length=1,
         description='Node name of the lifecycle-managed end tool.',
     )
-    movement_action_name: str = Field(
+    movement_controller_node_name: str = Field(
         default='movement_controller/execute_trajectory',
         min_length=1,
-        description='Action name of the movement controller execute action.',
+        description='Node name of the movement controller.',
     )
     movement_server_timeout_s: float = Field(
         default=5.0,

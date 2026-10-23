@@ -105,11 +105,10 @@ class PatternExecutor(LifecycleNode, ABC):
             ),
         )
         self.declare_parameter(
-            'movement_action_name',
-            'movement_controller/execute_trajectory',
+            'movement_controller_node_name',
+            '/movement_controller/execute_trajectory',
             ParameterDescriptor(
-                description='Action name of the movement controller execute '
-                'trajectory action.'
+                description='Node name of the movement controller.'
             ),
         )
         self.declare_parameter(
@@ -145,7 +144,7 @@ class PatternExecutor(LifecycleNode, ABC):
             .get_parameter_value().string_value,
             'endtool_node_name': self.get_parameter('endtool_node_name')
             .get_parameter_value().string_value,
-            'movement_action_name': self.get_parameter('movement_action_name')
+            'movement_controller_node_name': self.get_parameter('movement_controller_node_name')
             .get_parameter_value().string_value,
             'movement_server_timeout_s': self.get_parameter(
                 'movement_server_timeout_s'
@@ -186,7 +185,7 @@ class PatternExecutor(LifecycleNode, ABC):
         self._movement_action_client = ActionClient(
             self,
             ExecuteTrajectory,
-            self._config.movement_action_name,
+            self._config.movement_controller_node_name,
             callback_group=self._movement_callback_group,
         )
         self._endtool_manager = EndtoolLifecycleManager(
@@ -208,50 +207,54 @@ class PatternExecutor(LifecycleNode, ABC):
         if super().on_activate(state) != TransitionCallbackReturn.SUCCESS:
             self.get_logger().error('Failed to activate base lifecycle node.')
             return TransitionCallbackReturn.FAILURE
-
-        if (
-            self._config is None
-            or self._movement_action_client is None
-            or self._endtool_manager is None
-            or self._dispatcher is None
-        ):
-            self.get_logger().error(
-                'Sanity check failed, executor is not configured. Cannot activate.'
-            )
-            return TransitionCallbackReturn.FAILURE
-
-        if not self._activate_end_tool():
-            return TransitionCallbackReturn.FAILURE
-
-        if not self._movement_action_client.wait_for_server(
-            timeout_sec=self._config.movement_server_timeout_s
-        ):
-            self.get_logger().error('Movement controller action server not available.')
-            self._deactivate_end_tool()
-            return TransitionCallbackReturn.FAILURE
-
         try:
-            self._on_endtool_activated()
+            if (
+                self._config is None
+                or self._movement_action_client is None
+                or self._endtool_manager is None
+                or self._dispatcher is None
+            ):
+                self.get_logger().error(
+                    'Sanity check failed, executor is not configured. Cannot activate.'
+                )
+                return TransitionCallbackReturn.FAILURE
+
+            if not self._activate_end_tool():
+                return TransitionCallbackReturn.FAILURE
+
+            if not self._movement_action_client.wait_for_server(
+                timeout_sec=self._config.movement_server_timeout_s
+            ):
+                self.get_logger().error('Movement controller action server not available.')
+                self._deactivate_end_tool()
+                return TransitionCallbackReturn.FAILURE
+
+            try:
+                self._on_endtool_activated()
+            except Exception as error:  # noqa: BLE001
+                self.get_logger().error(f'Failed to create end-tool clients: {error}')
+                self._deactivate_end_tool()
+                return TransitionCallbackReturn.FAILURE
+
+            self._executing_patterns_publisher = self.create_publisher(
+                Bool,
+                '~/executing_patterns',
+                QoSProfile(
+                    depth=1,
+                    durability=DurabilityPolicy.TRANSIENT_LOCAL,
+                    reliability=ReliabilityPolicy.RELIABLE,
+                ),
+            )
+            self._publish_executing(False)
+
+            self._action_server = self._create_action_server()
+            self._is_active = True
+
+            return TransitionCallbackReturn.SUCCESS
         except Exception as error:  # noqa: BLE001
-            self.get_logger().error(f'Failed to create end-tool clients: {error}')
-            self._deactivate_end_tool()
+            self.get_logger().error(f'Failed to activate executor: {error}')
             return TransitionCallbackReturn.FAILURE
-
-        self._executing_patterns_publisher = self.create_publisher(
-            Bool,
-            '~/executing_patterns',
-            QoSProfile(
-                depth=1,
-                durability=DurabilityPolicy.TRANSIENT_LOCAL,
-                reliability=ReliabilityPolicy.RELIABLE,
-            ),
-        )
-        self._publish_executing(False)
-
-        self._action_server = self._create_action_server()
-        self._is_active = True
-
-        return TransitionCallbackReturn.SUCCESS
+    
 
     def on_deactivate(self, state: LifecycleState) -> TransitionCallbackReturn:
         """Close interfaces, abort any in-flight goal, deactivate the end tool."""
@@ -306,6 +309,7 @@ class PatternExecutor(LifecycleNode, ABC):
 
         self._dispatcher = None
         self._config = None
+        self._release_execution_slot()
 
         return TransitionCallbackReturn.SUCCESS
 

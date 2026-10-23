@@ -31,14 +31,14 @@ from time import sleep
 from threading import Lock, Event
 from asyncio import Future
 
-from rclpy import init, shutdown
+from rclpy import init, ok, shutdown
 from pydantic import ValidationError
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.action import ActionServer, ActionClient, CancelResponse, GoalResponse
 from rclpy.action.server import ServerGoalHandle
 from rclpy.action.client import CancelGoal, ClientGoalHandle
 from rclpy.callback_groups import ReentrantCallbackGroup
-from rclpy.executors import MultiThreadedExecutor
+from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle.node import LifecycleState, TransitionCallbackReturn
 from rclpy.publisher import Publisher
@@ -710,6 +710,9 @@ def main(args=None) -> None:
     executor.add_node(node)
     try:
         executor.spin()
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
     finally:
         node.destroy_node()
-        shutdown()
+        if ok():
+            shutdown()

@@ -511,6 +511,8 @@ class VolumetricDispensingTool(LifecycleNode):
 
     def _handle_dispense_start(self, _: Trigger.Request, response: Trigger.Response):
         """Handle the dispense start service request."""
+        self.get_logger().info('Received dispense start request.')
+
         if self._controller is None:
             response.success = False
             response.message = "Controller is not initialized."
@@ -535,6 +537,8 @@ class VolumetricDispensingTool(LifecycleNode):
 
     def _handle_dispense_stop(self, _: StopDispensing.Request, response: StopDispensing.Response):
         """Handle the dispense stop service request."""
+        self.get_logger().info('Received dispense stop request.')
+        
         if self._controller is None:
             response.success = False
             response.error_message = "Controller is not initialized."

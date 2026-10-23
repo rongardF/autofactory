@@ -111,19 +111,65 @@ install(
 
 # Install the generated C/C++ type support shared libraries that SKIP_INSTALL skipped.
 # These are required at runtime by any node (Python or C++) that uses these interfaces.
+#
+# EXPORT: SKIP_INSTALL also suppresses the typesupport target export that rosidl
+# normally emits. Without it, downstream packages that reference these interfaces
+# in their own `rosidl_generate_interfaces(... DEPENDENCIES movement_controller)`
+# cannot link against these libraries, producing a runtime
+# "undefined symbol: movement_controller__msg__..." / "Could not import
+# 'rosidl_typesupport_c'" failure. Re-export the targets to restore that linkage.
 install(
   TARGETS
     ${PROJECT_NAME}__rosidl_generator_c
+    ${PROJECT_NAME}__rosidl_generator_cpp
     ${PROJECT_NAME}__rosidl_typesupport_c
     ${PROJECT_NAME}__rosidl_typesupport_cpp
     ${PROJECT_NAME}__rosidl_typesupport_fastrtps_c
     ${PROJECT_NAME}__rosidl_typesupport_fastrtps_cpp
     ${PROJECT_NAME}__rosidl_typesupport_introspection_c
     ${PROJECT_NAME}__rosidl_typesupport_introspection_cpp
+  EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
 )
+
+# Export the installed targets (namespace defaults to ${PROJECT_NAME}::) and
+# register them as typesupport targets so downstream `rosidl_generate_interfaces`
+# populates ${PROJECT_NAME}_TARGETS and links against them.
+ament_export_targets(export_${PROJECT_NAME})
+rosidl_export_typesupport_targets(__rosidl_generator_c
+  ${PROJECT_NAME}__rosidl_generator_c)
+rosidl_export_typesupport_targets(__rosidl_generator_cpp
+  ${PROJECT_NAME}__rosidl_generator_cpp)
+rosidl_export_typesupport_targets(__rosidl_typesupport_c
+  ${PROJECT_NAME}__rosidl_typesupport_c)
+rosidl_export_typesupport_targets(__rosidl_typesupport_cpp
+  ${PROJECT_NAME}__rosidl_typesupport_cpp)
+rosidl_export_typesupport_targets(__rosidl_typesupport_fastrtps_c
+  ${PROJECT_NAME}__rosidl_typesupport_fastrtps_c)
+rosidl_export_typesupport_targets(__rosidl_typesupport_fastrtps_cpp
+  ${PROJECT_NAME}__rosidl_typesupport_fastrtps_cpp)
+rosidl_export_typesupport_targets(__rosidl_typesupport_introspection_c
+  ${PROJECT_NAME}__rosidl_typesupport_introspection_c)
+rosidl_export_typesupport_targets(__rosidl_typesupport_introspection_cpp
+  ${PROJECT_NAME}__rosidl_typesupport_introspection_cpp)
+
+# The Python conversion library (lib${PROJECT_NAME}__rosidl_generator_py.so) is a
+# SEPARATE chain from the C typesupport libraries above, and SKIP_INSTALL drops its
+# install + export too. Downstream interface packages link it via the *unsuffixed*
+# ${PROJECT_NAME}_TARGETS variable; without it they fail at runtime with
+# "undefined symbol: <pkg>__msg__<type>__convert_from_py".
+# Installing it also keeps the Python extension modules from depending on build/.
+install(
+  TARGETS ${PROJECT_NAME}__rosidl_generator_py
+  EXPORT export_${PROJECT_NAME}__rosidl_generator_py
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
+rosidl_export_typesupport_targets("" ${PROJECT_NAME}__rosidl_generator_py)
+ament_export_targets(export_${PROJECT_NAME}__rosidl_generator_py)
 
 # --------------------------------------------------------------------------
 # Testing
@@ -186,5 +232,15 @@ install(DIRECTORY config launch srdf urdf world
 # Finalize
 # --------------------------------------------------------------------------
 ament_export_include_directories(include)
-ament_export_dependencies(rosidl_default_runtime)
+# Re-export the interface dependencies that SKIP_INSTALL dropped. Downstream
+# packages that link the exported typesupport targets need these imported
+# targets (e.g. geometry_msgs::..., shape_msgs::...) to be defined via
+# find_package; without this they fail to configure with
+# "target ... was not found".
+ament_export_dependencies(
+  rosidl_default_runtime
+  geometry_msgs
+  shape_msgs
+  action_msgs
+)
 ament_package()

@@ -40,7 +40,7 @@ def generate_launch_description() -> LaunchDescription:
     node_name = LaunchConfiguration('node_name')
     tool_sn = LaunchConfiguration('tool_sn')
     endtool_node_name = LaunchConfiguration('endtool_node_name')
-    movement_action_name = LaunchConfiguration('movement_action_name')
+    movement_controller_node_name = LaunchConfiguration('movement_controller_node_name')
     config_file = LaunchConfiguration('config_file')
 
     declared_arguments = [
@@ -65,9 +65,9 @@ def generate_launch_description() -> LaunchDescription:
             description='Node name of the dispenser whose lifecycle is driven.',
         ),
         DeclareLaunchArgument(
-            'movement_action_name',
-            default_value='movement_controller/execute_trajectory',
-            description='Movement controller execute-trajectory action name.',
+            'movement_controller_node_name',
+            default_value='/movement_controller/execute_trajectory',
+            description='Movement controller node name.',
         ),
         DeclareLaunchArgument(
             'config_file',
@@ -93,7 +93,7 @@ def generate_launch_description() -> LaunchDescription:
                 'simulated': simulated,
                 'tool_sn': tool_sn,
                 'endtool_node_name': endtool_node_name,
-                'movement_action_name': movement_action_name,
+                'movement_controller_node_name': movement_controller_node_name,
             },
         ],
     )

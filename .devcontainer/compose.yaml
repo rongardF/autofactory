@@ -9,6 +9,13 @@ services:
     entrypoint: ["/usr/local/bin/autofactory-desktop"]
     command: ["sleep", "infinity"]
     shm_size: 1gb
+    # Soft limit 0 suppresses the multi-hundred-MB core.<pid> dumps that
+    # upstream move_group leaves in the workspace on SIGINT (moveit2#3268).
+    # Hard limit stays unlimited so `ulimit -c unlimited` can re-enable them.
+    ulimits:
+      core:
+        soft: 0
+        hard: -1
     environment:
       BASH_ENV: /usr/local/share/autofactory/setup.bash
       ROS_DOMAIN_ID: "42"

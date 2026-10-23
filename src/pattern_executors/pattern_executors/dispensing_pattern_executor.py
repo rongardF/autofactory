@@ -374,7 +374,7 @@ class DispensingPatternExecutor(PatternExecutor):
         """Build a valve-closed PTP approach movement to the pattern origin."""
         movement = DispensingMovement()
         path = TrajectoryPath()
-        path.path_id = f'{pattern.pattern_id}__approach'
+        path.path_id = f'{pattern.pattern_id}'
         path.motion_type = TrajectoryPath.MOTION_TYPE_PTP
         path.target_pose = deepcopy(pattern.start_pose)
         movement.path = path
