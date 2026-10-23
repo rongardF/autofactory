@@ -1,0 +1,54 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <model name="mock_product">
+    <link name="product_origin">
+      <!-- Aluminium heatsink 0.3 x 0.5 x 0.15 m; ~33% fill factor of solid
+           aluminium (2700 kg/m^3) → ~20 kg. Inertia from homogeneous-box model. -->
+      <!-- Mesh origin is at a corner; COM offset measured in CAD. -->
+      <inertial>
+        <pose>0.1512 -0.2519 0.1273 0 0 0</pose>
+        <mass>20.0</mass>
+        <inertia>
+          <ixx>0.4542</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>0.1875</iyy>
+          <iyz>0</iyz>
+          <izz>0.5667</izz>
+        </inertia>
+      </inertial>
+      <collision name="collision">
+        <geometry>
+          <mesh>
+            <uri>model://mock_product/meshes/collision.stl</uri>
+            <scale>1 1 1</scale>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name="visual">
+	    <geometry>
+          <mesh>
+            <uri>model://mock_product/meshes/visual.obj</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+          <specular>0.45 0.45 0.45 1</specular>
+          <emissive>0 0 0 1</emissive>
+          <pbr>
+            <metal>
+              <albedo_map>model://mock_product/materials/brushed_albedo.png</albedo_map>
+              <normal_map>model://mock_product/materials/brushed_normal.png</normal_map>
+              <roughness_map>model://mock_product/materials/brushed_rough.png</roughness_map>
+              <metalness_map>model://mock_product/materials/brushed_metalness.png</metalness_map>
+            </metal>
+          </pbr>
+        </material>
+        <meta> 
+            <layer> 1 </layer>
+        </meta>
+      </visual>
+    </link>
+  </model>
+</sdf>
