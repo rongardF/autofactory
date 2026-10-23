@@ -538,6 +538,11 @@ fields carry descriptions; DTOs are frozen where not mutated.
   fire while the action-execution coroutine awaits the movement result.
 - Lifecycle/service waits poll on the **wall clock** (not node clock) to stay
   correct under `use_sim_time`.
+- Execution-time metrics (`execution_time_s`, `pattern_execution_time_s`) are
+  measured on the **node clock** so they report simulation time under
+  `use_sim_time`, consistent with the end tool's `dispensing_time_s`.
+- `wait` pattern actions sleep on the **node clock** (`Clock.sleep_for`), so
+  they last the requested simulation time; a paused simulation pauses the wait.
 
 ---
 

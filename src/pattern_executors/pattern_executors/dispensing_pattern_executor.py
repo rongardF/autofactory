@@ -44,7 +44,9 @@ from rclpy import init, ok, shutdown
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.action.server import ServerGoalHandle
 from rclpy.client import Client
+from rclpy.duration import Duration
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
+from rclpy.time import Time
 
 from std_srvs.srv import Trigger
 from movement_controller.msg import TrajectoryPath
@@ -214,7 +216,7 @@ class DispensingPatternExecutor(PatternExecutor):
         """Execute every pattern in the goal and build the aggregate result."""
         goal: ExecuteDispensingPattern.Goal = goal_handle.request
         self._publish_executing(True)
-        start_time = monotonic()
+        start_time = self.get_clock().now()
         metrics: list[DispensingPatternMetric] = []
         error_message = ''
         failed = False
@@ -252,7 +254,7 @@ class DispensingPatternExecutor(PatternExecutor):
 
         result = ExecuteDispensingPattern.Result()
         result.operation_id = goal.operation_id
-        result.execution_time_s = monotonic() - start_time
+        result.execution_time_s = self._elapsed_s(start_time)
         result.metrics = metrics
 
         if not failed:
@@ -330,7 +332,7 @@ class DispensingPatternExecutor(PatternExecutor):
             self._current_element_metrics = []
             self._current_open_element_id = None
 
-        pattern_start = monotonic()
+        pattern_start = self.get_clock().now()
         tool_frame = self._dispensing_config.calibrated_tcp_frame
 
         approach_result = self._dispatcher.execute_batches(
@@ -365,7 +367,7 @@ class DispensingPatternExecutor(PatternExecutor):
             element_metrics = list(self._current_element_metrics)
 
         return self._build_pattern_metric(
-            pattern, element_metrics, monotonic() - pattern_start
+            pattern, element_metrics, self._elapsed_s(pattern_start)
         )
 
     def _build_approach_movement(
@@ -391,7 +393,14 @@ class DispensingPatternExecutor(PatternExecutor):
             self._close_valve(movement)
         elif action.type == PatternAction.TYPE_WAIT:
             if action.wait_time_s > 0.0:
-                sleep(action.wait_time_s)
+                # Node clock so the wait honours use_sim_time.
+                completed = self.get_clock().sleep_for(
+                    Duration(seconds=action.wait_time_s)
+                )
+                if not completed:
+                    raise RuntimeError(
+                        'Wait action interrupted (shutdown or clock source change).'
+                    )
         else:
             raise RuntimeError(f"Unknown pattern action type '{action.type}'.")
 
@@ -508,6 +517,14 @@ class DispensingPatternExecutor(PatternExecutor):
             and abs(first.y - second.y) <= self._POSITION_EPSILON_M
             and abs(first.z - second.z) <= self._POSITION_EPSILON_M
         )
+
+    def _elapsed_s(self, start: Time) -> float:
+        """Return seconds elapsed since ``start`` on the node clock.
+
+        Execution-time metrics use the node clock so they honour
+        ``use_sim_time``; timeout deadlines intentionally stay on the wall clock.
+        """
+        return (self.get_clock().now() - start).nanoseconds / 1e9
 
     def _call_service(self, client: Client, request, description: str):
         """Call a service asynchronously and wait on the wall clock for a reply."""
