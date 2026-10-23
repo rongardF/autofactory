@@ -68,6 +68,7 @@ def generate_launch_description() -> LaunchDescription:
     gazebo_gui = LaunchConfiguration("gazebo_gui")
     station_id = LaunchConfiguration("station_id")
     local_cache = LaunchConfiguration("local_cache")
+    world_file = LaunchConfiguration("world_file")
 
     declared_arguments = [
         DeclareLaunchArgument(
@@ -121,6 +122,13 @@ def generate_launch_description() -> LaunchDescription:
                 "backend (false) for the station_cache node."
             ),
         ),
+        DeclareLaunchArgument(
+            "world_file",
+            default_value=PathJoinSubstitution(
+                [station_share, "config", "world", "calibration.world"]
+            ),
+            description="Path to the world file to load in Gazebo.",
+        ),
     ]
 
     movement_controller_launch = IncludeLaunchDescription(
@@ -147,9 +155,7 @@ def generate_launch_description() -> LaunchDescription:
             "srdf_file": PathJoinSubstitution(
                 [station_share, "config", "srdf", "default_setup.srdf.xacro"]
             ),
-            "world_file": PathJoinSubstitution(
-                [station_share, "config", "world", "default.world"]
-            ),
+            "world_file": world_file,
             "gz_resource_path": PathJoinSubstitution(
                 [station_share, "config", "model"]
             ),

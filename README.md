@@ -82,6 +82,14 @@ Replace `<robot-ip-address>` with the robot's address:
 ros2 launch station station.launch.py simulated:=false ip_address:=<robot-ip-address> model:=ur10
 ```
 
+### Simulation with different Gazebo worlds
+
+Default simulation world will have a camera calibration board placed into workplace. To simulate with mocked heatsink placed into workplace you can specify a custom world file, for example:
+
+```bash
+ros2 launch station station.launch.py simulated:=true model:=ur10e world_file:=/workspaces/autofactory/src/station/config/world/mock_product.world
+```
+
 ## Work with cameras and sensors
 
 ### View a camera image

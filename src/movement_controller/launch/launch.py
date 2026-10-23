@@ -98,7 +98,7 @@ def declare_arguments() -> list[DeclareLaunchArgument]:
         DeclareLaunchArgument(
             "world_file",
             default_value=PathJoinSubstitution(
-                [FindPackageShare("movement_controller"), "world", "default.world"]
+                [FindPackageShare("movement_controller"), "world", "calibration.world"]
             ),
             description=(
                 "Gazebo world file, relative to the package share directory. "
