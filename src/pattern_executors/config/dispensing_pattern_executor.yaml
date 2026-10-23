@@ -1,0 +1,25 @@
+# Default parameters for the dispensing_pattern_executor node.
+#
+# Copy or override these values via a launch file or `--params-file`. The
+# `tool_sn` and `endtool_node_name` parameters are required (non-empty) and
+# must be provided for the node to configure successfully.
+/**:
+  ros__parameters:
+    # End-tool serial number. The movement tool frame is derived as
+    # "{tool_sn}_calibrated_tcp" and must equal the dispenser's published
+    # calibrated TCP frame id.
+    tool_sn: ""
+    # Node name of the volumetric dispenser whose lifecycle this executor drives.
+    endtool_node_name: ""
+    # Movement controller execute-trajectory action name.
+    movement_action_name: "movement_controller/execute_trajectory"
+    # Timeout (seconds) for movement action server availability checks.
+    movement_server_timeout_s: 5.0
+    # Timeout (seconds) for end-tool lifecycle and parameter service calls.
+    endtool_service_timeout_s: 5.0
+    # Simulation flag reserved for future Gazebo-world manipulation (no effect yet).
+    simulated: true
+    # Relative service name that opens the dispenser valve (open_valve).
+    dispense_start_service_name: "dispense_start"
+    # Relative service name that closes the dispenser valve (close_valve).
+    dispense_stop_service_name: "dispense_stop"

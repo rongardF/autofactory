@@ -1,0 +1,53 @@
+- the 'PatternExecutor' is a lifecycle node in the 'pattern_executors' ROS2 package
+- there will be a different 'PatternExecutor' node defined for each pattern type (e.g. 'DispensingPatternExecutor', 'ScrewdrivingPatternExecutor', 'ComponentMountPatternExecutor' etc.)
+- initially we will only focus on 'DispensingPatternExecutor' node development
+- each 'PatternExecutor' is responsible for implementing a custom pattern execution process for that particular (pattern) type:
+    - it will use endtools specific for this pattern (e.g. 'DispensingPatternExecutor' will use dispensers)
+    - it will provide a standard and abstract interface to interact with; it may also have type specific interface in addition
+- the pattern executors will rely on assemblies to know what patterns and how to execute them:
+    - the assembly is a JSON file that contains a list of 'Operation' objects (see 'example_assembly.json' file)
+    - the 'operation_type' field in each 'Operation' object will define which type of 'PatternExecutor' must be used for that operation execution
+    - each 'Operation' object defines a list of patterns - each pattern defines a sequence of robot movements accompanied with some endtool actions
+    - there is a separate 'Pattern' object type for each operation type
+    - the 'Operation' object itself shoould be agnostic and work with all pattern types
+    - the 'operation_args' can be an arbitrary dictionary with key-value pairs specific for that opertaion type
+    - each 'DispensingPattern' object will contain: 
+        - a list of robot movements and dispenser valve opening/closing actions
+        - there are dispensing movements and then are acompaning 'shake-off' movements and moving between pattern elements
+        - some of the elements (like DOT dispensing) mean no movement at all so in that case the movement target pose might be identical to start pose, but actions will contain a 'wait' instruction
+- the interface for each 'PatternExecutor' node must include following:
+    - an action called 'execute_patterns' which:
+        - will get a list of specific  type of 'Pattern' messages (e.g. 'DispensingPattern' message)
+        - will get a frame_id which specifies the frame against which all the poses will be defiend (this will be usually product/heatsink origin point published by some other ROS2 node which is not important here)
+        - will respond with:
+            - boolean 'success' 
+            - string 'error_message'
+            - float 'execution_time_s'
+            - string 'operation_id'
+            - a list of 'PatternMetric' message; this message is specific for each pattern/operation type
+        - will exeucte until all patterns are completed
+        - will send feedback as pattern ID and 'execution_time_s' after each pattern is completed; also contains a custom 'PatternMetric' message
+        - will reject any concurrent calls while exeucintg patterns already
+    - a topic called 'executing_patterns' which is of string type and will publish latched boolean value if executing something
+- each 'PatternExecutor' will be a lifecycle node which will activate the corresponding end-tool node when its being activated ('on_activate')
+- each node will support 'simulated' operation mode
+- each 'PatternExecutor' will perform movements using that endtools '{tool_sn}_calibrated_tcp' frame; the 'tool_sn' will be provided as a node parameter
+- specfics for 'DispensingPatternExecutor':
+    - each pattern is made up of series of movements to perform dispensing
+    - there are supporting 'shake-off' movements in the end of every dispensing (when valve is closed) to shake of the putty trail from the needle:
+        - the actual shake-off pattern should be customizable and extendable
+        - initially the shake-off movement is simply:
+            - for DOT elements we do a full circle with 3mm radius and which raises in height 3mm
+            - for non-DOT (e.g. stripes) we a) first move linearly back 5mm (or if stripe length was less then full length of the stripe) along the stripes
+              trajectory b) then move forwad along the stripe trajectory to the original end point c) then do the same ciruclar movement as with DOTs
+    - if its a DOT dispensing then this means that the dispenser needle does not move and we simply move to place, open valve for certain amount of time and then close the valve
+    - if dispensing an actual pattern then the valve is opened and the dispenser is moved around with specific speed and finally dispenser valve is closed
+- both in simulation and real hardware mode the heatsink/product model will be injected into moveit2 planning scene by another ROS2 node (not relevant here; just expect it to be already injected when executing patterns)
+- in simulation mode the heatsink/product will also be injected into Gazebo world
+- the actions for 'DispensingPatternExecutor' are:
+    - open_valve - this does not have any arguments and will call the endtool service to open the valve
+    - close_valce - this does not have any arguments and will call the endtool service to close the valve
+    - wait - this action has a single argument 'wait_time_s' which defines the amount to wait before continuing; this action is blocking which means that if its called then no other movement is sent/done until that time elapses
+    - all actions can have following 'timing' argument values:
+        - 'start' - this action is executed immeditaly after the ACTUAL robot movement (trajectory execution) has started; to ensure the actual movement has started with current movement_controller implementation we should send a trajectory path which is empty movement (target pose is same as current pose) before the actual movement so when we receieve a feedback that empty movement is completed then we know to perform this action
+        - 'end' - this action is executed immeditaly once we get a feedback that the trajectory path is completed

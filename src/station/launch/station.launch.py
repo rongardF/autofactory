@@ -1,4 +1,4 @@
-# Copyright (c) 2026, Movement Controller Contributors
+# Copyright (c) 2026, Autofactory
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -219,6 +219,20 @@ def generate_launch_description() -> LaunchDescription:
         }],
     )
 
+    # NOTE: this node is temporary and only for testing
+    dispensing_pattern_executor = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            Path(get_package_share_directory("pattern_executors")) / "launch" / "dispensing_pattern_executor.launch.py"
+        ),
+        launch_arguments={
+            "simulated": simulated,
+            "node_name": "dispensing_executor",
+            "tool_sn": "abc123",
+            "endtool_node_name": "dispensing_abc123",
+            "movement_action_name": "execute_trajectory"
+        }.items(),
+    )
+
     # use GroupAction to scope the launch files so that their declared arguments don't leak into 
     # the global namespace
     return LaunchDescription(
@@ -230,5 +244,6 @@ def generate_launch_description() -> LaunchDescription:
             GroupAction([movement_controller_launch], scoped=True),
             GroupAction([tools_manager], scoped=True),
             GroupAction([station_cache_node], scoped=True),
+            GroupAction([dispensing_pattern_executor], scoped=True),
         ]
     )

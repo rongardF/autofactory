@@ -5,7 +5,6 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
       target: development
-      network: host
     init: true
     entrypoint: ["/usr/local/bin/autofactory-desktop"]
     command: ["sleep", "infinity"]

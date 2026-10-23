@@ -1,4 +1,4 @@
-# Copyright (c) 2026, Movement Controller Contributors
+# Copyright (c) 2026, Autofactory
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -72,6 +72,41 @@ install(
   DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_py/${PROJECT_NAME}/"
   DESTINATION
     "lib/python${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}/site-packages/${PROJECT_NAME}"
+)
+
+install(
+  DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_type_description/${PROJECT_NAME}/"
+  DESTINATION "share/${PROJECT_NAME}"
+)
+
+install(
+  DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_c/${PROJECT_NAME}/"
+  DESTINATION "include/${PROJECT_NAME}"
+)
+
+install(
+  DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp/${PROJECT_NAME}/"
+  DESTINATION "include/${PROJECT_NAME}"
+)
+
+install(
+  DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rosidl_typesupport_introspection_c/${PROJECT_NAME}/"
+  DESTINATION "include/${PROJECT_NAME}"
+)
+
+install(
+  DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rosidl_typesupport_introspection_cpp/${PROJECT_NAME}/"
+  DESTINATION "include/${PROJECT_NAME}"
+)
+
+install(
+  DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rosidl_typesupport_fastrtps_c/${PROJECT_NAME}/"
+  DESTINATION "include/${PROJECT_NAME}"
+)
+
+install(
+  DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rosidl_typesupport_fastrtps_cpp/${PROJECT_NAME}/"
+  DESTINATION "include/${PROJECT_NAME}"
 )
 
 # Install the generated C/C++ type support shared libraries that SKIP_INSTALL skipped.
@@ -150,5 +185,6 @@ install(DIRECTORY config launch srdf urdf world
 # --------------------------------------------------------------------------
 # Finalize
 # --------------------------------------------------------------------------
+ament_export_include_directories(include)
 ament_export_dependencies(rosidl_default_runtime)
 ament_package()
