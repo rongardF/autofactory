@@ -1,2 +1,2 @@
-movement_controller/TrajectoryPath path
+pattern_executors/MovementPath path
 pattern_executors/PatternAction[] actions

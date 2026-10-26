@@ -48,10 +48,8 @@ from rclpy.duration import Duration
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.time import Time
 
-from std_srvs.srv import Trigger
-from movement_controller.msg import TrajectoryPath
-from endtools.srv import StopDispensing
-
+from builtin_interfaces.msg import Time as RosTime
+from endtools.srv import StartDispensing, StopDispensing
 from pattern_executors.action import ExecuteDispensingPattern
 from pattern_executors.interface.pattern_executor import PatternExecutor
 from pattern_executors.model.dispensing_executor_config_dto import (
@@ -63,6 +61,7 @@ from pattern_executors.msg import (
     DispensingMovement,
     DispensingPattern,
     DispensingPatternMetric,
+    MovementPath,
     PatternAction,
 )
 from pattern_executors.util.units_converter import cc_to_m3, m3_s_to_cc_s
@@ -152,7 +151,7 @@ class DispensingPatternExecutor(PatternExecutor):
             else f'/{config.endtool_node_name}'
         )
         self._dispense_start_client = self.create_client(
-            Trigger,
+            StartDispensing,
             f'{prefix}/{config.dispense_start_service_name}',
             callback_group=self._endtool_callback_group,
         )
@@ -230,7 +229,7 @@ class DispensingPatternExecutor(PatternExecutor):
 
                 self._prepare_pattern(pattern)
                 pattern_metric = self._execute_pattern(
-                    pattern, goal.frame_id, goal_handle
+                    pattern, goal_handle
                 )
                 if pattern_metric is None:
                     failed = True
@@ -318,7 +317,6 @@ class DispensingPatternExecutor(PatternExecutor):
     def _execute_pattern(
         self,
         pattern: DispensingPattern,
-        frame_id: str,
         goal_handle: ServerGoalHandle,
     ) -> DispensingPatternMetric | None:
         """Run one pattern's approach and movements, returning its metric.
@@ -337,7 +335,6 @@ class DispensingPatternExecutor(PatternExecutor):
 
         approach_result = self._dispatcher.execute_batches(
             [self._build_approach_movement(pattern)],
-            frame_id,
             tool_frame,
             self._fire_action,
         )
@@ -353,7 +350,6 @@ class DispensingPatternExecutor(PatternExecutor):
 
         movement_result = self._dispatcher.execute_batches(
             list(pattern.movements),
-            frame_id,
             tool_frame,
             self._fire_action,
         )
@@ -375,22 +371,30 @@ class DispensingPatternExecutor(PatternExecutor):
     ) -> DispensingMovement:
         """Build a valve-closed PTP approach movement to the pattern origin."""
         movement = DispensingMovement()
-        path = TrajectoryPath()
+        path = MovementPath()
         path.path_id = f'{pattern.pattern_id}'
-        path.motion_type = TrajectoryPath.MOTION_TYPE_PTP
+        path.motion_type = MovementPath.MOTION_TYPE_PTP
         path.target_pose = deepcopy(pattern.start_pose)
         movement.path = path
         movement.actions = []
         return movement
 
     def _fire_action(
-        self, action: PatternAction, movement: DispensingMovement
+        self,
+        action: PatternAction,
+        movement: DispensingMovement,
+        motion_stamp: RosTime,
     ) -> None:
-        """Execute a single pattern action (open/close valve or wait)."""
+        """Execute a single pattern action (open/close valve or wait).
+
+        :param motion_stamp: Instant the movement_controller reported the phase
+            transition at. Forwarded to the dispenser so it resolves the TCP pose
+            at that instant rather than whenever the service call happens to run.
+        """
         if action.type == PatternAction.TYPE_OPEN_VALVE:
-            self._open_valve(movement)
+            self._open_valve(movement, motion_stamp)
         elif action.type == PatternAction.TYPE_CLOSE_VALVE:
-            self._close_valve(movement)
+            self._close_valve(movement, motion_stamp)
         elif action.type == PatternAction.TYPE_WAIT:
             if action.wait_time_s > 0.0:
                 # Node clock so the wait honours use_sim_time.
@@ -404,13 +408,17 @@ class DispensingPatternExecutor(PatternExecutor):
         else:
             raise RuntimeError(f"Unknown pattern action type '{action.type}'.")
 
-    def _open_valve(self, movement: DispensingMovement) -> None:
+    def _open_valve(
+        self, movement: DispensingMovement, motion_stamp: RosTime
+    ) -> None:
         """Start dispensing and record the open element's originating path id."""
         if self._dispense_start_client is None:
             raise RuntimeError('Dispenser start client is not available.')
 
+        request = StartDispensing.Request()
+        request.pose_stamp = motion_stamp
         response = self._call_service(
-            self._dispense_start_client, Trigger.Request(), 'dispense_start'
+            self._dispense_start_client, request, 'dispense_start'
         )
         if response is None or not response.success:
             raise RuntimeError('Failed to start dispensing.')
@@ -418,13 +426,17 @@ class DispensingPatternExecutor(PatternExecutor):
         with self._metrics_lock:
             self._current_open_element_id = movement.path.path_id
 
-    def _close_valve(self, movement: DispensingMovement) -> None:
+    def _close_valve(
+        self, movement: DispensingMovement, motion_stamp: RosTime
+    ) -> None:
         """Stop dispensing and record the completed element metric."""
         if self._dispense_stop_client is None:
             raise RuntimeError('Dispenser stop client is not available.')
 
+        request = StopDispensing.Request()
+        request.pose_stamp = motion_stamp
         response = self._call_service(
-            self._dispense_stop_client, StopDispensing.Request(), 'dispense_stop'
+            self._dispense_stop_client, request, 'dispense_stop'
         )
         if response is None or not response.success:
             detail = response.error_message if response is not None else 'no response'

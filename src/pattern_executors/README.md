@@ -38,8 +38,9 @@ messages.
 `DispensingPatternExecutor` serves the `~/execute_dispensing_pattern` action
 (`pattern_executors/action/ExecuteDispensingPattern`):
 
-- **Goal**: `DispensingPattern[] patterns`, `string frame_id` (frame all poses
-  are expressed in), `string operation_id`.
+- **Goal**: `DispensingPattern[] patterns`, `string operation_id`. Every pose in
+  the goal carries its own `header.frame_id` (`DispensingPattern.start_pose` and
+  each `MovementPath.target_pose`); the executor forwards them unchanged.
 - **Result**: `bool success`, `string error_message`, `float64 execution_time_s`,
   `string operation_id`, `DispensingPatternMetric[] metrics` (one per executed
   pattern; only fully-completed patterns are reported on failure/cancel).
@@ -72,9 +73,25 @@ Action semantics:
 
 | Action | Mapped to | Blocking |
 |--------|-----------|----------|
-| `open_valve` | `~/dispense_start` (`std_srvs/Trigger`) | No (service round-trip) |
+| `open_valve` | `~/dispense_start` (`endtools/StartDispensing`) | No (service round-trip) |
 | `close_valve` | `~/dispense_stop` (`endtools/StopDispensing`) | No (service round-trip) |
 | `wait` | sleep `wait_time_s` | Yes (no movement in flight) |
+
+Both valve services take a `pose_stamp`, forwarded from the movement feedback's
+`motion_stamp`. The end tool resolves the TCP pose in TF at that instant rather
+than sampling its own clock, so the deposited-material model matches the path
+the robot actually travelled regardless of service latency.
+
+Timing choice matters: a travelled element (stripe) opens at `start` and closes
+at `end` of the same movement, so the two stamps bracket the move. A stationary
+element (dot) must put **all three** actions (`open_valve`, `wait`,
+`close_valve`) at `end`, so both stamps are the movement's end instant — a
+zero-length deposit whose volume is the dwell. Opening a dot at `start` puts the
+entire approach move inside the open window and smears the deposit along it.
+
+Because `end`-timed actions run while the batch result is still being awaited,
+the dispatcher joins them before returning, so the next batch cannot start
+moving the robot while a dwell still has the valve open.
 
 Each `open_valve` → `close_valve` cycle yields one `DispensedElementMetric`
 (`element_id` = `path_id` of the movement whose `open_valve` started it, volume
@@ -101,9 +118,11 @@ any exception mid-goal the executor cancels the in-flight movement goal, forces
 | `dispense_start_service_name` | string | `dispense_start` | Relative open-valve service name. |
 | `dispense_stop_service_name` | string | `dispense_stop` | Relative close-valve service name. |
 
-`frame_id` is **not** a parameter — it arrives per goal. `tool_frame` is always
-set by the executor to `{tool_sn}_calibrated_tcp`, which must equal the
-dispenser's published calibrated TCP frame id.
+The pose frame is **not** a parameter and is **not** a goal-level field — it
+arrives per pose in `target_pose.header.frame_id`. `tool_frame` is not part of
+`MovementPath` either: the executor sets it on the `movement_controller`
+`TrajectoryPath` it builds, always to `{tool_sn}_calibrated_tcp`, which must
+equal the dispenser's published calibrated TCP frame id.
 
 ## Lifecycle behaviour
 
@@ -144,8 +163,8 @@ dispenser node are assumed to be running already).
 - The end tool is a lifecycle node exposing the standard lifecycle/parameter
   services plus `~/dispense_start` and `~/dispense_stop`, and is left
   `inactive` (or already `active`) before the executor is activated.
-- The product/heatsink origin frame named by the goal `frame_id` is published
-  by another node.
+- The product/heatsink origin frame referenced by the goal poses'
+  `header.frame_id` is published by another node.
 
 ## Out of scope
 

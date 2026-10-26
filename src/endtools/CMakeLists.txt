@@ -49,8 +49,10 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
 # See: https://github.com/ros2/rosidl_python/issues/141
 # --------------------------------------------------------------------------
 rosidl_generate_interfaces(${PROJECT_NAME}
+  "srv/StartDispensing.srv"
   "srv/StopDispensing.srv"
   "srv/SetTcp.srv"
+  DEPENDENCIES builtin_interfaces
   SKIP_INSTALL
 )
 
@@ -136,9 +138,9 @@ install(
 )
 
 # --------------------------------------------------------------------------
-# Install launch and model files
+# Install launch, model and sdf files
 # --------------------------------------------------------------------------
-install(DIRECTORY launch model
+install(DIRECTORY launch model sdf
   DESTINATION share/${PROJECT_NAME}
 )
 

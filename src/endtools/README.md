@@ -88,7 +88,7 @@ transitions; nothing is created in `__init__` except parameter declarations.
 1. Fails if config is missing, **`mounted` is `False`**, or the controller is `None`.
 2. `controller.setup(config)`.
 3. Creates services:
-   - `~/dispense_start` — `std_srvs/Trigger`
+   - `~/dispense_start` — `endtools/StartDispensing`
    - `~/dispense_stop` — `endtools/StopDispensing`
 
 **`on_deactivate`** destroys the two dispense services and calls
@@ -104,19 +104,34 @@ The node is spun with a `MultiThreadedExecutor(num_threads=5)` and uses
 
 ### Dispense start / stop flow
 
-- **`~/dispense_start`** (`Trigger`): rejects if the controller is missing or
-  already dispensing; otherwise calls `start_dispensing()` and returns
-  `success=True`. `RuntimeError`s are converted to `success=False` with a message.
-- **`~/dispense_stop`** (`StopDispensing`): calls `stop_dispensing()`, returning
-  `success`, `dispensed_volume`, `duration_seconds`, and `error_message`.
+- **`~/dispense_start`** (`StartDispensing`): rejects if the controller is missing
+  or already dispensing; otherwise calls `start_dispensing(pose_stamp)` and
+  returns `success=True`. `RuntimeError`s are converted to `success=False` with
+  an `error_message`.
+- **`~/dispense_stop`** (`StopDispensing`): calls `stop_dispensing(pose_stamp)`,
+  returning `success`, `dispensed_volume`, `duration_seconds`, and
+  `error_message`.
+
+Both requests carry a `pose_stamp`: the instant the TCP reached the pose that
+starts/ends the dispensed element, supplied by the caller from the movement
+feedback's `motion_stamp`. It is deliberately *not* the instant the service runs
+— those differ by the caller's round-trip latency, and for a dwell they differ by
+the whole dwell. A zero stamp means "sample the node clock" and is used by abort
+cleanup, which has no motion to align to.
 
 #### Simulated controller (`SimulatedDispenserController`)
-- `start_dispensing()` — sets the `is_dispensing` flag (thread-safe via `RLock`)
-  and records the start time from the node clock.
-- `stop_dispensing()` — clears the flag, computes
-  `dispensed_volume = flow_rate × elapsed_seconds` and returns a
+- `start_dispensing(pose_stamp)` — sets the `is_dispensing` flag (thread-safe via
+  `RLock`), records the valve-open time from the node clock and remembers the
+  supplied pose stamp.
+- `stop_dispensing(pose_stamp)` — clears the flag, computes
+  `dispensed_volume = flow_rate × elapsed_seconds` from the **node clock** window
+  (how long the valve was actually open) and returns a
   `DispensingMetricsDTO(dispensed_volume_cc, dispensing_duration_s, flowrate_cc)`.
-- There is no physical actuation — it is pure time integration.
+- The deposited-material model is placed from the **pose stamps**: the TCP is
+  looked up in TF at the start and end stamps, and the straight-line distance
+  between them decides stripe vs. dot (`_STRIPE_MIN_LENGTH_MM`, above zero so a
+  sub-millimetre residual of a nominally stationary dwell stays a dot).
+- There is no physical actuation — the volume is pure time integration.
 
 #### Hardware controller (`HardwareDispenserController`)
 - `setup`/`teardown` store/clear config only.
@@ -212,7 +227,7 @@ ros2 launch endtools volumetric_dispenser_launch.py \
 # Drive the lifecycle, then dispense:
 ros2 lifecycle set /volumetric_dispensing_tool configure
 ros2 lifecycle set /volumetric_dispensing_tool activate
-ros2 service call /volumetric_dispensing_tool/dispense_start std_srvs/srv/Trigger
+ros2 service call /volumetric_dispensing_tool/dispense_start endtools/srv/StartDispensing
 ros2 service call /volumetric_dispensing_tool/dispense_stop endtools/srv/StopDispensing
 ```
 

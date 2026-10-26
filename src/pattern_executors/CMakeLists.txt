@@ -45,16 +45,16 @@ get_filename_component(
   "${movement_controller_DIR}/../../.."
   ABSOLUTE
 )
-include_directories("${MOVEMENT_CONTROLLER_PREFIX}/include")
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/ExecuteDispensingPattern.action"
   "msg/PatternAction.msg"
+  "msg/MovementPath.msg"
   "msg/DispensingMovement.msg"
   "msg/DispensingPattern.msg"
   "msg/DispensedElementMetric.msg"
   "msg/DispensingPatternMetric.msg"
-  DEPENDENCIES geometry_msgs movement_controller
+  DEPENDENCIES geometry_msgs
   SKIP_INSTALL
 )
 

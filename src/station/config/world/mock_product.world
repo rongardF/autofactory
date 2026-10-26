@@ -281,11 +281,11 @@
       </link>
     </model>
 
-    <!-- Mock product placed at x=0.95, y=0, z=0.85 -->
+    <!-- Mock product placed at x=0.85, y=0.25, z=0.85 in the world frame. -->
     <include>
       <uri>model://mock_product</uri>
       <name>mock_product</name>
-      <pose>0.85 0.25 0.85 0 0 0</pose>
+      <pose>0.85 0.25 0.83 0 0 0</pose>
     </include>
 
   </world>

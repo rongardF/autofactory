@@ -50,13 +50,14 @@ from rclpy.lifecycle.node import LifecycleNode
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile
 from rclpy.time import Time
 
-from geometry_msgs.msg import Pose, PoseStamped, TransformStamped
+from geometry_msgs.msg import Point, Pose, PoseStamped, TransformStamped
 from std_msgs.msg import String
 from tf2_ros import TransformException
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 from tf2_geometry_msgs import do_transform_pose
 
+from movement_controller.enums import MotionTypeEnum
 from movement_controller.exceptions import FrameResolutionError
 from movement_controller.models import TrajectoryPathDTO
 
@@ -201,10 +202,17 @@ class ToolFrameResolver:
             ) from exc
 
         resolved_pose = self._compose(path.target_pose, offset)
+        update: dict[str, object] = {'tool_frame': link, 'target_pose': resolved_pose}
+
+        if path.motion_type == MotionTypeEnum.CIRC:
+            update['circ_point'] = self._compose_point(
+                path.circ_point, path.target_pose, offset
+            )
+
         self._logger.info(
             f"Resolved tool_frame '{frame}' to robot-model link '{link}' for path {path.path_id}"
         )
-        return path.model_copy(update={'tool_frame': link, 'target_pose': resolved_pose})
+        return path.model_copy(update=update)
 
     # endregion: public methods
 
@@ -275,5 +283,38 @@ class ToolFrameResolver:
         resolved.header.stamp = target.header.stamp
         resolved.pose = do_transform_pose(offset_pose, target_as_transform)
         return resolved
+
+    @classmethod
+    def _compose_point(
+        cls, point: Point, target: PoseStamped, offset: TransformStamped
+    ) -> Point:
+        """Re-express a CIRC arc reference point from the tool frame to the link.
+
+        ``circ_point`` is a bare position describing where the *tool frame*
+        passes (``interim``) or the centre the tool frame orbits (``center``).
+        Once ``target_pose`` is recomposed for the link, the arc point must be
+        moved by the same rigid offset, otherwise PILZ builds its circle from
+        two link poses and one tool-frame point and plans a wildly wrong arc.
+
+        PILZ holds orientation fixed (or slerps between identical start/goal
+        orientations) along a CIRC, so the tool-to-link offset is the same
+        constant translation at the arc point as it is at the goal; applying
+        the goal orientation to the arc point reproduces it exactly.
+
+        :param point: Arc reference point expressed for the tool frame.
+        :type point: Point
+        :param target: Original (unresolved) target pose, supplying the
+            orientation under which the offset is applied.
+        :type target: PoseStamped
+        :param offset: Rigid transform giving the link's pose in the tool frame.
+        :type offset: TransformStamped
+        :returns: The arc reference point expressed for the link.
+        :rtype: Point
+        """
+        point_as_pose = PoseStamped()
+        point_as_pose.header = target.header
+        point_as_pose.pose.position = point
+        point_as_pose.pose.orientation = target.pose.orientation
+        return cls._compose(point_as_pose, offset).pose.position
 
     # endregion: private helpers

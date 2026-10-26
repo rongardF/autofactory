@@ -29,12 +29,13 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
 from threading import Event, Lock, Thread
 from time import monotonic, sleep
 from typing import Any, Callable
 
+from builtin_interfaces.msg import Time
 from movement_controller.action import ExecuteTrajectory
+from movement_controller.msg import TrajectoryPath
 from pattern_executors.msg import DispensingMovement, PatternAction
 from pydantic import BaseModel, ConfigDict, Field
 from rclpy.action import ActionClient
@@ -42,7 +43,11 @@ from rclpy.action.client import ClientGoalHandle
 from rclpy.lifecycle import LifecycleNode
 from rclpy.task import Future
 
-ActionExecutorType = Callable[[PatternAction, DispensingMovement], None]
+# Called with the action to run, the movement it belongs to, and the instant the
+# movement_controller reported the phase transition at. The stamp is what consumers
+# must use to resolve the TCP pose, because the callback itself runs an unbounded
+# number of milliseconds after the robot reached that pose.
+ActionExecutorType = Callable[[PatternAction, DispensingMovement, Time], None]
 
 
 class _PathActionState(BaseModel):
@@ -53,6 +58,7 @@ class _PathActionState(BaseModel):
     start_dispatched: bool = False
     end_dispatched: bool = False
     start_done: Event = Field(default_factory=Event)
+    end_done: Event = Field(default_factory=Event)
 
 
 class MovementDispatcher:
@@ -97,7 +103,6 @@ class MovementDispatcher:
     def execute_batches(
         self,
         movements: list[DispensingMovement],
-        frame_id: str,
         tool_frame: str,
         action_executor: ActionExecutorType,
     ) -> ExecuteTrajectory.Result:
@@ -111,7 +116,6 @@ class MovementDispatcher:
         for batch in batches:
             batch_result = self._execute_single_batch(
                 batch,
-                frame_id,
                 tool_frame,
                 action_executor,
             )
@@ -145,7 +149,6 @@ class MovementDispatcher:
     def _execute_single_batch(
         self,
         batch: list[DispensingMovement],
-        frame_id: str,
         tool_frame: str,
         action_executor: ActionExecutorType,
     ) -> ExecuteTrajectory.Result:
@@ -162,10 +165,19 @@ class MovementDispatcher:
         goal = ExecuteTrajectory.Goal()
         goal.paths = []
         for movement in batch:
-            stamped_path = deepcopy(movement.path)
-            stamped_path.target_pose.header.frame_id = frame_id
-            stamped_path.tool_frame = tool_frame
-            goal.paths.append(stamped_path)
+            trajectory_path = TrajectoryPath()
+            trajectory_path.path_id = movement.path.path_id
+            trajectory_path.motion_type = movement.path.motion_type
+            trajectory_path.target_pose = movement.path.target_pose
+            trajectory_path.blend_radius = movement.path.blend_radius
+            trajectory_path.cartesian_speed = movement.path.cartesian_speed
+            trajectory_path.cartesian_acceleration = movement.path.cartesian_acceleration
+            trajectory_path.joint_speed = movement.path.joint_speed
+            trajectory_path.joint_acceleration = movement.path.joint_acceleration
+            trajectory_path.circ_type = movement.path.circ_type
+            trajectory_path.circ_point = movement.path.circ_point
+            trajectory_path.tool_frame = tool_frame
+            goal.paths.append(trajectory_path)
 
         if not self._movement_action_client.wait_for_server(
             timeout_sec=self._movement_server_timeout_s
@@ -183,7 +195,7 @@ class MovementDispatcher:
             with callback_errors_lock:
                 callback_errors.append(error)
 
-        def _run_actions_for_phase(path_id: str, phase: str) -> None:
+        def _run_actions_for_phase(path_id: str, phase: str, stamp: Time) -> None:
             movement = movement_by_path_id[path_id]
             state = action_state_by_path_id[path_id]
             try:
@@ -193,12 +205,14 @@ class MovementDispatcher:
                 for action in movement.actions:
                     if action.timing != phase:
                         continue
-                    action_executor(action, movement)
+                    action_executor(action, movement, stamp)
             except Exception as error:  # noqa: BLE001
                 _record_callback_error(error)
             finally:
                 if phase == PatternAction.TIMING_START:
                     state.start_done.set()
+                else:
+                    state.end_done.set()
 
         def _feedback_callback(feedback_msg: ExecuteTrajectory.Impl.FeedbackMessage) -> None:
             feedback = feedback_msg.feedback
@@ -227,7 +241,7 @@ class MovementDispatcher:
 
                 thread = Thread(
                     target=_run_actions_for_phase,
-                    args=(path_id, phase),
+                    args=(path_id, phase, feedback.motion_stamp),
                     daemon=True,
                 )
                 thread.start()
@@ -277,7 +291,18 @@ class MovementDispatcher:
             return result
 
         for state in action_state_by_path_id.values():
-            state.start_done.wait()
+            # End-timed actions (e.g. an open/dwell/close dot) run on their own thread
+            # while this call is still waiting for the goal result. They must finish
+            # before the next batch is sent, otherwise the robot starts moving again
+            # with the valve still open. Only wait on phases that were actually
+            # dispatched so an aborted batch cannot block here forever.
+            with self._state_lock:
+                await_start = state.start_dispatched
+                await_end = state.end_dispatched
+            if await_start:
+                state.start_done.wait()
+            if await_end:
+                state.end_done.wait()
 
         if callback_errors:
             callback_error = callback_errors[0]

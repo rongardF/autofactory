@@ -379,6 +379,7 @@ class ToolsManager(LifecycleNode):
                     launch_arguments={
                         **tool_parameters,
                         "simulated": self._config.simulated, # NOTE: over-writting these parameters 
+                        "world_name": self._config.world_name,
                         "use_sim_time": self._config.simulated,
                         "tool_sn": tool_mounted.tool_sn,
                         "mounted": "true",

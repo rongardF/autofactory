@@ -59,6 +59,10 @@ class ToolConfigBaseDTO(BaseModel):
         default=True,
         description='Selects Gazebo spawn (true) vs UR payload path (false).',
     )
+    world_name: str = Field(
+        default='default',
+        description='Name of the simulation world.',
+    )
     mounted: bool = Field(
         default=False,
         description='Whether the tool is mounted. Drives mount/unmount side-effects; read only at configure time.',

@@ -1,0 +1,6 @@
+# StartDispensing.srv — start the dispensing by opening the valve
+builtin_interfaces/Time pose_stamp   # Instant the TCP pose that starts the dispensed element was reached;
+                                     # zero means "sample the node clock on arrival"
+---
+bool     success                     # True if the start succeeded (was not already dispensing)
+string   error_message               # Populated when success is False

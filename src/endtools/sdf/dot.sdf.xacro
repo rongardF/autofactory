@@ -1,0 +1,55 @@
+<?xml version="1.0" ?>
+<sdf version="1.6" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="dispensed_dot_model"
+      params="
+        model_name:=dot_123
+        product_model_name:=product
+        product_link:=heatsink
+        radius_m:=0.02
+      ">
+
+    <model name="${model_name}">
+      <link name="dot_link">
+        <inertial>
+            <mass>1e-6</mass>
+        </inertial>
+        <visual name="dot_visual">
+            <geometry>
+                <sphere>
+                    <radius>${radius_m}</radius>
+                </sphere>
+            </geometry>
+            <material>
+              <ambient>0.33 0.66 0.99 1</ambient>
+              <diffuse>0.33 0.66 0.99 1</diffuse>
+            </material>
+        </visual>
+      </link>
+
+      <plugin filename="gz-sim-detachable-joint-system"
+                name="gz::sim::systems::DetachableJoint">
+        <parent_link>dot_link</parent_link>
+        <child_model>${product_model_name}</child_model>
+        <child_link>${product_link}</child_link>
+        <attach_topic>/${model_name}/attach</attach_topic>
+        <detach_topic>/${model_name}/detach</detach_topic>
+        <output_topic>/${model_name}/state</output_topic>
+      </plugin>
+    </model>
+
+  </xacro:macro>
+
+  <xacro:arg name="model_name"                  default="dot_123"/>
+  <xacro:arg name="product_model_name"          default="product"/>
+  <xacro:arg name="product_link"             default="heatsink"/>
+  <xacro:arg name="radius_m"              default="0.02"/>
+
+  <xacro:dispensed_dot_model
+      model_name="$(arg model_name)"
+      product_model_name="$(arg product_model_name)"
+      product_link="$(arg product_link)"
+      radius_m="$(arg radius_m)"
+  />
+
+</sdf>

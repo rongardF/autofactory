@@ -1,5 +1,4 @@
 pattern_executors/DispensingPattern[] patterns
-string frame_id
 string operation_id
 ---
 bool success
