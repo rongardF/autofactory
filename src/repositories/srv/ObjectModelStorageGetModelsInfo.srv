@@ -1,0 +1,5 @@
+ObjectModelStorageMappingValue[]  filter_keys    # a model matches only if it has ALL pairs; empty returns all
+---
+ObjectModelStorageModelInfo[]     models         # matching models (empty on failure)
+bool                              success        # true if the model info was retrieved
+string                            error_message  # empty on success, human-readable reason on failure

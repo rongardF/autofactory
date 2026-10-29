@@ -1,0 +1,5 @@
+string  model_id         # UUID4 of the model to make available locally
+---
+string  local_path       # absolute path to the cached model (empty on failure)
+bool    success          # true if the model is available at local_path
+string  error_message    # empty on success, human-readable reason on failure

@@ -1,0 +1,10 @@
+# Goal: make several models available locally, processed one-by-one in order.
+string[]  model_ids      # UUID4 values of the models to fetch
+---
+# Result
+bool      success        # true if every requested model is available locally
+string    error_message  # empty on success, human-readable reason on failure
+---
+# Feedback, published once per processed model
+string    model_id       # model that was just processed
+string    local_path     # absolute path to the cached model (empty if it failed)

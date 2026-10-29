@@ -35,7 +35,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from repositories.enums.cache_value_type_enum import CacheValueTypeEnum
+from repositories.enums.station_cache.cache_value_type_enum import CacheValueTypeEnum
 
 # Union of every payload a typed cache entry can hold, matching the six message
 # value types (string, bool, number, string[], bytes, number[]).
