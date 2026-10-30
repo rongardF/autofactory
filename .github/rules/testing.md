@@ -32,6 +32,10 @@ src/movement_controller/
 
 **Not** inside `movement_controller/movement_controller/tests/` — the `tests/` folder is a sibling to the Python package directory, not nested inside it.
 
+**Tests must never be installed.** The production image contains only the colcon `install/` directory (`src/` is not copied), so nothing under `tests/` (unit/integration tests, testbench notebooks, fixtures) may be installed by `CMakeLists.txt` / `setup.py` (no `install(DIRECTORY tests ...)`, exclude `tests` from `find_packages`). `__init__.py` files in `tests/` sub-folders are allowed when they are needed for, or simplify, test discovery.
+
+Manual testbench tools (e.g. Jupyter notebooks for calling services) live in `tests/testbench/`. Jupyter tooling goes into `requirements-dev.txt`, never `requirements.txt`.
+
 ---
 
 ## File Naming
