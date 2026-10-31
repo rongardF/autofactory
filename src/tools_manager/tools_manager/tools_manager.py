@@ -1,4 +1,4 @@
-# Copyright (c) 2026, Movement Controller Contributors
+# Copyright (c) 2026, Autofactory
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -29,7 +29,7 @@ import os
 from threading import RLock
 from uuid import uuid4
 
-from rclpy import init, shutdown
+from rclpy import init, ok, shutdown
 from pydantic import ValidationError
 from ament_index_python.packages import get_package_share_directory, PackageNotFoundError
 from action_msgs.msg import GoalStatus
@@ -38,7 +38,7 @@ from rclpy.duration import Duration
 from rclpy.parameter import ParameterValue, ParameterType
 from rclpy.qos import QoSProfile, DurabilityPolicy
 from rclpy.action import ActionClient
-from rclpy.executors import MultiThreadedExecutor
+from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle.node import LifecycleState, TransitionCallbackReturn
 from rclpy.subscription import Subscription
@@ -379,6 +379,7 @@ class ToolsManager(LifecycleNode):
                     launch_arguments={
                         **tool_parameters,
                         "simulated": self._config.simulated, # NOTE: over-writting these parameters 
+                        "world_name": self._config.world_name,
                         "use_sim_time": self._config.simulated,
                         "tool_sn": tool_mounted.tool_sn,
                         "mounted": "true",
@@ -1136,6 +1137,9 @@ def main(args=None) -> None:
     executor.add_node(node)
     try:
         executor.spin()
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
     finally:
         node.destroy_node()
-        shutdown()
+        if ok():
+            shutdown()

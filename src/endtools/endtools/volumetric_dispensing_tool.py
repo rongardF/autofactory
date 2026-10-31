@@ -1,4 +1,4 @@
-# Copyright (c) 2026, Movement Controller Contributors
+# Copyright (c) 2026, Autofactory
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -39,9 +39,9 @@ from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle.node import LifecycleState, TransitionCallbackReturn
 from rclpy.publisher import Publisher
 from rclpy.qos import QoSProfile, DurabilityPolicy, HistoryPolicy
+from rclpy.time import Time as RclpyTime
 
 from std_msgs.msg import String
-from std_srvs.srv import Trigger
 
 from builtin_interfaces.msg import Time
 from geometry_msgs.msg import TransformStamped
@@ -50,7 +50,7 @@ from tf2_msgs.msg import TFMessage
 from repositories.msg import NumberArrayCache
 from repositories.srv import FetchNumberArray, StoreNumberArray
 
-from endtools.srv import SetTcp, StopDispensing
+from endtools.srv import SetTcp, StartDispensing, StopDispensing
 
 from endtools.enumerator import ToolTypeEnum
 from endtools.model import DispensingToolConfigDTO
@@ -96,6 +96,11 @@ class VolumetricDispensingTool(LifecycleNode):
             'simulated',
             True,
             ParameterDescriptor(description='Whether the node is running in simulation mode'),
+        )
+        self.declare_parameter(
+            'world_name',
+            "default",
+            ParameterDescriptor(description='Name of the simulation world'),
         )
         
         self.declare_parameter(
@@ -412,7 +417,7 @@ class VolumetricDispensingTool(LifecycleNode):
         self._controller.setup(self._config)
 
         self._start_service = self.create_service(
-            Trigger, '~/dispense_start', self._handle_dispense_start,
+            StartDispensing, '~/dispense_start', self._handle_dispense_start,
             callback_group=self._service_callback_group,
         )
         self._stop_service = self.create_service(
@@ -509,39 +514,58 @@ class VolumetricDispensingTool(LifecycleNode):
         
         return response
 
-    def _handle_dispense_start(self, _: Trigger.Request, response: Trigger.Response):
+    @staticmethod
+    def _resolve_pose_stamp(stamp: Time) -> RclpyTime | None:
+        """Convert a request pose stamp to an rclpy time, treating zero as unset.
+
+        A zero stamp means the caller did not know when the TCP reached the pose
+        (e.g. an abort cleanup), so the controller falls back to its node clock.
+        """
+        if stamp.sec == 0 and stamp.nanosec == 0:
+            return None
+        return RclpyTime.from_msg(stamp)
+
+    def _handle_dispense_start(
+        self, request: StartDispensing.Request, response: StartDispensing.Response
+    ):
         """Handle the dispense start service request."""
+        self.get_logger().info('Received dispense start request.')
+
         if self._controller is None:
             response.success = False
-            response.message = "Controller is not initialized."
+            response.error_message = "Controller is not initialized."
             return response
         if self._controller.is_dispensing:
             response.success = False
-            response.message = "Dispensing is already in progress."
+            response.error_message = "Dispensing is already in progress."
             return response
 
         try:
-            self._controller.start_dispensing()
+            self._controller.start_dispensing(self._resolve_pose_stamp(request.pose_stamp))
             response.success = True
-            response.message = "Dispensing started successfully."
+            response.error_message = ""
         except RuntimeError as e:
             response.success = False
-            response.message = str(e)
+            response.error_message = str(e)
         except Exception as e:
             response.success = False
-            response.message = f"Unexpected error: {e}"
+            response.error_message = f"Unexpected error: {e}"
 
         return response
 
-    def _handle_dispense_stop(self, _: StopDispensing.Request, response: StopDispensing.Response):
+    def _handle_dispense_stop(self, request: StopDispensing.Request, response: StopDispensing.Response):
         """Handle the dispense stop service request."""
+        self.get_logger().info('Received dispense stop request.')
+        
         if self._controller is None:
             response.success = False
             response.error_message = "Controller is not initialized."
             return response
 
         try:
-            metrics = self._controller.stop_dispensing()
+            metrics = self._controller.stop_dispensing(
+                self._resolve_pose_stamp(request.pose_stamp)
+            )
             response.success = True
             response.error_message = ""
             response.dispensed_volume = metrics.dispensed_volume_cc

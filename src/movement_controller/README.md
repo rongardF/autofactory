@@ -188,11 +188,26 @@ Goal field:
 
 - `status` (`string`)
 - `trajectory_path_ids` (`string[]`)
+- `motion_stamp` (`builtin_interfaces/Time`)
 
 Status values published per execution group (see `FeedbackStatusEnum`):
 
 - `executing` — emitted when a group starts executing
 - `completed` — emitted when a group finishes
+
+`motion_stamp` is taken from this node's clock (so it honours `use_sim_time`) at
+the instant the transition is published, while the robot is still parked at the
+group's start (`executing`) or end (`completed`) pose. Consumers that need the
+robot pose at a transition must look it up in TF **at this stamp**: sampling
+their own clock inside the feedback callback drifts by the feedback and service
+round-trip and can slide into the next movement.
+
+The stamp is only as good as the controller's "goal reached" signal. In
+simulation, `config/ur/controllers.yaml` therefore does two things. It raises
+gz_ros2_control's `position_proportional_gain` to 1.0, which cuts the tracking lag
+from 80 ms to 8 ms. It also uses tight JTC goal tolerances (0.001 rad, stopped
+below 0.01 rad/s, `goal_time` 1.0 s), so a group completes only once the arm has
+actually settled on its end pose.
 
 ## TrajectoryPath Message
 
