@@ -47,8 +47,8 @@ from builtin_interfaces.msg import Time
 from geometry_msgs.msg import TransformStamped
 from tf2_msgs.msg import TFMessage
 
-from repositories.msg import NumberArrayCache
-from repositories.srv import FetchNumberArray, StoreNumberArray
+from repositories.msg import StationCacheNumberArrayCache
+from repositories.srv import StationCacheFetchNumberArray, StationCacheStoreNumberArray
 
 from endtools.srv import SetTcp, StartDispensing, StopDispensing
 
@@ -236,13 +236,13 @@ class VolumetricDispensingTool(LifecycleNode):
             self.get_logger().warning('station_cache store_number_array service unavailable.')
             return False
 
-        entry = NumberArrayCache()
+        entry = StationCacheNumberArrayCache()
         entry.key = self._config.tcp_cache_key
         entry.value = list(tcp)
         entry.expire_at_valid_till = True
         entry.valid_till = (self.get_clock().now() + Duration(seconds=valid_period)).to_msg()
 
-        request = StoreNumberArray.Request()
+        request = StationCacheStoreNumberArray.Request()
         request.data = entry
         try:
             response = self._store_tcp_client.call(request)
@@ -267,7 +267,7 @@ class VolumetricDispensingTool(LifecycleNode):
             self.get_logger().warning('station_cache fetch_number_array service unavailable.')
             return None
 
-        request = FetchNumberArray.Request()
+        request = StationCacheFetchNumberArray.Request()
         request.key = self._config.tcp_cache_key
         try:
             response = self._fetch_tcp_client.call(request)
@@ -340,11 +340,11 @@ class VolumetricDispensingTool(LifecycleNode):
             # Create the station_cache clients used by the tool_tcp property to
             # persist and retrieve the calibrated TCP.
             self._store_tcp_client = self.create_client(
-                StoreNumberArray, f'/{station_cache_name}/store_number_array',
+                StationCacheStoreNumberArray, f'/{station_cache_name}/store_number_array',
                 callback_group=self._cache_client_callback_group,
             )
             self._fetch_tcp_client = self.create_client(
-                FetchNumberArray, f'/{station_cache_name}/fetch_number_array',
+                StationCacheFetchNumberArray, f'/{station_cache_name}/fetch_number_array',
                 callback_group=self._cache_client_callback_group,
             )
 

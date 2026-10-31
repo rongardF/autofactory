@@ -5,9 +5,7 @@
   <version>0.0.0</version>
   <description>
     Repository-style ROS 2 nodes for storing and retrieving data on behalf of
-    other nodes. Hosts the station_cache lifecycle node: a typed key/value
-    cache with pluggable local (in-memory) and cloud (REST, stubbed) storage
-    backends, scoped per station_id, with optional time-based expiry.
+    other nodes.
   </description>
   <maintainer email="ronnyBravo32@proton.me">Ron Freimann</maintainer>
   <license>BSD-3-Clause</license>
@@ -18,6 +16,7 @@
 
   <depend>builtin_interfaces</depend>
   <depend>service_msgs</depend>
+  <depend>action_msgs</depend>
 
   <exec_depend>rclpy</exec_depend>
   <exec_depend>lifecycle_msgs</exec_depend>
