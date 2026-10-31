@@ -1,0 +1,4 @@
+string pattern_id
+float64 dispensed_volume_m3
+float64 pattern_execution_time_s
+pattern_executors/DispensedElementMetric[] element_metrics

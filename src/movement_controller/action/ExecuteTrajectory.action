@@ -1,4 +1,4 @@
-# Copyright (c) 2026, Movement Controller Contributors
+# Copyright (c) 2026, Autofactory
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -36,3 +36,8 @@ string[] trajectory_paths_completed
 # Feedback: emitted when blended execution starts and when it completes
 string status
 string[] trajectory_path_ids
+# Instant the reported transition happened, taken from this node's clock (honours
+# use_sim_time). Consumers that need the robot pose at the transition must look it
+# up in TF at this stamp instead of sampling their own clock, which drifts by the
+# feedback/service round-trip latency.
+builtin_interfaces/Time motion_stamp
