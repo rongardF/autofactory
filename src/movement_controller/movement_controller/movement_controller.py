@@ -1,4 +1,4 @@
-# Copyright (c) 2026, Movement Controller Contributors
+# Copyright (c) 2026, Autofactory
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -31,14 +31,14 @@ from time import sleep
 from threading import Lock, Event
 from asyncio import Future
 
-from rclpy import init, shutdown
+from rclpy import init, ok, shutdown
 from pydantic import ValidationError
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.action import ActionServer, ActionClient, CancelResponse, GoalResponse
 from rclpy.action.server import ServerGoalHandle
 from rclpy.action.client import CancelGoal, ClientGoalHandle
 from rclpy.callback_groups import ReentrantCallbackGroup
-from rclpy.executors import MultiThreadedExecutor
+from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle.node import LifecycleState, TransitionCallbackReturn
 from rclpy.publisher import Publisher
@@ -610,6 +610,11 @@ class MovementController(LifecycleNode):
                     fb = ExecuteTrajectory.Feedback()
                     fb.status = FeedbackStatusEnum.EXECUTING.value
                     fb.trajectory_path_ids = plan.path_ids
+                    # Stamped here, before the group is handed to the executor, so the
+                    # robot is still parked at the group's start pose. Consumers use this
+                    # stamp for TF lookups instead of their own clock, which would have
+                    # drifted by the feedback + service round-trip by the time they run.
+                    fb.motion_stamp = self.get_clock().now().to_msg()
                     goal_handle.publish_feedback(fb)
 
                     for traj in plan.motion_plan.planned_trajectories:  # type: ignore[union-attr]
@@ -642,6 +647,9 @@ class MovementController(LifecycleNode):
                     fb2 = ExecuteTrajectory.Feedback()
                     fb2.status = FeedbackStatusEnum.COMPLETED.value
                     fb2.trajectory_path_ids = plan.path_ids
+                    # Stamped immediately after the last trajectory of the group returned,
+                    # while the robot is still parked at the group's end pose.
+                    fb2.motion_stamp = self.get_clock().now().to_msg()
                     goal_handle.publish_feedback(fb2)
 
                     # h. Track completed IDs (D-02)
@@ -710,6 +718,9 @@ def main(args=None) -> None:
     executor.add_node(node)
     try:
         executor.spin()
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
     finally:
         node.destroy_node()
-        shutdown()
+        if ok():
+            shutdown()

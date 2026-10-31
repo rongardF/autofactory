@@ -1,6 +1,7 @@
 from threading import RLock
 
 from rclpy.lifecycle import LifecycleNode
+from rclpy.time import Time
 
 from endtools.interface.dispenser_controller import DispenserController
 from endtools.model.dispensing_metrics_dto import DispensingMetricsDTO
@@ -22,8 +23,12 @@ class HardwareDispenserController(DispenserController):
         with self._lock:
             return self._is_dispensing
 
-    def start_dispensing(self):
-        """Start the hardware dispensing operation."""
+    def start_dispensing(self, pose_stamp: Time | None = None):
+        """Start the hardware dispensing operation.
+
+        ``pose_stamp`` is unused: real hardware deposits material along the path
+        the robot actually travels, so there is no model to place.
+        """
         with self._lock:
             if self._is_dispensing:
                 raise RuntimeError("Dispensing is already in progress.")
@@ -34,8 +39,11 @@ class HardwareDispenserController(DispenserController):
         # TODO: Add actual hardware control logic to start dispensing here.
         raise NotImplementedError("Hardware dispensing logic is not implemented yet.")
 
-    def stop_dispensing(self) -> DispensingMetricsDTO:
-        """Stop the hardware dispensing operation and return metrics."""
+    def stop_dispensing(self, pose_stamp: Time | None = None) -> DispensingMetricsDTO:
+        """Stop the hardware dispensing operation and return metrics.
+
+        ``pose_stamp`` is unused; see :meth:`start_dispensing`.
+        """
         with self._lock:
             if not self._is_dispensing:
                 raise RuntimeError("Dispensing is not in progress.")

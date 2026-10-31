@@ -15,7 +15,7 @@ RUN --mount=type=cache,id=autofactory-apt,target=/var/cache/apt,sharing=locked \
     sudo=1.9.15p5-3ubuntu5.24.04.4 \
     mesa-utils=9.0.0-2 \
     x11-utils=7.7+6build2 \
-    xvfb=2:21.1.12-1ubuntu1.8 \
+    xvfb=2:21.1.12-1ubuntu1.9 \
     x11vnc=0.9.16-10 \
     novnc=1:1.3.0-2 \
     websockify=0.10.0+dfsg1-5build2 \

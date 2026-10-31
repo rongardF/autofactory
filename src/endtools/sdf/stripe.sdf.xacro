@@ -1,0 +1,85 @@
+<?xml version="1.0" ?>
+<sdf version="1.6" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="dispensed_stripe_model"
+      params="
+        model_name:=stripe_123
+        product_model_name:=product
+        product_link:=heatsink
+        radius_m:=0.02
+        length_m:=0.1
+      ">
+
+    <model name="${model_name}">
+      <link name="stripe_link">
+        <inertial>
+            <mass>1e-6</mass>
+        </inertial>
+
+        <visual name="stripe_cap_start_visual">
+            <pose>0 0 0 0 0 0</pose>
+            <geometry>
+                <sphere>
+                    <radius>${radius_m}</radius>
+                </sphere>
+            </geometry>
+            <material>
+              <ambient>0.33 0.66 0.99 1</ambient>
+              <diffuse>0.33 0.66 0.99 1</diffuse>
+            </material>
+        </visual>
+        <visual name="stripe_cylinder_visual">
+            <pose>${length_m / 2.0} 0 0 0 ${pi / 2} 0</pose>
+            <geometry>
+                <cylinder>
+                    <radius>${radius_m}</radius>
+                    <length>${length_m}</length>
+                </cylinder>
+            </geometry>
+            <material>
+              <ambient>0.33 0.66 0.99 1</ambient>
+              <diffuse>0.33 0.66 0.99 1</diffuse>
+            </material>
+        </visual>
+        <visual name="stripe_cap_end_visual">
+            <pose>${length_m} 0 0 0 0 0</pose>
+            <geometry>
+                <sphere>
+                    <radius>${radius_m}</radius>
+                </sphere>
+            </geometry>
+            <material>
+              <ambient>0.33 0.66 0.99 1</ambient>
+              <diffuse>0.33 0.66 0.99 1</diffuse>
+            </material>
+        </visual>
+      </link>
+
+      <plugin filename="gz-sim-detachable-joint-system"
+                name="gz::sim::systems::DetachableJoint">
+        <parent_link>stripe_link</parent_link>
+        <child_model>${product_model_name}</child_model>
+        <child_link>${product_link}</child_link>
+        <attach_topic>/${model_name}/attach</attach_topic>
+        <detach_topic>/${model_name}/detach</detach_topic>
+        <output_topic>/${model_name}/state</output_topic>
+      </plugin>
+    </model>
+
+  </xacro:macro>
+
+  <xacro:arg name="model_name"                  default="stripe_123"/>
+  <xacro:arg name="product_model_name"          default="product"/>
+  <xacro:arg name="product_link"             default="heatsink"/>
+  <xacro:arg name="radius_m"              default="0.02"/>
+  <xacro:arg name="length_m"              default="0.1"/>
+
+  <xacro:dispensed_stripe_model
+      model_name="$(arg model_name)"
+      product_model_name="$(arg product_model_name)"
+      product_link="$(arg product_link)"
+      radius_m="$(arg radius_m)"
+      length_m="$(arg length_m)"
+  />
+
+</sdf>

@@ -1,4 +1,6 @@
 # DispenseStop.srv — stop the dispensing by closing the valve
+builtin_interfaces/Time pose_stamp   # Instant the TCP pose that ends the dispensed element was reached;
+                                     # zero means "sample the node clock on arrival"
 ---
 bool     success            # True if the stop succeeded (was dispensing)
 float64  dispensed_volume 0.0   # dispensed volume = flow_rate * duration_seconds

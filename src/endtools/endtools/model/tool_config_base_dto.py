@@ -1,4 +1,4 @@
-# Copyright (c) 2026, Endtools Contributors
+# Copyright (c) 2026, Autofactory
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -58,6 +58,10 @@ class ToolConfigBaseDTO(BaseModel):
     simulated: bool = Field(
         default=True,
         description='Selects Gazebo spawn (true) vs UR payload path (false).',
+    )
+    world_name: str = Field(
+        default='default',
+        description='Name of the simulation world.',
     )
     mounted: bool = Field(
         default=False,

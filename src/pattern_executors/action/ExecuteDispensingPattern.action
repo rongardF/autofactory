@@ -1,0 +1,12 @@
+pattern_executors/DispensingPattern[] patterns
+string operation_id
+---
+bool success
+string error_message
+float64 execution_time_s
+string operation_id
+pattern_executors/DispensingPatternMetric[] metrics
+---
+string pattern_id
+float64 execution_time_s
+pattern_executors/DispensingPatternMetric metric
