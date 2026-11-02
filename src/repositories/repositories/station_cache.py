@@ -47,81 +47,81 @@ from rclpy.lifecycle import LifecycleNode, State, TransitionCallbackReturn
 from rclpy.service import Service
 from rclpy.timer import Timer
 
-from repositories.enums.cache_value_type_enum import CacheValueTypeEnum
-from repositories.interfaces.cache_backend import CacheBackend
-from repositories.models.cache_entry_dto import CacheEntryDTO, CacheValue
-from repositories.models.station_cache_config_dto import StationCacheConfigDTO
+from repositories.enums.station_cache.cache_value_type_enum import CacheValueTypeEnum
+from repositories.interfaces.station_cache.cache_backend import CacheBackend
+from repositories.models.station_cache.cache_entry_dto import CacheEntryDTO, CacheValue
+from repositories.models.station_cache.station_cache_config_dto import StationCacheConfigDTO
 from repositories.msg import (
-    BooleanCache,
-    BytesCache,
-    NumberArrayCache,
-    NumberCache,
-    StringArrayCache,
-    StringCache,
+    StationCacheBooleanCache,
+    StationCacheBytesCache,
+    StationCacheNumberArrayCache,
+    StationCacheNumberCache,
+    StationCacheStringArrayCache,
+    StationCacheStringCache,
 )
-from repositories.services.cloud_cache_backend import CloudCacheBackend
-from repositories.services.local_cache_backend import LocalCacheBackend
+from repositories.services.station_cache.cloud_cache_backend import CloudCacheBackend
+from repositories.services.station_cache.local_cache_backend import LocalCacheBackend
 from repositories.srv import (
-    Delete,
-    FetchBoolean,
-    FetchBytes,
-    FetchNumber,
-    FetchNumberArray,
-    FetchString,
-    FetchStringArray,
-    StoreBoolean,
-    StoreBytes,
-    StoreNumber,
-    StoreNumberArray,
-    StoreString,
-    StoreStringArray,
+    StationCacheDelete,
+    StationCacheFetchBoolean,
+    StationCacheFetchBytes,
+    StationCacheFetchNumber,
+    StationCacheFetchNumberArray,
+    StationCacheFetchString,
+    StationCacheFetchStringArray,
+    StationCacheStoreBoolean,
+    StationCacheStoreBytes,
+    StationCacheStoreNumber,
+    StationCacheStoreNumberArray,
+    StationCacheStoreString,
+    StationCacheStoreStringArray,
 )
 from repositories.utils.time_converter import datetime_to_time_msg, time_msg_to_datetime
 
 # Any ``*Cache`` message type and its class object, used to type the generic
 # store/fetch handlers that are shared across all six value types.
 CacheMsg = (
-    StringCache
-    | BooleanCache
-    | NumberCache
-    | StringArrayCache
-    | BytesCache
-    | NumberArrayCache
+    StationCacheStringCache
+    | StationCacheBooleanCache
+    | StationCacheNumberCache
+    | StationCacheStringArrayCache
+    | StationCacheBytesCache
+    | StationCacheNumberArrayCache
 )
 
 # Request/response unions for the generic store and fetch handlers (each is
 # bound to a concrete type at service-creation time via functools.partial).
 StoreRequest = (
-    StoreString.Request
-    | StoreBoolean.Request
-    | StoreNumber.Request
-    | StoreStringArray.Request
-    | StoreBytes.Request
-    | StoreNumberArray.Request
+    StationCacheStoreString.Request
+    | StationCacheStoreBoolean.Request
+    | StationCacheStoreNumber.Request
+    | StationCacheStoreStringArray.Request
+    | StationCacheStoreBytes.Request
+    | StationCacheStoreNumberArray.Request
 )
 StoreResponse = (
-    StoreString.Response
-    | StoreBoolean.Response
-    | StoreNumber.Response
-    | StoreStringArray.Response
-    | StoreBytes.Response
-    | StoreNumberArray.Response
+    StationCacheStoreString.Response
+    | StationCacheStoreBoolean.Response
+    | StationCacheStoreNumber.Response
+    | StationCacheStoreStringArray.Response
+    | StationCacheStoreBytes.Response
+    | StationCacheStoreNumberArray.Response
 )
 FetchRequest = (
-    FetchString.Request
-    | FetchBoolean.Request
-    | FetchNumber.Request
-    | FetchStringArray.Request
-    | FetchBytes.Request
-    | FetchNumberArray.Request
+    StationCacheFetchString.Request
+    | StationCacheFetchBoolean.Request
+    | StationCacheFetchNumber.Request
+    | StationCacheFetchStringArray.Request
+    | StationCacheFetchBytes.Request
+    | StationCacheFetchNumberArray.Request
 )
 FetchResponse = (
-    FetchString.Response
-    | FetchBoolean.Response
-    | FetchNumber.Response
-    | FetchStringArray.Response
-    | FetchBytes.Response
-    | FetchNumberArray.Response
+    StationCacheFetchString.Response
+    | StationCacheFetchBoolean.Response
+    | StationCacheFetchNumber.Response
+    | StationCacheFetchStringArray.Response
+    | StationCacheFetchBytes.Response
+    | StationCacheFetchNumberArray.Response
 )
 
 
@@ -339,90 +339,90 @@ class StationCache(LifecycleNode):
         """Create all 13 node-relative services and track them for teardown."""
         self._cache_services = [
             self.create_service(
-                StoreString,
+                StationCacheStoreString,
                 '~/store_string',
                 partial(self._on_store, value_type=CacheValueTypeEnum.STRING),
             ),
             self.create_service(
-                StoreBoolean,
+                StationCacheStoreBoolean,
                 '~/store_boolean',
                 partial(self._on_store, value_type=CacheValueTypeEnum.BOOLEAN),
             ),
             self.create_service(
-                StoreNumber,
+                StationCacheStoreNumber,
                 '~/store_number',
                 partial(self._on_store, value_type=CacheValueTypeEnum.NUMBER),
             ),
             self.create_service(
-                StoreStringArray,
+                StationCacheStoreStringArray,
                 '~/store_string_array',
                 partial(self._on_store, value_type=CacheValueTypeEnum.STRING_ARRAY),
             ),
             self.create_service(
-                StoreBytes,
+                StationCacheStoreBytes,
                 '~/store_bytes',
                 partial(self._on_store, value_type=CacheValueTypeEnum.BYTES),
             ),
             self.create_service(
-                StoreNumberArray,
+                StationCacheStoreNumberArray,
                 '~/store_number_array',
                 partial(self._on_store, value_type=CacheValueTypeEnum.NUMBER_ARRAY),
             ),
             self.create_service(
-                FetchString,
+                StationCacheFetchString,
                 '~/fetch_string',
                 partial(
                     self._on_fetch,
                     value_type=CacheValueTypeEnum.STRING,
-                    msg_factory=StringCache,
+                    msg_factory=StationCacheStringCache,
                 ),
             ),
             self.create_service(
-                FetchBoolean,
+                StationCacheFetchBoolean,
                 '~/fetch_boolean',
                 partial(
                     self._on_fetch,
                     value_type=CacheValueTypeEnum.BOOLEAN,
-                    msg_factory=BooleanCache,
+                    msg_factory=StationCacheBooleanCache,
                 ),
             ),
             self.create_service(
-                FetchNumber,
+                StationCacheFetchNumber,
                 '~/fetch_number',
                 partial(
                     self._on_fetch,
                     value_type=CacheValueTypeEnum.NUMBER,
-                    msg_factory=NumberCache,
+                    msg_factory=StationCacheNumberCache,
                 ),
             ),
             self.create_service(
-                FetchStringArray,
+                StationCacheFetchStringArray,
                 '~/fetch_string_array',
                 partial(
                     self._on_fetch,
                     value_type=CacheValueTypeEnum.STRING_ARRAY,
-                    msg_factory=StringArrayCache,
+                    msg_factory=StationCacheStringArrayCache,
                 ),
             ),
             self.create_service(
-                FetchBytes,
+                StationCacheFetchBytes,
                 '~/fetch_bytes',
                 partial(
                     self._on_fetch,
                     value_type=CacheValueTypeEnum.BYTES,
-                    msg_factory=BytesCache,
+                    msg_factory=StationCacheBytesCache,
                 ),
             ),
             self.create_service(
-                FetchNumberArray,
+                StationCacheFetchNumberArray,
                 '~/fetch_number_array',
                 partial(
                     self._on_fetch,
                     value_type=CacheValueTypeEnum.NUMBER_ARRAY,
-                    msg_factory=NumberArrayCache,
+                    msg_factory=StationCacheNumberArrayCache,
                 ),
             ),
-            self.create_service(Delete, '~/delete', self._on_delete),
+            self.create_service(StationCacheDelete, '~/delete', self._on_delete),
         ]
 
     def _destroy_services(self) -> None:
@@ -558,13 +558,13 @@ class StationCache(LifecycleNode):
         return response
 
     def _on_delete(
-        self, request: Delete.Request, response: Delete.Response
-    ) -> Delete.Response:
+        self, request: StationCacheDelete.Request, response: StationCacheDelete.Response
+    ) -> StationCacheDelete.Response:
         """Delete whatever entry exists for ``key``, regardless of its type.
 
         Args:
-            request: The ``Delete`` request carrying ``key``.
-            response: The ``Delete`` response to populate.
+            request: The ``StationCacheDelete`` request carrying ``key``.
+            response: The ``StationCacheDelete`` response to populate.
 
         Returns:
             The populated response (``success`` + ``deleted`` + ``error_message``);

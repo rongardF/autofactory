@@ -24,11 +24,4 @@
 # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
-"""Concrete storage service implementations for the ``station_cache`` node.
-
-Each service implements the :class:`CacheBackend` contract from
-:mod:`repositories.interfaces`.
-"""
-
-from repositories.services.cloud_cache_backend import CloudCacheBackend
-from repositories.services.local_cache_backend import LocalCacheBackend
+"""Concrete service implementations for the ``repositories`` nodes, grouped per node."""

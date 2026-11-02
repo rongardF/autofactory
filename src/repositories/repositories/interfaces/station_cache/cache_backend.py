@@ -36,7 +36,7 @@ without touching the service surface.
 from abc import ABC, abstractmethod
 from datetime import datetime
 
-from repositories.models.cache_entry_dto import CacheEntryDTO
+from repositories.models.station_cache.cache_entry_dto import CacheEntryDTO
 
 
 class CacheBackend(ABC):

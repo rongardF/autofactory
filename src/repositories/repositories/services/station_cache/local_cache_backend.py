@@ -36,8 +36,8 @@ lost on cleanup/shutdown or process exit.
 import threading
 from datetime import datetime
 
-from repositories.interfaces.cache_backend import CacheBackend
-from repositories.models.cache_entry_dto import CacheEntryDTO
+from repositories.interfaces.station_cache.cache_backend import CacheBackend
+from repositories.models.station_cache.cache_entry_dto import CacheEntryDTO
 
 
 class LocalCacheBackend(CacheBackend):

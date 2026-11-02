@@ -24,6 +24,4 @@
 # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
-"""Abstract contracts the ``repositories`` nodes depend on."""
-
-from repositories.interfaces.cache_backend import CacheBackend
+"""Abstract contracts the ``repositories`` nodes depend on, grouped per node."""

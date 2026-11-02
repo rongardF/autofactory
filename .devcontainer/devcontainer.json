@@ -10,7 +10,8 @@
         "ms-vscode-remote.remote-containers",
         "ms-azuretools.vscode-docker",
         "github.copilot-chat",
-        "openai.chatgpt"
+        "openai.chatgpt",
+        "ms-vscode.cmake-tools"
       ],
       "settings": {
         "python.defaultInterpreterPath": "/opt/venv/bin/python3",

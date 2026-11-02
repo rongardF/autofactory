@@ -10,6 +10,7 @@ find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(builtin_interfaces REQUIRED)
+find_package(action_msgs REQUIRED)
 
 # Python version — needed to compute the correct site-packages install path
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
@@ -21,20 +22,27 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
 # See: https://github.com/ros2/rosidl_python/issues/141
 # --------------------------------------------------------------------------
 rosidl_generate_interfaces(${PROJECT_NAME}
-  "msg/StringCache.msg"
-  "msg/BooleanCache.msg"
-  "msg/NumberCache.msg"
-  "msg/StringArrayCache.msg"
-  "msg/BytesCache.msg"
-  "msg/NumberArrayCache.msg"
-  "srv/StoreString.srv"      "srv/FetchString.srv"
-  "srv/StoreBoolean.srv"     "srv/FetchBoolean.srv"
-  "srv/StoreNumber.srv"      "srv/FetchNumber.srv"
-  "srv/StoreStringArray.srv" "srv/FetchStringArray.srv"
-  "srv/StoreBytes.srv"       "srv/FetchBytes.srv"
-  "srv/StoreNumberArray.srv" "srv/FetchNumberArray.srv"
-  "srv/Delete.srv"
-  DEPENDENCIES builtin_interfaces
+  "msg/StationCacheStringCache.msg"
+  "msg/StationCacheBooleanCache.msg"
+  "msg/StationCacheNumberCache.msg"
+  "msg/StationCacheStringArrayCache.msg"
+  "msg/StationCacheBytesCache.msg"
+  "msg/StationCacheNumberArrayCache.msg"
+  "srv/StationCacheStoreString.srv"      "srv/StationCacheFetchString.srv"
+  "srv/StationCacheStoreBoolean.srv"     "srv/StationCacheFetchBoolean.srv"
+  "srv/StationCacheStoreNumber.srv"      "srv/StationCacheFetchNumber.srv"
+  "srv/StationCacheStoreStringArray.srv" "srv/StationCacheFetchStringArray.srv"
+  "srv/StationCacheStoreBytes.srv"       "srv/StationCacheFetchBytes.srv"
+  "srv/StationCacheStoreNumberArray.srv" "srv/StationCacheFetchNumberArray.srv"
+  "srv/StationCacheDelete.srv"
+  # object_model_storage interfaces
+  "msg/ObjectModelStorageMappingValue.msg"
+  "msg/ObjectModelStorageModelInfo.msg"
+  "msg/ObjectModelStorageCachedModels.msg"
+  "srv/ObjectModelStorageGetModelsInfo.srv"
+  "srv/ObjectModelStorageGetModel.srv"
+  "action/ObjectModelStorageGetModels.action"
+  DEPENDENCIES builtin_interfaces action_msgs
   SKIP_INSTALL
 )
 
@@ -110,12 +118,57 @@ install(
 rosidl_export_typesupport_targets("" ${PROJECT_NAME}__rosidl_generator_py)
 ament_export_targets(export_${PROJECT_NAME}__rosidl_generator_py)
 
-# Install the lifecycle node program so it is discoverable as
-# `ros2 run repositories station_cache`.
+# Export the installed targets (namespace defaults to ${PROJECT_NAME}::) and
+# register them as typesupport targets so downstream `rosidl_generate_interfaces`
+# populates ${PROJECT_NAME}_TARGETS and links against them. SKIP_INSTALL omits
+# this, which breaks any package that references these interfaces in its own
+# interface files (runtime "undefined symbol" / "Could not import
+# 'rosidl_typesupport_c'" failure).
+ament_export_targets(export_${PROJECT_NAME})
+rosidl_export_typesupport_targets(__rosidl_generator_c
+  ${PROJECT_NAME}__rosidl_generator_c)
+rosidl_export_typesupport_targets(__rosidl_generator_cpp
+  ${PROJECT_NAME}__rosidl_generator_cpp)
+rosidl_export_typesupport_targets(__rosidl_typesupport_c
+  ${PROJECT_NAME}__rosidl_typesupport_c)
+rosidl_export_typesupport_targets(__rosidl_typesupport_cpp
+  ${PROJECT_NAME}__rosidl_typesupport_cpp)
+rosidl_export_typesupport_targets(__rosidl_typesupport_fastrtps_c
+  ${PROJECT_NAME}__rosidl_typesupport_fastrtps_c)
+rosidl_export_typesupport_targets(__rosidl_typesupport_fastrtps_cpp
+  ${PROJECT_NAME}__rosidl_typesupport_fastrtps_cpp)
+rosidl_export_typesupport_targets(__rosidl_typesupport_introspection_c
+  ${PROJECT_NAME}__rosidl_typesupport_introspection_c)
+rosidl_export_typesupport_targets(__rosidl_typesupport_introspection_cpp
+  ${PROJECT_NAME}__rosidl_typesupport_introspection_cpp)
+
+# The Python conversion library (lib${PROJECT_NAME}__rosidl_generator_py.so) is a
+# SEPARATE chain from the C typesupport libraries above, and SKIP_INSTALL drops its
+# install + export too. Downstream interface packages link it via the *unsuffixed*
+# ${PROJECT_NAME}_TARGETS variable; without it they fail at runtime with
+# "undefined symbol: <pkg>__msg__<type>__convert_from_py".
+# Installing it also keeps the Python extension modules from depending on build/.
+install(
+  TARGETS ${PROJECT_NAME}__rosidl_generator_py
+  EXPORT export_${PROJECT_NAME}__rosidl_generator_py
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
+rosidl_export_typesupport_targets("" ${PROJECT_NAME}__rosidl_generator_py)
+ament_export_targets(export_${PROJECT_NAME}__rosidl_generator_py)
+
+# Install the lifecycle node programs so they are discoverable as
+# `ros2 run repositories <node>`
 install(PROGRAMS
   ${PROJECT_NAME}/station_cache.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME station_cache
+)
+install(PROGRAMS
+  ${PROJECT_NAME}/object_model_storage.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME object_model_storage
 )
 
 if(BUILD_TESTING)

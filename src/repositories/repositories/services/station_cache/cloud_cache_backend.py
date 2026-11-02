@@ -35,8 +35,8 @@ REST contract will drive the real implementation in a future iteration.
 
 from datetime import datetime
 
-from repositories.interfaces.cache_backend import CacheBackend
-from repositories.models.cache_entry_dto import CacheEntryDTO
+from repositories.interfaces.station_cache.cache_backend import CacheBackend
+from repositories.models.station_cache.cache_entry_dto import CacheEntryDTO
 
 # Shared message surfaced by every stubbed method so the node reports a
 # consistent reason to callers.
