@@ -36,18 +36,24 @@ from typing import Any, Callable
 from builtin_interfaces.msg import Time
 from movement_controller.action import ExecuteTrajectory
 from movement_controller.msg import TrajectoryPath
-from pattern_executors.msg import DispensingMovement, PatternAction
 from pydantic import BaseModel, ConfigDict, Field
 from rclpy.action import ActionClient
 from rclpy.action.client import ClientGoalHandle
 from rclpy.lifecycle import LifecycleNode
 from rclpy.task import Future
+from repositories.msg import (
+    OperationRepositoryDispensingMovement,
+    OperationRepositoryPatternAction,
+)
 
 # Called with the action to run, the movement it belongs to, and the instant the
 # movement_controller reported the phase transition at. The stamp is what consumers
 # must use to resolve the TCP pose, because the callback itself runs an unbounded
 # number of milliseconds after the robot reached that pose.
-ActionExecutorType = Callable[[PatternAction, DispensingMovement, Time], None]
+ActionExecutorType = Callable[
+    [OperationRepositoryPatternAction, OperationRepositoryDispensingMovement, Time],
+    None,
+]
 
 
 class _PathActionState(BaseModel):
@@ -79,16 +85,16 @@ class MovementDispatcher:
 
     def split_into_batches(
         self,
-        movements: list[DispensingMovement],
-    ) -> list[list[DispensingMovement]]:
+        movements: list[OperationRepositoryDispensingMovement],
+    ) -> list[list[OperationRepositoryDispensingMovement]]:
         """Split movements into batches, cutting after any movement with wait action."""
-        batches: list[list[DispensingMovement]] = []
-        current_batch: list[DispensingMovement] = []
+        batches: list[list[OperationRepositoryDispensingMovement]] = []
+        current_batch: list[OperationRepositoryDispensingMovement] = []
 
         for movement in movements:
             current_batch.append(movement)
             has_wait_action = any(
-                action.type == PatternAction.TYPE_WAIT
+                action.type == OperationRepositoryPatternAction.TYPE_WAIT
                 for action in movement.actions
             )
             if has_wait_action:
@@ -102,7 +108,7 @@ class MovementDispatcher:
 
     def execute_batches(
         self,
-        movements: list[DispensingMovement],
+        movements: list[OperationRepositoryDispensingMovement],
         tool_frame: str,
         action_executor: ActionExecutorType,
     ) -> ExecuteTrajectory.Result:
@@ -148,13 +154,13 @@ class MovementDispatcher:
 
     def _execute_single_batch(
         self,
-        batch: list[DispensingMovement],
+        batch: list[OperationRepositoryDispensingMovement],
         tool_frame: str,
         action_executor: ActionExecutorType,
     ) -> ExecuteTrajectory.Result:
         """Send one ExecuteTrajectory goal for a movement batch and process feedback."""
         movement_by_path_id = {
-            movement.path.path_id: movement
+            movement.id: movement
             for movement in batch
         }
         action_state_by_path_id = {
@@ -166,16 +172,19 @@ class MovementDispatcher:
         goal.paths = []
         for movement in batch:
             trajectory_path = TrajectoryPath()
-            trajectory_path.path_id = movement.path.path_id
-            trajectory_path.motion_type = movement.path.motion_type
-            trajectory_path.target_pose = movement.path.target_pose
-            trajectory_path.blend_radius = movement.path.blend_radius
-            trajectory_path.cartesian_speed = movement.path.cartesian_speed
-            trajectory_path.cartesian_acceleration = movement.path.cartesian_acceleration
-            trajectory_path.joint_speed = movement.path.joint_speed
-            trajectory_path.joint_acceleration = movement.path.joint_acceleration
-            trajectory_path.circ_type = movement.path.circ_type
-            trajectory_path.circ_point = movement.path.circ_point
+            trajectory_path.path_id = movement.id
+            trajectory_path.motion_type = movement.motion_type
+            trajectory_path.target_pose = movement.target_pose
+            trajectory_path.blend_radius = (
+                movement.blend_radius_m if movement.blend_radius_m >= 0.0 else 0.0
+            )
+            trajectory_path.cartesian_speed = movement.cartesian_speed_m_s
+            trajectory_path.cartesian_acceleration = -1.0
+            trajectory_path.joint_speed = movement.joint_speed_rad_s
+            trajectory_path.joint_acceleration = -1.0
+            trajectory_path.circ_type = movement.circ_type
+            if movement.circ_point:
+                trajectory_path.circ_point = movement.circ_point[0]
             trajectory_path.tool_frame = tool_frame
             goal.paths.append(trajectory_path)
 
@@ -199,7 +208,7 @@ class MovementDispatcher:
             movement = movement_by_path_id[path_id]
             state = action_state_by_path_id[path_id]
             try:
-                if phase == PatternAction.TIMING_END:
+                if phase == OperationRepositoryPatternAction.TIMING_END:
                     state.start_done.wait()
 
                 for action in movement.actions:
@@ -209,18 +218,25 @@ class MovementDispatcher:
             except Exception as error:  # noqa: BLE001
                 _record_callback_error(error)
             finally:
-                if phase == PatternAction.TIMING_START:
+                if phase == OperationRepositoryPatternAction.TIMING_START:
                     state.start_done.set()
                 else:
                     state.end_done.set()
 
         def _feedback_callback(feedback_msg: ExecuteTrajectory.Impl.FeedbackMessage) -> None:
             feedback = feedback_msg.feedback
-            if feedback.status not in {PatternAction.TIMING_START, PatternAction.TIMING_END}:
+            if feedback.status not in {
+                OperationRepositoryPatternAction.TIMING_START,
+                OperationRepositoryPatternAction.TIMING_END,
+            }:
                 if feedback.status not in {'executing', 'completed'}:
                     return
 
-            phase = PatternAction.TIMING_START if feedback.status == 'executing' else PatternAction.TIMING_END
+            phase = (
+                OperationRepositoryPatternAction.TIMING_START
+                if feedback.status == 'executing'
+                else OperationRepositoryPatternAction.TIMING_END
+            )
             for path_id in feedback.trajectory_path_ids:
                 movement = movement_by_path_id.get(path_id)
                 if movement is None:
@@ -229,10 +245,16 @@ class MovementDispatcher:
                 state = action_state_by_path_id[path_id]
                 should_dispatch = False
                 with self._state_lock:
-                    if phase == PatternAction.TIMING_START and not state.start_dispatched:
+                    if (
+                        phase == OperationRepositoryPatternAction.TIMING_START
+                        and not state.start_dispatched
+                    ):
                         state.start_dispatched = True
                         should_dispatch = True
-                    elif phase == PatternAction.TIMING_END and not state.end_dispatched:
+                    elif (
+                        phase == OperationRepositoryPatternAction.TIMING_END
+                        and not state.end_dispatched
+                    ):
                         state.end_dispatched = True
                         should_dispatch = True
 

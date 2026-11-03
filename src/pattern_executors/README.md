@@ -38,9 +38,10 @@ messages.
 `DispensingPatternExecutor` serves the `~/execute_dispensing_pattern` action
 (`pattern_executors/action/ExecuteDispensingPattern`):
 
-- **Goal**: `DispensingPattern[] patterns`, `string operation_id`. Every pose in
-  the goal carries its own `header.frame_id` (`DispensingPattern.start_pose` and
-  each `MovementPath.target_pose`); the executor forwards them unchanged.
+- **Goal**: `repositories/OperationRepositoryDispensingPattern[] patterns`,
+  `string operation_id`. Every pose in the goal carries its own
+  `header.frame_id` (`start_pose` and each movement's `target_pose`); the
+  executor forwards them unchanged.
 - **Result**: `bool success`, `string error_message`, `float64 execution_time_s`,
   `string operation_id`, `DispensingPatternMetric[] metrics` (one per executed
   pattern; only fully-completed patterns are reported on failure/cancel).
@@ -49,16 +50,17 @@ messages.
 
 Goals are **rejected** when the node is not active or a goal is already
 executing (single-goal concurrency). Goals are also rejected when invalid: empty
-`patterns`, an unknown `PatternAction.type`/`timing`, or a `wait` action on a
+`patterns`, an unknown action `type`/`timing`, or a `wait` action on a
 non-zero-length movement.
 
 ### Pattern execution
 
 For each pattern the executor:
 
-1. Reconfigures the end-tool flow rate when `flowrate_m3_s` differs from the
-   dispenser's current `flowrate` (compared in cc/s to 6 decimals). Reconfigure
-   cycle: deactivate → cleanup → set `flowrate` → configure → activate.
+1. Reads the float `flowrate_m3_s` argument from `pattern_args` and reconfigures
+   the end-tool when it differs from the dispenser's current `flowrate`
+   (compared in cc/s to 6 decimals). Reconfigure cycle: deactivate → cleanup →
+   set `flowrate` → configure → activate.
 2. Runs a valve-closed `PTP` approach to `pattern.start_pose` (no actions).
 3. Splits `movements[]` into execution batches, cutting **after** any movement
    that carries a blocking `wait` action. Each batch is one `ExecuteTrajectory`
@@ -75,7 +77,14 @@ Action semantics:
 |--------|-----------|----------|
 | `open_valve` | `~/dispense_start` (`endtools/StartDispensing`) | No (service round-trip) |
 | `close_valve` | `~/dispense_stop` (`endtools/StopDispensing`) | No (service round-trip) |
-| `wait` | sleep `wait_time_s` | Yes (no movement in flight) |
+| `wait` | sleep the `wait_time_s` action argument | Yes (no movement in flight) |
+
+The `wait_time_s` float entry is carried in the action's `action_args` array.
+A missing, wrongly typed, or negative entry fails execution; zero is a valid
+immediate wait. Each argument uses `OperationRepositoryArg`'s `argument_type`
+to select its typed value field.
+Dispensing pattern messages are defined by `repositories` and shared with
+operation lookup.
 
 Both valve services take a `pose_stamp`, forwarded from the movement feedback's
 `motion_stamp`. The end tool resolves the TCP pose in TF at that instant rather
@@ -94,7 +103,7 @@ the dispatcher joins them before returning, so the next batch cannot start
 moving the robot while a dwell still has the valve open.
 
 Each `open_valve` → `close_valve` cycle yields one `DispensedElementMetric`
-(`element_id` = `path_id` of the movement whose `open_valve` started it, volume
+(`element_id` = movement `id` of the movement whose `open_valve` started it, volume
 converted cc→m³).
 
 ### Abort / cancel
@@ -119,10 +128,13 @@ any exception mid-goal the executor cancels the in-flight movement goal, forces
 | `dispense_stop_service_name` | string | `dispense_stop` | Relative close-valve service name. |
 
 The pose frame is **not** a parameter and is **not** a goal-level field — it
-arrives per pose in `target_pose.header.frame_id`. `tool_frame` is not part of
-`MovementPath` either: the executor sets it on the `movement_controller`
-`TrajectoryPath` it builds, always to `{tool_sn}_calibrated_tcp`, which must
-equal the dispenser's published calibrated TCP frame id.
+arrives per pose in `target_pose.header.frame_id`. The dispatcher maps
+`blend_radius_m < 0` to a zero blend radius, passes speed values through
+(`-1.0` means use the controller default), sets both acceleration fields to
+`-1.0`, and takes the optional `circ_point` from its bounded array. `tool_frame`
+is set on the `movement_controller` `TrajectoryPath` it builds, always to
+`{tool_sn}_calibrated_tcp`, which must equal the dispenser's published
+calibrated TCP frame id.
 
 ## Lifecycle behaviour
 
