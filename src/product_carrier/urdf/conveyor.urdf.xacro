@@ -20,7 +20,8 @@
 
     Arguments:
       parent            link the conveyor is mounted on (prefixed with tf_prefix)
-      simulated         add Gazebo-only elements (presence lidar, joint state publisher)
+      simulated         add Gazebo-only elements (presence lidar, joint state publisher,
+                        carrier joint position controller)
       mount_origin_xyz  position of conveyor_origin relative to parent
       mount_origin_rpy  orientation of conveyor_origin relative to parent
       conveyor_length   carrier travel length [m]
@@ -30,6 +31,9 @@
     Gazebo topics (simulated=true):
       ${tf_prefix}conveyor/presence_sensor  gz.msgs.LaserScan
       ${tf_prefix}conveyor/joint_state      gz.msgs.Model (base_carrier_joint only)
+      /model/<model>/joint/${tf_prefix}base_carrier_joint/0/cmd_pos
+                                            gz.msgs.Double, carrier position command [m]
+                                            (default topic, used by the GUI Joint Position Controller)
   -->
   <xacro:macro name="conveyor" params="
     parent
@@ -48,6 +52,10 @@
     <xacro:property name="presence_sensor_range" value="0.05"/>
     <xacro:property name="carrier_effort" value="1000.0"/>
     <xacro:property name="carrier_velocity" value="0.5"/>
+    <!-- carrier position controller gains, tuned for a light (~2 kg) welded product -->
+    <xacro:property name="carrier_p_gain" value="100"/>
+    <xacro:property name="carrier_d_gain" value="30"/>
+    <xacro:property name="carrier_cmd_limit" value="200"/>
 
     <link name="${tf_prefix}conveyor_origin">
       <visual>
@@ -151,6 +159,15 @@
         <plugin filename="gz-sim-joint-state-publisher-system" name="gz::sim::systems::JointStatePublisher">
           <joint_name>${tf_prefix}base_carrier_joint</joint_name>
           <topic>${tf_prefix}conveyor/joint_state</topic>
+        </plugin>
+        <!-- Drives the carrier joint; keeps the default cmd_pos topic so the GUI plugin can command it -->
+        <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+          <joint_name>${tf_prefix}base_carrier_joint</joint_name>
+          <p_gain>${carrier_p_gain}</p_gain>
+          <i_gain>0</i_gain>
+          <d_gain>${carrier_d_gain}</d_gain>
+          <cmd_max>${carrier_cmd_limit}</cmd_max>
+          <cmd_min>${-carrier_cmd_limit}</cmd_min>
         </plugin>
       </gazebo>
     </xacro:if>

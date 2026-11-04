@@ -1,0 +1,52 @@
+<?xml version="1.0" ?>
+<!--
+  Test product for the conveyor presence sensor.
+
+  Welded to the conveyor 'carrier' link with a DetachableJoint, which attaches
+  on spawn (no attach/detach topics are bridged). The relative pose is taken at
+  attach time, so spawn the pallet at the carrier pose. Origin is at the +X
+  end of the pallet; it extends 0.4 m along -X.
+
+  The collision mesh fits the conveyor collision geometry: 2.5 mm clearance to
+  the side rails and belts, the underside rests exactly on the guide strips
+  (z = 0) and the centre peg runs in the gap between the belts.
+-->
+<sdf version="1.9">
+  <model name="pallet">
+    <link name="pallet_link">
+      <!-- PLACEHOLDER inertial estimate (0.4 x 0.535 x 0.03 m box) -->
+      <inertial>
+        <pose>-0.2 0 0.005 0 0 0</pose>
+        <mass>2.0</mass>
+        <inertia>
+          <ixx>0.0479</ixx><iyy>0.0268</iyy><izz>0.0744</izz>
+          <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="collision">
+        <geometry>
+          <mesh>
+            <uri>model://pallet/meshes/collision.stl</uri>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name="visual">
+        <geometry>
+          <mesh>
+            <uri>model://pallet/meshes/collision.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <ambient>0.1 0.3 0.8 1</ambient>
+          <diffuse>0.1 0.3 0.8 1</diffuse>
+        </material>
+      </visual>
+    </link>
+
+    <plugin filename="gz-sim-detachable-joint-system" name="gz::sim::systems::DetachableJoint">
+      <parent_link>pallet_link</parent_link>
+      <child_model>conveyor</child_model>
+      <child_link>carrier</child_link>
+    </plugin>
+  </model>
+</sdf>
