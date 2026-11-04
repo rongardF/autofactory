@@ -12,10 +12,11 @@ Python code is grouped per node inside each domain package; `utils/` is shared:
 repositories/
 ├── station_cache.py               # station_cache node
 ├── object_model_storage.py        # object_model_storage node
-├── enums/{station_cache,object_model_storage}/
-├── interfaces/{station_cache,object_model_storage}/
-├── models/{station_cache,object_model_storage}/
-├── services/{station_cache,object_model_storage}/
+├── operation_repository.py        # operation_repository node
+├── enums/{station_cache,object_model_storage,operation_repository}/
+├── interfaces/{station_cache,object_model_storage,operation_repository}/
+├── models/{station_cache,object_model_storage,operation_repository}/
+├── services/{station_cache,object_model_storage,operation_repository}/
 └── utils/                         # shared helpers
 ```
 
@@ -132,6 +133,67 @@ downloads.
 Until the service exists, cloud-mode calls return `success=false` with
 `cloud mode not implemented (GET <url>)`.
 
+## `operation_repository` node
+
+Returns one validated assembly operation by `assembly_id` and `operation_id`.
+The node is the single owner of operation DTOs and dispensing-pattern ROS
+messages; `pattern_executors` consumes those shared messages.
+
+- **Class:** `OperationRepository` (`rclpy.lifecycle.LifecycleNode`)
+- **Executable:** `operation_repository`
+- **Service:** `~/get_operation`
+  (`repositories/srv/OperationRepositoryGetOperation`)
+- **Backends:** `LocalOperationBackend` (assembly JSON, loaded on configure) /
+  `CloudOperationBackend` (REST contract; HTTP transport is stubbed)
+
+The service returns exactly one `OperationRepositoryOperation` on success and
+an empty `operation` array on failure. Failures are logged and returned as
+`success=false` with an explanatory `error_message`.
+
+### Parameters
+
+| Parameter | Type | Default | Notes |
+|-----------|------|---------|-------|
+| `local_repository` | bool | `true` | Local assembly file when true; cloud REST backend when false. |
+| `assembly_file_path` | string | `/tmp/station/mock_assembly_file.json` | Must be absolute; read and fully validated on configure. |
+| `station_id` | string | `''` | Required UUID4 in cloud mode only. |
+| `operation_repository_url` | string | `''` | Required in cloud mode only. |
+| `product_origin_frame_id` | string | `product_origin` | Must not be empty; assigned to all converted poses. |
+
+### Local mode
+
+The assembly root requires `schema_version: "1.0"` and a UUID4 `id`.
+Every operation is parsed and validated when the node is configured; a missing
+or unreadable file, unsupported schema, malformed operation, or invalid UUID
+fails configure. Requests must provide the assembly's root id and an operation
+id present in the cached assembly.
+
+### Cloud mode (contract; HTTP not implemented yet)
+
+`GET {operation_repository_url}/{station_id}/operation_repository/operation_data`
+with `assembly_id`, `operation_id`, and `schema_version=1.0` query parameters
+returns one operation object. Until the service exists, the backend makes no
+HTTP request and returns `success=false` with the requested URL in the error.
+Cloud configuration requires a UUID4 `station_id` and a non-empty URL.
+
+### JSON-to-message conversion
+
+The operation DTO validates its root schema version and required fields.
+Pose arrays are interpreted as XYZ meters plus fixed-axis roll/pitch/yaw radians
+and converted to `PoseStamped` in `product_origin_frame_id`. JSON null numeric
+movement settings become `-1.0`, a null `circ_type` becomes an empty string,
+and a null circular point becomes an empty bounded array. Operation, pattern,
+and action arguments use `OperationRepositoryArg[]`; each argument's
+`argument_type` selects its one active typed value field, while all other value
+fields remain at their message defaults. Operation argument values are strings
+or other supported JSON types; pattern and action arguments retain their JSON
+value types. Empty argument objects and `null` are represented as `null` in the
+DTO's JSON form and as empty arrays in ROS messages. JSON value arrays must be
+non-empty and homogeneous so their element type can be inferred. The shared
+`SCHEMA_VERSION` constant is `1.0`. Dispensing patterns still require the
+`flowrate_m3_s` float argument, and wait actions require their `wait_time_s`
+float argument.
+
 ## Build
 
 ```bash
@@ -147,7 +209,12 @@ ros2 run repositories station_cache --ros-args \
 
 ros2 run repositories object_model_storage --ros-args \
   -p station_id:=<uuid4> -p download_path:=/tmp/station/object_models/
+
+ros2 run repositories operation_repository
 ```
 
 Drive the lifecycle with `ros2 lifecycle set /<node> configure` then
-`... activate`.
+`... activate`. For the local example, copy
+`mock_product_assembly.json` to `/tmp/station/mock_assembly_file.json`, then
+call `/operation_repository/get_operation` with the assembly and operation
+UUID4 values.

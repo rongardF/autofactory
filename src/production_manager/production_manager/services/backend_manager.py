@@ -30,6 +30,7 @@ from typing import Protocol
 from production_manager.interface.production_backend import ProductionBackend
 from production_manager.model.production_data_dto import ProductionDataDTO
 from production_manager.model.result_dto import ResultDTO
+from repositories.enums.operation_repository import SCHEMA_VERSION
 
 
 class LoggerLike(Protocol):
@@ -48,7 +49,9 @@ class BackendManager(ProductionBackend):
         product_revision: str,
         serial_number: str,
         station_id: str,
+        schema_version: str = SCHEMA_VERSION,
     ) -> ProductionDataDTO:
+        """Fetch production data; the GET query will include schema_version=<value>."""
         self._logger.warning('Cloud production backend is not implemented.')
         return ProductionDataDTO.failure('not implemented')
 

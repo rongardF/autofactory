@@ -42,6 +42,7 @@ from production_manager.utils.assembly_reader import (
     validate_assembly,
 )
 from production_manager.utils.uuid_validator import is_uuid4
+from repositories.enums.operation_repository import SCHEMA_VERSION
 
 
 class LoggerLike(Protocol):
@@ -84,7 +85,10 @@ class LocalManager(ProductionBackend):
         product_revision: str,
         serial_number: str,
         station_id: str,
+        schema_version: str = SCHEMA_VERSION,
     ) -> ProductionDataDTO:
+        """Return local production data; schema version is checked on assembly use."""
+        del schema_version
         with self._lock:
             current = self._current_operation
         if current is None:

@@ -11,6 +11,7 @@ find_package(ament_cmake_python REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 find_package(action_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 
 # Python version — needed to compute the correct site-packages install path
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
@@ -42,9 +43,40 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/ObjectModelStorageGetModelsInfo.srv"
   "srv/ObjectModelStorageGetModel.srv"
   "action/ObjectModelStorageGetModels.action"
-  DEPENDENCIES builtin_interfaces action_msgs
+  # operation_repository interfaces
+  "msg/OperationRepositoryArg.msg"
+  "msg/OperationRepositoryMaterial.msg"
+  "msg/OperationRepositoryEndTool.msg"
+  "msg/OperationRepositoryPatternAction.msg"
+  "msg/OperationRepositoryDispensingMovement.msg"
+  "msg/OperationRepositoryDispensingPattern.msg"
+  "msg/OperationRepositoryOperation.msg"
+  "srv/OperationRepositoryGetOperation.srv"
+  DEPENDENCIES builtin_interfaces action_msgs geometry_msgs
   SKIP_INSTALL
 )
+
+ament_index_register_resource(
+  "rosidl_interfaces"
+  CONTENT
+    "msg/StationCacheStringCache.msg\nmsg/StationCacheBooleanCache.msg\nmsg/StationCacheNumberCache.msg\nmsg/StationCacheStringArrayCache.msg\nmsg/StationCacheBytesCache.msg\nmsg/StationCacheNumberArrayCache.msg\nsrv/StationCacheStoreString.srv\nsrv/StationCacheFetchString.srv\nsrv/StationCacheStoreBoolean.srv\nsrv/StationCacheFetchBoolean.srv\nsrv/StationCacheStoreNumber.srv\nsrv/StationCacheFetchNumber.srv\nsrv/StationCacheStoreStringArray.srv\nsrv/StationCacheFetchStringArray.srv\nsrv/StationCacheStoreBytes.srv\nsrv/StationCacheFetchBytes.srv\nsrv/StationCacheStoreNumberArray.srv\nsrv/StationCacheFetchNumberArray.srv\nsrv/StationCacheDelete.srv\nmsg/ObjectModelStorageMappingValue.msg\nmsg/ObjectModelStorageModelInfo.msg\nmsg/ObjectModelStorageCachedModels.msg\nsrv/ObjectModelStorageGetModelsInfo.srv\nsrv/ObjectModelStorageGetModel.srv\naction/ObjectModelStorageGetModels.action\nmsg/OperationRepositoryArg.msg\nmsg/OperationRepositoryMaterial.msg\nmsg/OperationRepositoryEndTool.msg\nmsg/OperationRepositoryPatternAction.msg\nmsg/OperationRepositoryDispensingMovement.msg\nmsg/OperationRepositoryDispensingPattern.msg\nmsg/OperationRepositoryOperation.msg\nsrv/OperationRepositoryGetOperation.srv"
+)
+
+# Generated headers include their package-qualified paths (for example
+# repositories/msg/...), so consumers need the common include root as well as
+# the package-specific path exported by rosidl.
+foreach(target
+    ${PROJECT_NAME}__rosidl_generator_c
+    ${PROJECT_NAME}__rosidl_generator_cpp
+    ${PROJECT_NAME}__rosidl_typesupport_c
+    ${PROJECT_NAME}__rosidl_typesupport_cpp
+    ${PROJECT_NAME}__rosidl_typesupport_fastrtps_c
+    ${PROJECT_NAME}__rosidl_typesupport_fastrtps_cpp
+    ${PROJECT_NAME}__rosidl_typesupport_introspection_c
+    ${PROJECT_NAME}__rosidl_typesupport_introspection_cpp
+)
+  target_include_directories(${target} INTERFACE "$<INSTALL_INTERFACE:include>")
+endforeach()
 
 # Install the Python module so it is importable (import repositories...).
 ament_python_install_package(${PROJECT_NAME})
@@ -57,6 +89,45 @@ install(
   DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_py/${PROJECT_NAME}/"
   DESTINATION
     "lib/python${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}/site-packages/${PROJECT_NAME}"
+)
+
+# SKIP_INSTALL also omits generated headers required by packages that use these
+# interfaces in their own ROS interface definitions.
+install(
+  DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_c/${PROJECT_NAME}/"
+  DESTINATION include/${PROJECT_NAME}
+)
+install(
+  DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp/${PROJECT_NAME}/"
+  DESTINATION include/${PROJECT_NAME}
+)
+install(
+  DIRECTORY
+    "${CMAKE_CURRENT_BINARY_DIR}/rosidl_typesupport_fastrtps_c/${PROJECT_NAME}/"
+  DESTINATION include/${PROJECT_NAME}
+)
+install(
+  DIRECTORY
+    "${CMAKE_CURRENT_BINARY_DIR}/rosidl_typesupport_fastrtps_cpp/${PROJECT_NAME}/"
+  DESTINATION include/${PROJECT_NAME}
+)
+install(
+  DIRECTORY
+    "${CMAKE_CURRENT_BINARY_DIR}/rosidl_typesupport_introspection_c/${PROJECT_NAME}/"
+  DESTINATION include/${PROJECT_NAME}
+)
+install(
+  DIRECTORY
+    "${CMAKE_CURRENT_BINARY_DIR}/rosidl_typesupport_introspection_cpp/${PROJECT_NAME}/"
+  DESTINATION include/${PROJECT_NAME}
+)
+install(DIRECTORY msg/ DESTINATION share/${PROJECT_NAME}/msg)
+install(DIRECTORY srv/ DESTINATION share/${PROJECT_NAME}/srv)
+install(DIRECTORY action/ DESTINATION share/${PROJECT_NAME}/action)
+install(
+  DIRECTORY
+    "${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_type_description/${PROJECT_NAME}/"
+  DESTINATION share/${PROJECT_NAME}
 )
 
 # Install the generated C/C++ type support shared libraries that SKIP_INSTALL
@@ -118,46 +189,6 @@ install(
 rosidl_export_typesupport_targets("" ${PROJECT_NAME}__rosidl_generator_py)
 ament_export_targets(export_${PROJECT_NAME}__rosidl_generator_py)
 
-# Export the installed targets (namespace defaults to ${PROJECT_NAME}::) and
-# register them as typesupport targets so downstream `rosidl_generate_interfaces`
-# populates ${PROJECT_NAME}_TARGETS and links against them. SKIP_INSTALL omits
-# this, which breaks any package that references these interfaces in its own
-# interface files (runtime "undefined symbol" / "Could not import
-# 'rosidl_typesupport_c'" failure).
-ament_export_targets(export_${PROJECT_NAME})
-rosidl_export_typesupport_targets(__rosidl_generator_c
-  ${PROJECT_NAME}__rosidl_generator_c)
-rosidl_export_typesupport_targets(__rosidl_generator_cpp
-  ${PROJECT_NAME}__rosidl_generator_cpp)
-rosidl_export_typesupport_targets(__rosidl_typesupport_c
-  ${PROJECT_NAME}__rosidl_typesupport_c)
-rosidl_export_typesupport_targets(__rosidl_typesupport_cpp
-  ${PROJECT_NAME}__rosidl_typesupport_cpp)
-rosidl_export_typesupport_targets(__rosidl_typesupport_fastrtps_c
-  ${PROJECT_NAME}__rosidl_typesupport_fastrtps_c)
-rosidl_export_typesupport_targets(__rosidl_typesupport_fastrtps_cpp
-  ${PROJECT_NAME}__rosidl_typesupport_fastrtps_cpp)
-rosidl_export_typesupport_targets(__rosidl_typesupport_introspection_c
-  ${PROJECT_NAME}__rosidl_typesupport_introspection_c)
-rosidl_export_typesupport_targets(__rosidl_typesupport_introspection_cpp
-  ${PROJECT_NAME}__rosidl_typesupport_introspection_cpp)
-
-# The Python conversion library (lib${PROJECT_NAME}__rosidl_generator_py.so) is a
-# SEPARATE chain from the C typesupport libraries above, and SKIP_INSTALL drops its
-# install + export too. Downstream interface packages link it via the *unsuffixed*
-# ${PROJECT_NAME}_TARGETS variable; without it they fail at runtime with
-# "undefined symbol: <pkg>__msg__<type>__convert_from_py".
-# Installing it also keeps the Python extension modules from depending on build/.
-install(
-  TARGETS ${PROJECT_NAME}__rosidl_generator_py
-  EXPORT export_${PROJECT_NAME}__rosidl_generator_py
-  ARCHIVE DESTINATION lib
-  LIBRARY DESTINATION lib
-  RUNTIME DESTINATION bin
-)
-rosidl_export_typesupport_targets("" ${PROJECT_NAME}__rosidl_generator_py)
-ament_export_targets(export_${PROJECT_NAME}__rosidl_generator_py)
-
 # Install the lifecycle node programs so they are discoverable as
 # `ros2 run repositories <node>`
 install(PROGRAMS
@@ -169,6 +200,11 @@ install(PROGRAMS
   ${PROJECT_NAME}/object_model_storage.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME object_model_storage
+)
+install(PROGRAMS
+  ${PROJECT_NAME}/operation_repository.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME operation_repository
 )
 
 if(BUILD_TESTING)
@@ -187,5 +223,6 @@ ament_export_dependencies(
   rosidl_default_runtime
   builtin_interfaces
   service_msgs
+  geometry_msgs
 )
 ament_package()

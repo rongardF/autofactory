@@ -27,7 +27,7 @@
 
 """Concrete dispensing pattern executor node.
 
-Executes :class:`DispensingPattern` goals: it drives the volumetric dispenser
+Executes shared dispensing pattern goals: it drives the volumetric dispenser
 end tool, runs the pattern movements through ``movement_controller`` while
 firing feedback-timed valve/wait actions, and reports per-element and
 per-pattern dispensing metrics.
@@ -39,15 +39,6 @@ from copy import deepcopy
 from threading import Lock
 from time import monotonic, sleep
 
-from rcl_interfaces.msg import ParameterDescriptor, ParameterType, ParameterValue
-from rclpy import init, ok, shutdown
-from rclpy.action import ActionServer, CancelResponse, GoalResponse
-from rclpy.action.server import ServerGoalHandle
-from rclpy.client import Client
-from rclpy.duration import Duration
-from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
-from rclpy.time import Time
-
 from builtin_interfaces.msg import Time as RosTime
 from endtools.srv import StartDispensing, StopDispensing
 from pattern_executors.action import ExecuteDispensingPattern
@@ -56,17 +47,22 @@ from pattern_executors.model.dispensing_executor_config_dto import (
     DispensingExecutorConfigDTO,
 )
 from pattern_executors.model.pattern_executor_config_dto import PatternExecutorConfigDTO
-from pattern_executors.msg import (
-    DispensedElementMetric,
-    DispensingMovement,
-    DispensingPattern,
-    DispensingPatternMetric,
-    MovementPath,
-    PatternAction,
-)
+from pattern_executors.msg import DispensedElementMetric, DispensingPatternMetric
 from pattern_executors.util.units_converter import cc_to_m3, m3_s_to_cc_s
-
-
+from rcl_interfaces.msg import ParameterDescriptor, ParameterType, ParameterValue
+from rclpy import init, ok, shutdown
+from rclpy.action import ActionServer, CancelResponse, GoalResponse
+from rclpy.action.server import ServerGoalHandle
+from rclpy.client import Client
+from rclpy.duration import Duration
+from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
+from rclpy.time import Time
+from repositories.msg import (
+    OperationRepositoryArg,
+    OperationRepositoryDispensingMovement,
+    OperationRepositoryDispensingPattern,
+    OperationRepositoryPatternAction,
+)
 
 
 class DispensingPatternExecutor(PatternExecutor):
@@ -272,11 +268,11 @@ class DispensingPatternExecutor(PatternExecutor):
     # endregion: action callbacks
 
     # region: execution
-    def _prepare_pattern(self, pattern: DispensingPattern) -> None:
+    def _prepare_pattern(self, pattern: OperationRepositoryDispensingPattern) -> None:
         """Reconfigure the end-tool flow rate for this pattern when it differs."""
         assert self._endtool_manager is not None
 
-        target_cc_s = m3_s_to_cc_s(pattern.flowrate_m3_s)
+        target_cc_s = m3_s_to_cc_s(self._flowrate_m3_s(pattern))
         current_parameter = self._endtool_manager.get_parameter(
             self._FLOWRATE_PARAMETER_NAME
         )
@@ -316,7 +312,7 @@ class DispensingPatternExecutor(PatternExecutor):
 
     def _execute_pattern(
         self,
-        pattern: DispensingPattern,
+        pattern: OperationRepositoryDispensingPattern,
         goal_handle: ServerGoalHandle,
     ) -> DispensingPatternMetric | None:
         """Run one pattern's approach and movements, returning its metric.
@@ -367,22 +363,20 @@ class DispensingPatternExecutor(PatternExecutor):
         )
 
     def _build_approach_movement(
-        self, pattern: DispensingPattern
-    ) -> DispensingMovement:
+        self, pattern: OperationRepositoryDispensingPattern
+    ) -> OperationRepositoryDispensingMovement:
         """Build a valve-closed PTP approach movement to the pattern origin."""
-        movement = DispensingMovement()
-        path = MovementPath()
-        path.path_id = f'{pattern.pattern_id}'
-        path.motion_type = MovementPath.MOTION_TYPE_PTP
-        path.target_pose = deepcopy(pattern.start_pose)
-        movement.path = path
+        movement = OperationRepositoryDispensingMovement()
+        movement.id = pattern.id
+        movement.motion_type = OperationRepositoryDispensingMovement.MOTION_TYPE_PTP
+        movement.target_pose = deepcopy(pattern.start_pose)
         movement.actions = []
         return movement
 
     def _fire_action(
         self,
-        action: PatternAction,
-        movement: DispensingMovement,
+        action: OperationRepositoryPatternAction,
+        movement: OperationRepositoryDispensingMovement,
         motion_stamp: RosTime,
     ) -> None:
         """Execute a single pattern action (open/close valve or wait).
@@ -391,15 +385,16 @@ class DispensingPatternExecutor(PatternExecutor):
             transition at. Forwarded to the dispenser so it resolves the TCP pose
             at that instant rather than whenever the service call happens to run.
         """
-        if action.type == PatternAction.TYPE_OPEN_VALVE:
+        if action.type == OperationRepositoryPatternAction.TYPE_OPEN_VALVE:
             self._open_valve(movement, motion_stamp)
-        elif action.type == PatternAction.TYPE_CLOSE_VALVE:
+        elif action.type == OperationRepositoryPatternAction.TYPE_CLOSE_VALVE:
             self._close_valve(movement, motion_stamp)
-        elif action.type == PatternAction.TYPE_WAIT:
-            if action.wait_time_s > 0.0:
+        elif action.type == OperationRepositoryPatternAction.TYPE_WAIT:
+            wait_time_s = self._wait_time_s(action)
+            if wait_time_s > 0.0:
                 # Node clock so the wait honours use_sim_time.
                 completed = self.get_clock().sleep_for(
-                    Duration(seconds=action.wait_time_s)
+                    Duration(seconds=wait_time_s)
                 )
                 if not completed:
                     raise RuntimeError(
@@ -408,8 +403,28 @@ class DispensingPatternExecutor(PatternExecutor):
         else:
             raise RuntimeError(f"Unknown pattern action type '{action.type}'.")
 
+    def _wait_time_s(self, action: OperationRepositoryPatternAction) -> float:
+        """Return the required non-negative wait duration from named arguments."""
+        for argument in action.action_args:
+            if argument.argument_name == 'wait_time_s':
+                if argument.argument_type != OperationRepositoryArg.TYPE_FLOAT:
+                    raise RuntimeError('Wait action wait_time_s argument must be a float.')
+                if argument.argument_value_float < 0.0:
+                    raise RuntimeError('Wait action has a negative wait_time_s argument.')
+                return argument.argument_value_float
+        raise RuntimeError('Wait action is missing the wait_time_s argument.')
+
+    def _flowrate_m3_s(self, pattern: OperationRepositoryDispensingPattern) -> float:
+        """Return the required float flow rate from named pattern arguments."""
+        for argument in pattern.pattern_args:
+            if argument.argument_name == 'flowrate_m3_s':
+                if argument.argument_type != OperationRepositoryArg.TYPE_FLOAT:
+                    raise RuntimeError('Pattern flowrate_m3_s argument must be a float.')
+                return argument.argument_value_float
+        raise RuntimeError('Pattern is missing the flowrate_m3_s argument.')
+
     def _open_valve(
-        self, movement: DispensingMovement, motion_stamp: RosTime
+        self, movement: OperationRepositoryDispensingMovement, motion_stamp: RosTime
     ) -> None:
         """Start dispensing and record the open element's originating path id."""
         if self._dispense_start_client is None:
@@ -424,10 +439,10 @@ class DispensingPatternExecutor(PatternExecutor):
             raise RuntimeError('Failed to start dispensing.')
 
         with self._metrics_lock:
-            self._current_open_element_id = movement.path.path_id
+            self._current_open_element_id = movement.id
 
     def _close_valve(
-        self, movement: DispensingMovement, motion_stamp: RosTime
+        self, movement: OperationRepositoryDispensingMovement, motion_stamp: RosTime
     ) -> None:
         """Stop dispensing and record the completed element metric."""
         if self._dispense_stop_client is None:
@@ -445,7 +460,7 @@ class DispensingPatternExecutor(PatternExecutor):
         with self._metrics_lock:
             element_metric = DispensedElementMetric()
             element_metric.element_id = (
-                self._current_open_element_id or movement.path.path_id
+                self._current_open_element_id or movement.id
             )
             element_metric.dispensed_volume_m3 = cc_to_m3(response.dispensed_volume)
             element_metric.dispensing_time_s = response.duration_seconds
@@ -454,13 +469,13 @@ class DispensingPatternExecutor(PatternExecutor):
 
     def _build_pattern_metric(
         self,
-        pattern: DispensingPattern,
+        pattern: OperationRepositoryDispensingPattern,
         element_metrics: list[DispensedElementMetric],
         pattern_execution_time_s: float,
     ) -> DispensingPatternMetric:
         """Aggregate element metrics into one pattern metric."""
         pattern_metric = DispensingPatternMetric()
-        pattern_metric.pattern_id = pattern.pattern_id
+        pattern_metric.pattern_id = pattern.id
         pattern_metric.dispensed_volume_m3 = sum(
             element.dispensed_volume_m3 for element in element_metrics
         )
@@ -494,30 +509,33 @@ class DispensingPatternExecutor(PatternExecutor):
             return 'goal contains no patterns'
 
         valid_types = {
-            PatternAction.TYPE_OPEN_VALVE,
-            PatternAction.TYPE_CLOSE_VALVE,
-            PatternAction.TYPE_WAIT,
+            OperationRepositoryPatternAction.TYPE_OPEN_VALVE,
+            OperationRepositoryPatternAction.TYPE_CLOSE_VALVE,
+            OperationRepositoryPatternAction.TYPE_WAIT,
         }
-        valid_timings = {PatternAction.TIMING_START, PatternAction.TIMING_END}
+        valid_timings = {
+            OperationRepositoryPatternAction.TIMING_START,
+            OperationRepositoryPatternAction.TIMING_END,
+        }
 
         for pattern in goal.patterns:
             reference_position = pattern.start_pose.pose.position
             for movement in pattern.movements:
-                movement_position = movement.path.target_pose.pose.position
+                movement_position = movement.target_pose.pose.position
                 has_wait = False
                 for action in movement.actions:
                     if action.type not in valid_types:
                         return f"invalid action type '{action.type}'"
                     if action.timing not in valid_timings:
                         return f"invalid action timing '{action.timing}'"
-                    if action.type == PatternAction.TYPE_WAIT:
+                    if action.type == OperationRepositoryPatternAction.TYPE_WAIT:
                         has_wait = True
                 if has_wait and not self._positions_equal(
                     reference_position, movement_position
                 ):
                     return (
-                        f"wait action on non-zero-length movement "
-                        f"'{movement.path.path_id}'"
+                        f'wait action on non-zero-length movement '
+                        f"'{movement.id}'"
                     )
                 reference_position = movement_position
         return None

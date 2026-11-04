@@ -3,6 +3,8 @@
     "schema_version": "1.0",
     "assembly_number": "12345",
     "assembly_revision": "1.0",
+    "product_number": "12345",
+    "product_revision": "1.0",
     "created_at": "2024-06-05T12:00:00Z",
     "updated_at": "2024-06-05T12:00:00Z",
     "created_by": "user123",
@@ -11,29 +13,20 @@
     "operations": [
         {
             "id": "dab06081-0e24-4583-9f33-06d3c26b69f7",
-            "schema_version": "1.0",
             "operation_type": "dispensing",
             "operation_number": "0001",
             "description": "Dispensing thermal putty",
-            "start_state": {
-                "assembly_number": "ABC777/1",
-                "assembly_revision": "1.2",
-                "model_ref": "78c630b7-730a-45ac-b57c-e01a43737b31"
-            },
-            "end_state": {
-                "assembly_number": "ABC777/1",
-                "assembly_revision": "1.2",
-                "model_ref": "78c630b7-730a-45ac-b57c-e01a43737b31"
-            },
+            "start_assembly_model_id": "78c630b7-730a-45ac-b57c-e01a43737b31",
+            "end_assembly_model_id": "78c630b7-730a-45ac-b57c-e01a43737b31",
             "material": {
-                "product_code": "material-123",
+                "product_number": "material-123",
                 "product_revision": "a1"
             },
-            "operation_args": {
-                "valid_endtools": [
-                    "volumetric_dispenser"
-                ]
+            "end_tool": {
+                "product_number": "volumetric_dispenser",
+                "product_revision": "a1"
             },
+            "operation_args": null,
             "patterns": [
                 {
                     "id": "37cc1b6d-2f65-4120-9a29-b680f3abc71a",
@@ -51,7 +44,7 @@
                     "movements": [
                         {
                             "id": "5101f435-ea4f-46c1-bd41-4bb3c6362037",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.17,
                                 -0.32,
@@ -69,18 +62,18 @@
                                 {
                                     "type": "open_valve",
                                     "timing": "start",
-                                    "action_args": {}
+                                    "action_args": null
                                 },
                                 {
                                     "type": "close_valve",
                                     "timing": "end",
-                                    "action_args": {}
+                                    "action_args": null
                                 }
                             ]
                         },
                         {
                             "id": "079df1d4-b2b9-413e-9b6b-9d8960381a08",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.167,
                                 -0.32,
@@ -98,7 +91,7 @@
                         },
                         {
                             "id": "d1f3c8e2-4b5a-4f9e-8c6b-1e2f3c4d5e6f",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.17,
                                 -0.32,
@@ -116,7 +109,7 @@
                         },
                         {
                             "id": "97f11373-b01b-453b-a4fd-3142a2044eb0",
-                            "motion_type": "ptp",
+                            "motion_type": "PTP",
                             "target_pose_m": [
                                 0.17,
                                 -0.33,
@@ -134,7 +127,7 @@
                         },
                         {
                             "id": "b13c2e94-c4a5-4b4a-a6fa-c23d7e44b4e1",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.11,
                                 -0.33,
@@ -152,18 +145,18 @@
                                 {
                                     "type": "open_valve",
                                     "timing": "start",
-                                    "action_args": {}
+                                    "action_args": null
                                 },
                                 {
                                     "type": "close_valve",
                                     "timing": "end",
-                                    "action_args": {}
+                                    "action_args": null
                                 }
                             ]
                         },
                         {
                             "id": "1b51cedc-cdd5-4931-8ddc-d4e2e02c3add",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.113,
                                 -0.33,
@@ -181,7 +174,7 @@
                         },
                         {
                             "id": "47dece87-8914-4976-9459-bc08a73cc19e",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.11,
                                 -0.33,
@@ -199,7 +192,7 @@
                         },
                         {
                             "id": "7b16f17d-7913-410b-aa63-744da6248038",
-                            "motion_type": "ptp",
+                            "motion_type": "PTP",
                             "target_pose_m": [
                                 0.11,
                                 -0.34,
@@ -217,7 +210,7 @@
                         },
                         {
                             "id": "4e372941-a1ad-4fcb-8dd5-3d16a1894134",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.17,
                                 -0.34,
@@ -235,18 +228,18 @@
                                 {
                                     "type": "open_valve",
                                     "timing": "start",
-                                    "action_args": {}
+                                    "action_args": null
                                 },
                                 {
                                     "type": "close_valve",
                                     "timing": "end",
-                                    "action_args": {}
+                                    "action_args": null
                                 }
                             ]
                         },
                         {
                             "id": "94f4526f-456d-4c89-9d0a-02a703251db6",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.167,
                                 -0.34,
@@ -264,7 +257,7 @@
                         },
                         {
                             "id": "b352664b-5703-4fce-8989-9492797d7f5f",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.17,
                                 -0.34,
@@ -298,7 +291,7 @@
                     "movements": [
                         {
                             "id": "88e5d86c-bd1e-4ad3-a369-0f7167eb89a5",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.17,
                                 -0.36,
@@ -316,18 +309,18 @@
                                 {
                                     "type": "open_valve",
                                     "timing": "start",
-                                    "action_args": {}
+                                    "action_args": null
                                 },
                                 {
                                     "type": "close_valve",
                                     "timing": "end",
-                                    "action_args": {}
+                                    "action_args": null
                                 }
                             ]
                         },
                         {
                             "id": "9f8ee4d7-37be-48fe-88fb-fd787bc8a4fa",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.167,
                                 -0.36,
@@ -345,7 +338,7 @@
                         },
                         {
                             "id": "72a0bf77-ab87-42e1-bb6e-cf4d11cd5183",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.17,
                                 -0.36,
@@ -363,7 +356,7 @@
                         },
                         {
                             "id": "48bcef0d-a6d9-4ed8-be96-0c7494d2504a",
-                            "motion_type": "ptp",
+                            "motion_type": "PTP",
                             "target_pose_m": [
                                 0.17,
                                 -0.37,
@@ -381,7 +374,7 @@
                         },
                         {
                             "id": "c4e304ae-750e-4b20-a5c3-2cde113fdd36",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.11,
                                 -0.37,
@@ -399,18 +392,18 @@
                                 {
                                     "type": "open_valve",
                                     "timing": "start",
-                                    "action_args": {}
+                                    "action_args": null
                                 },
                                 {
                                     "type": "close_valve",
                                     "timing": "end",
-                                    "action_args": {}
+                                    "action_args": null
                                 }
                             ]
                         },
                         {
                             "id": "014596eb-f04e-4c38-a6e7-91567b911c8b",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.113,
                                 -0.37,
@@ -428,7 +421,7 @@
                         },
                         {
                             "id": "e424019c-c819-49bf-b9a9-c24c807f7ee2",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.11,
                                 -0.37,
@@ -446,7 +439,7 @@
                         },
                         {
                             "id": "2aa56653-51fb-479b-9208-a0da46225f3a",
-                            "motion_type": "ptp",
+                            "motion_type": "PTP",
                             "target_pose_m": [
                                 0.11,
                                 -0.38,
@@ -464,7 +457,7 @@
                         },
                         {
                             "id": "9d13efba-5fbb-4493-9be7-b05117832eb7",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.17,
                                 -0.38,
@@ -482,18 +475,18 @@
                                 {
                                     "type": "open_valve",
                                     "timing": "start",
-                                    "action_args": {}
+                                    "action_args": null
                                 },
                                 {
                                     "type": "close_valve",
                                     "timing": "end",
-                                    "action_args": {}
+                                    "action_args": null
                                 }
                             ]
                         },
                         {
                             "id": "b586811f-d45f-4f2f-81a6-29aa5a5ab097",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.167,
                                 -0.38,
@@ -511,7 +504,7 @@
                         },
                         {
                             "id": "222b3b04-3e5e-428d-b126-fc667e168840",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.17,
                                 -0.38,
@@ -545,7 +538,7 @@
                     "movements": [
                         {
                             "id": "a218d2f2-72c5-4d77-93c1-ea728f7ccad7",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.225,
                                 -0.31,
@@ -563,7 +556,7 @@
                                 {
                                     "type": "open_valve",
                                     "timing": "start",
-                                    "action_args": {}
+                                    "action_args": null
                                 },
                                 {
                                     "type": "wait",
@@ -575,13 +568,13 @@
                                 {
                                     "type": "close_valve",
                                     "timing": "end",
-                                    "action_args": {}
+                                    "action_args": null
                                 }
                             ]
                         },
                         {
                             "id": "43ad7cdc-ff5b-4335-9d59-0622260a3c8d",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.228,
                                 -0.31,
@@ -599,7 +592,7 @@
                         },
                         {
                             "id": "5344b835-2b42-42a4-9539-a161487b7764",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.222,
                                 -0.31,
@@ -617,7 +610,7 @@
                         },
                         {
                             "id": "28fa9474-a8c0-4e0d-823b-09a328903477",
-                            "motion_type": "ptp",
+                            "motion_type": "PTP",
                             "target_pose_m": [
                                 0.225,
                                 -0.33,
@@ -635,7 +628,7 @@
                         },
                         {
                             "id": "16c86a27-4161-43ba-8e6a-08b928cba31f",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.225,
                                 -0.33,
@@ -653,7 +646,7 @@
                                 {
                                     "type": "open_valve",
                                     "timing": "start",
-                                    "action_args": {}
+                                    "action_args": null
                                 },
                                 {
                                     "type": "wait",
@@ -665,13 +658,13 @@
                                 {
                                     "type": "close_valve",
                                     "timing": "end",
-                                    "action_args": {}
+                                    "action_args": null
                                 }
                             ]
                         },
                         {
                             "id": "2e7799a2-fc02-4ea1-8b80-2ef5040b33eb",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.228,
                                 -0.33,
@@ -689,7 +682,7 @@
                         },
                         {
                             "id": "27a1ad2b-3e7e-4aee-80cf-beec6288f964",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.222,
                                 -0.33,
@@ -707,7 +700,7 @@
                         },
                         {
                             "id": "3fa14d4d-0a16-4141-a912-a1c3dca63926",
-                            "motion_type": "ptp",
+                            "motion_type": "PTP",
                             "target_pose_m": [
                                 0.225,
                                 -0.35,
@@ -725,7 +718,7 @@
                         },
                         {
                             "id": "93991ab6-b430-4ea9-af65-ff2089e82c60",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.225,
                                 -0.35,
@@ -743,7 +736,7 @@
                                 {
                                     "type": "open_valve",
                                     "timing": "start",
-                                    "action_args": {}
+                                    "action_args": null
                                 },
                                 {
                                     "type": "wait",
@@ -755,13 +748,13 @@
                                 {
                                     "type": "close_valve",
                                     "timing": "end",
-                                    "action_args": {}
+                                    "action_args": null
                                 }
                             ]
                         },
                         {
                             "id": "6e36a43e-ab0c-46fc-a56f-968df30871f6",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.228,
                                 -0.35,
@@ -779,7 +772,7 @@
                         },
                         {
                             "id": "73202634-273e-48ce-92b7-2560c72a0e7b",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.222,
                                 -0.35,
@@ -797,7 +790,7 @@
                         },
                         {
                             "id": "8bfa7c4e-b611-4fbc-a84e-cfa2dbef9d11",
-                            "motion_type": "ptp",
+                            "motion_type": "PTP",
                             "target_pose_m": [
                                 0.225,
                                 -0.37,
@@ -815,7 +808,7 @@
                         },
                         {
                             "id": "433f6195-ce4d-4295-8772-50ded03e43b3",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.225,
                                 -0.37,
@@ -833,7 +826,7 @@
                                 {
                                     "type": "open_valve",
                                     "timing": "start",
-                                    "action_args": {}
+                                    "action_args": null
                                 },
                                 {
                                     "type": "wait",
@@ -845,13 +838,13 @@
                                 {
                                     "type": "close_valve",
                                     "timing": "end",
-                                    "action_args": {}
+                                    "action_args": null
                                 }
                             ]
                         },
                         {
                             "id": "a4ab2124-4761-4113-b973-2e5d811506b9",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.228,
                                 -0.37,
@@ -869,7 +862,7 @@
                         },
                         {
                             "id": "1a56af68-fb44-431a-ab58-2bad06916745",
-                            "motion_type": "lin",
+                            "motion_type": "LIN",
                             "target_pose_m": [
                                 0.222,
                                 -0.37,

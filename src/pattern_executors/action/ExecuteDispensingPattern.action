@@ -1,4 +1,4 @@
-pattern_executors/DispensingPattern[] patterns
+repositories/OperationRepositoryDispensingPattern[] patterns
 string operation_id
 ---
 bool success

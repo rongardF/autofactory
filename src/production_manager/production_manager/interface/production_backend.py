@@ -29,6 +29,7 @@ from abc import ABC, abstractmethod
 
 from production_manager.model.production_data_dto import ProductionDataDTO
 from production_manager.model.result_dto import ResultDTO
+from repositories.enums.operation_repository import SCHEMA_VERSION
 
 
 class ProductionBackend(ABC):
@@ -39,6 +40,7 @@ class ProductionBackend(ABC):
         product_revision: str,
         serial_number: str,
         station_id: str,
+        schema_version: str = SCHEMA_VERSION,
     ) -> ProductionDataDTO:
         raise NotImplementedError
 

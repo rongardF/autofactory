@@ -54,7 +54,7 @@ ros2 lifecycle set /production_manager activate
 
 ## Assembly JSON
 
-The file is loaded as a JSON object and is not parsed into a fixed model. Its root `schema_version` controls interpretation of root-level and operation-level fields. Version `1.0` is currently supported. The root must contain UUID4 `id`, string `product_number` and `product_revision`, and a list of operation objects. Each operation must contain UUID4 `id` and `start_assembly_model_id`. Other fields are ignored.
+The file is loaded as a JSON object and is not parsed into a fixed model. Its root `schema_version` must equal the schema version supported by this software release (currently `1.0`, defined in `repositories`). A missing or unsupported value causes configuration to fail; the version selects no alternate parsing branches. The root must contain UUID4 `id`, string `product_number` and `product_revision`, and a list of operation objects. Each operation must contain UUID4 `id` and `start_assembly_model_id`. Other fields are ignored. Cloud production-data requests include the supported version as a `schema_version` query parameter.
 
 `start_assembly_model_id` identifies the product model before the selected operation. The operation's internal `patterns` are not read.
 

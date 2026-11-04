@@ -39,6 +39,7 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
 
 find_package(geometry_msgs REQUIRED)
 find_package(movement_controller REQUIRED)
+find_package(repositories REQUIRED)
 
 get_filename_component(
   MOVEMENT_CONTROLLER_PREFIX
@@ -48,16 +49,16 @@ get_filename_component(
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/ExecuteDispensingPattern.action"
-  "msg/PatternAction.msg"
-  "msg/MovementPath.msg"
-  "msg/DispensingMovement.msg"
-  "msg/DispensingPattern.msg"
   "msg/DispensedElementMetric.msg"
   "msg/DispensingPatternMetric.msg"
-  DEPENDENCIES geometry_msgs
+  DEPENDENCIES geometry_msgs repositories
   SKIP_INSTALL
 )
-
+ament_index_register_resource(
+  "rosidl_interfaces"
+  CONTENT
+    "action/ExecuteDispensingPattern.action\nmsg/DispensedElementMetric.msg\nmsg/DispensingPatternMetric.msg"
+)
 ament_python_install_package(${PROJECT_NAME})
 
 install(
@@ -136,6 +137,7 @@ ament_export_dependencies(
   rosidl_default_runtime
   geometry_msgs
   movement_controller
+  repositories
   action_msgs
 )
 ament_package()

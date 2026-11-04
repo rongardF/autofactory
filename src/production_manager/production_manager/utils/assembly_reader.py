@@ -24,22 +24,18 @@
 # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
-"""Read selected assembly fields without binding the file to a DTO.
-
-The root schema version governs root fields and operation-level fields.
-Operation schemas and patterns are intentionally not interpreted here.
-"""
+"""Read selected fields from the supported assembly JSON format."""
 
 import json
 from pathlib import Path
 from typing import Any
 
-from production_manager.enumerator.schema_version_enum import SchemaVersionEnum
 from production_manager.exception import (
     AssemblyFileException,
     UnsupportedSchemaVersionException,
 )
 from production_manager.utils.uuid_validator import is_uuid4
+from repositories.enums.operation_repository import SCHEMA_VERSION
 
 
 def load_assembly_file(path: str) -> dict[str, Any]:
@@ -47,21 +43,23 @@ def load_assembly_file(path: str) -> dict[str, Any]:
         with Path(path).open(encoding='utf-8') as file:
             assembly = json.load(file)
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise AssemblyFileException(f'Unable to read assembly JSON file {path!r}: {error}') from error
+        raise AssemblyFileException(
+            f'Unable to read assembly JSON file {path!r}: {error}'
+        ) from error
     if not isinstance(assembly, dict):
         raise AssemblyFileException('Assembly JSON root must be an object.')
     return assembly
 
 
-def get_schema_version(assembly: dict[str, Any]) -> SchemaVersionEnum:
+def validate_schema_version(assembly: dict[str, Any]) -> None:
+    """Require the assembly to use the schema supported by this release."""
     if 'schema_version' not in assembly:
         raise AssemblyFileException('Assembly is missing root key "schema_version".')
-    try:
-        return SchemaVersionEnum(assembly['schema_version'])
-    except (TypeError, ValueError) as error:
+    if assembly['schema_version'] != SCHEMA_VERSION:
         raise UnsupportedSchemaVersionException(
-            f'Unsupported assembly schema_version: {assembly["schema_version"]!r}.'
-        ) from error
+            f'Unsupported assembly schema_version: {assembly["schema_version"]!r}; '
+            f'expected {SCHEMA_VERSION!r}.'
+        )
 
 
 def _required_string(mapping: dict[str, Any], key: str, context: str) -> str:
@@ -72,62 +70,56 @@ def _required_string(mapping: dict[str, Any], key: str, context: str) -> str:
 
 
 def get_assembly_id(assembly: dict[str, Any]) -> str:
-    match get_schema_version(assembly):
-        case SchemaVersionEnum.V1_0:
-            value = _required_string(assembly, 'id', 'Assembly')
-            if not is_uuid4(value):
-                raise AssemblyFileException('Assembly key "id" must be a valid UUID4.')
-            return value
+    validate_schema_version(assembly)
+    value = _required_string(assembly, 'id', 'Assembly')
+    if not is_uuid4(value):
+        raise AssemblyFileException('Assembly key "id" must be a valid UUID4.')
+    return value
 
 
 def get_product_number(assembly: dict[str, Any]) -> str:
-    match get_schema_version(assembly):
-        case SchemaVersionEnum.V1_0:
-            return _required_string(assembly, 'product_number', 'Assembly')
+    validate_schema_version(assembly)
+    return _required_string(assembly, 'product_number', 'Assembly')
 
 
 def get_product_revision(assembly: dict[str, Any]) -> str:
-    match get_schema_version(assembly):
-        case SchemaVersionEnum.V1_0:
-            return _required_string(assembly, 'product_revision', 'Assembly')
+    validate_schema_version(assembly)
+    return _required_string(assembly, 'product_revision', 'Assembly')
 
 
 def get_operations(assembly: dict[str, Any]) -> list[dict[str, Any]]:
-    match get_schema_version(assembly):
-        case SchemaVersionEnum.V1_0:
-            operations = assembly.get('operations')
-            if not isinstance(operations, list) or not all(
-                isinstance(operation, dict) for operation in operations
-            ):
-                raise AssemblyFileException('Assembly key "operations" must be a list of objects.')
-            return operations
+    validate_schema_version(assembly)
+    operations = assembly.get('operations')
+    if not isinstance(operations, list) or not all(
+        isinstance(operation, dict) for operation in operations
+    ):
+        raise AssemblyFileException('Assembly key "operations" must be a list of objects.')
+    return operations
 
 
 def find_operation(assembly: dict[str, Any], operation_id: str) -> dict[str, Any] | None:
-    match get_schema_version(assembly):
-        case SchemaVersionEnum.V1_0:
-            for operation in get_operations(assembly):
-                if operation.get('id') == operation_id:
-                    return operation
-            return None
+    validate_schema_version(assembly)
+    for operation in get_operations(assembly):
+        if operation.get('id') == operation_id:
+            return operation
+    return None
 
 
 def get_operation_start_model_id(
     assembly: dict[str, Any],
     operation: dict[str, Any],
 ) -> str:
-    match get_schema_version(assembly):
-        case SchemaVersionEnum.V1_0:
-            value = _required_string(operation, 'start_assembly_model_id', 'Operation')
-            if not is_uuid4(value):
-                raise AssemblyFileException(
-                    'Operation key "start_assembly_model_id" must be a valid UUID4.'
-                )
-            return value
+    validate_schema_version(assembly)
+    value = _required_string(operation, 'start_assembly_model_id', 'Operation')
+    if not is_uuid4(value):
+        raise AssemblyFileException(
+            'Operation key "start_assembly_model_id" must be a valid UUID4.'
+        )
+    return value
 
 
 def validate_assembly(assembly: dict[str, Any]) -> None:
-    get_schema_version(assembly)
+    validate_schema_version(assembly)
     get_assembly_id(assembly)
     get_product_number(assembly)
     get_product_revision(assembly)
