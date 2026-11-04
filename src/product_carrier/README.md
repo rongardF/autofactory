@@ -97,7 +97,7 @@ With `simulated:=true` a `ros_gz_bridge` is started for:
 Links: `conveyor_origin` (meshes, inertial), `carrier_base`, `carrier` (attach objects here).
 
 Joints: `<parent>_conveyor_joint` (fixed), `origin_base_joint` (fixed), `base_carrier_joint`:
-- `simulated=true`: prismatic along X of `carrier_base`, range `[-conveyor_length, 0]`, starts at 0 and moves in -X, passive (no controller). Its state is published by the Gazebo JointStatePublisher system and bridged to `/joint_states`.
+- `simulated=true`: prismatic along X of `carrier_base`, range `[-conveyor_length, 0]`, starts at 0 and moves in -X. Its state is published by the Gazebo JointStatePublisher system and bridged to `/joint_states`. A Gazebo JointPositionController drives it from the default topic `/model/<model>/joint/<tf_prefix>base_carrier_joint/0/cmd_pos` (`gz.msgs.Double`, metres; not bridged to ROS), so it can be moved with the Gazebo GUI "Joint Position Controller" plugin or `gz topic`. Gains are tuned for a light (~2 kg) product welded to `carrier`.
 - `simulated=false`: fixed at `-conveyor_length`.
 
 ## SRDF macro (`srdf/conveyor.srdf.xacro`)
