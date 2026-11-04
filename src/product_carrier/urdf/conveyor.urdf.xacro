@@ -1,0 +1,160 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="conveyor">
+
+  <xacro:property name="conveyor_model_base" value="$(find product_carrier)/model/conveyor"/>
+
+  <!--
+    Conveyor line that carries products into and out of the robot workplace.
+
+    Links:
+      ${tf_prefix}conveyor_origin  conveyor body (visual, collision, inertial)
+      ${tf_prefix}carrier_base     start of the carrier travel (no geometry)
+      ${tf_prefix}carrier          moving carrier; objects are attached to this link
+
+    Joints:
+      ${tf_prefix}${parent}_conveyor_joint  fixed, parent -> conveyor_origin (mount pose)
+      ${tf_prefix}origin_base_joint         fixed, conveyor_origin -> carrier_base
+      ${tf_prefix}base_carrier_joint        carrier_base -> carrier
+          simulated=true : prismatic along X, range [-conveyor_length, 0], starts at 0 (moves in -X)
+          simulated=false: fixed at -conveyor_length
+
+    Arguments:
+      parent            link the conveyor is mounted on (prefixed with tf_prefix)
+      simulated         add Gazebo-only elements (presence lidar, joint state publisher)
+      mount_origin_xyz  position of conveyor_origin relative to parent
+      mount_origin_rpy  orientation of conveyor_origin relative to parent
+      conveyor_length   carrier travel length [m]
+      update_rate_hz    presence lidar update rate [Hz]
+      tf_prefix         prefix applied to every link, joint and Gazebo topic
+
+    Gazebo topics (simulated=true):
+      ${tf_prefix}conveyor/presence_sensor  gz.msgs.LaserScan
+      ${tf_prefix}conveyor/joint_state      gz.msgs.Model (base_carrier_joint only)
+  -->
+  <xacro:macro name="conveyor" params="
+    parent
+    simulated:=true
+    mount_origin_xyz:='0 0 0'
+    mount_origin_rpy:='0 0 0'
+    conveyor_length:=0.6
+    update_rate_hz:=10.0
+    tf_prefix:=''">
+
+    <!-- PLACEHOLDER values, to be replaced with measured ones -->
+    <xacro:property name="origin_base_xyz" value="1.051 0.3 0.84"/>
+    <xacro:property name="origin_base_rpy" value="0 0 0"/>
+    <!-- presence lidar: outside the conveyor body, ray (+X of the sensor) up to +Z path -->
+    <xacro:property name="presence_sensor_pose" value="0.1 0.08 0.816 0 ${-pi/2.0} 0"/>
+    <xacro:property name="presence_sensor_range" value="0.05"/>
+    <xacro:property name="carrier_effort" value="1000.0"/>
+    <xacro:property name="carrier_velocity" value="0.5"/>
+
+    <link name="${tf_prefix}conveyor_origin">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="file://${conveyor_model_base}/meshes/visual.dae"/>
+        </geometry>
+        <material name="conveyor_grey">
+          <color rgba="0.5 0.5 0.5 1"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="file://${conveyor_model_base}/meshes/collision.stl"/>
+        </geometry>
+      </collision>
+      <!-- PLACEHOLDER inertial estimate -->
+      <inertial>
+        <origin xyz="0 0 0.4" rpy="0 0 0"/>
+        <mass value="50.0"/>
+        <inertia ixx="1.0" ixy="0" ixz="0" iyy="1.0" iyz="0" izz="1.0"/>
+      </inertial>
+    </link>
+
+    <joint name="${tf_prefix}${parent}_conveyor_joint" type="fixed">
+      <parent link="${tf_prefix}${parent}"/>
+      <child link="${tf_prefix}conveyor_origin"/>
+      <origin xyz="${mount_origin_xyz}" rpy="${mount_origin_rpy}"/>
+    </joint>
+
+    <link name="${tf_prefix}carrier_base"/>
+
+    <joint name="${tf_prefix}origin_base_joint" type="fixed">
+      <parent link="${tf_prefix}conveyor_origin"/>
+      <child link="${tf_prefix}carrier_base"/>
+      <origin xyz="${origin_base_xyz}" rpy="${origin_base_rpy}"/>
+    </joint>
+
+    <!-- Tiny inertial so the link is not dropped by sdformat on a non-fixed joint -->
+    <link name="${tf_prefix}carrier">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="0.001"/>
+        <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6"/>
+      </inertial>
+    </link>
+
+    <xacro:if value="${simulated}">
+      <joint name="${tf_prefix}base_carrier_joint" type="prismatic">
+        <parent link="${tf_prefix}carrier_base"/>
+        <child link="${tf_prefix}carrier"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="${-conveyor_length}" upper="0.0" effort="${carrier_effort}" velocity="${carrier_velocity}"/>
+      </joint>
+    </xacro:if>
+    <xacro:unless value="${simulated}">
+      <joint name="${tf_prefix}base_carrier_joint" type="fixed">
+        <parent link="${tf_prefix}carrier_base"/>
+        <child link="${tf_prefix}carrier"/>
+        <origin xyz="${-conveyor_length} 0 0" rpy="0 0 0"/>
+      </joint>
+    </xacro:unless>
+
+    <xacro:if value="${simulated}">
+      <!-- Single-ray presence sensor at the workplace slot; any return within range means a product is in place -->
+      <gazebo reference="${tf_prefix}conveyor_origin">
+        <sensor name="${tf_prefix}conveyor_presence_sensor" type="gpu_lidar">
+          <pose>${presence_sensor_pose}</pose>
+          <always_on>true</always_on>
+          <update_rate>${update_rate_hz}</update_rate>
+          <visualize>true</visualize>
+          <topic>${tf_prefix}conveyor/presence_sensor</topic>
+          <frame_id>${tf_prefix}conveyor_origin</frame_id>
+          <lidar>
+            <scan>
+              <horizontal>
+                <samples>1</samples>
+                <resolution>1</resolution>
+                <min_angle>0</min_angle>
+                <max_angle>0</max_angle>
+              </horizontal>
+              <vertical>
+                <samples>1</samples>
+                <resolution>1</resolution>
+                <min_angle>0</min_angle>
+                <max_angle>0</max_angle>
+              </vertical>
+            </scan>
+            <range>
+              <min>0.001</min>
+              <max>${presence_sensor_range}</max>
+              <resolution>0.001</resolution>
+            </range>
+          </lidar>
+        </sensor>
+      </gazebo>
+
+      <gazebo>
+        <plugin filename="gz-sim-joint-state-publisher-system" name="gz::sim::systems::JointStatePublisher">
+          <joint_name>${tf_prefix}base_carrier_joint</joint_name>
+          <topic>${tf_prefix}conveyor/joint_state</topic>
+        </plugin>
+      </gazebo>
+    </xacro:if>
+
+  </xacro:macro>
+
+</robot>
