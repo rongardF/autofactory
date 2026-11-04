@@ -1,0 +1,9 @@
+# First tag memory address to write.
+uint32 start_address
+# Bytes to write (1..248); the write length is len(data).
+uint8[] data
+---
+# True if the write succeeded.
+bool success
+# Human-readable reason when success is false; empty otherwise.
+string error_message

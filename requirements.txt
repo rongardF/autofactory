@@ -17,3 +17,6 @@ typing_extensions==4.16.0
 
 # Mesh processing for MoveIt planning-scene objects.
 trimesh==4.4.3
+
+# ── Serial communication ───────────────────────────────────────────────────
+pyserial==3.5

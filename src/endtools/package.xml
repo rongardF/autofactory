@@ -35,6 +35,8 @@
   <exec_depend>ros_gz_interfaces</exec_depend>
   <exec_depend>xacro</exec_depend>
   <exec_depend>repositories</exec_depend>
+  <!-- Gazebo RFID tag plugin (rfid_sim_systems) used by the tool models -->
+  <exec_depend>rfid_scanner</exec_depend>
 
   <!-- Launch runtime -->
   <exec_depend>launch</exec_depend>

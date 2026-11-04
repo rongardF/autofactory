@@ -17,7 +17,13 @@
         "python.defaultInterpreterPath": "/opt/venv/bin/python3",
         "python.analysis.extraPaths": [
           "${workspaceFolder}/install/lib/python3.12/site-packages",
-          "${workspaceFolder}/install/lib/python3/site-packages"
+          "${workspaceFolder}/install/lib/python3/site-packages",
+          "/opt/ros/jazzy/lib/python3.12/site-packages",
+          "/opt/ros/jazzy/opt/gz_sim_vendor/lib/python",
+          "/opt/ros/jazzy/opt/sdformat_vendor/lib/python",
+          "/opt/ros/jazzy/opt/gz_transport_vendor/lib/python",
+          "/opt/ros/jazzy/opt/gz_msgs_vendor/lib/python",
+          "/opt/ros/jazzy/opt/gz_math_vendor/lib/python"
         ],
         "editor.formatOnSave": true,
         "editor.rulers": [
