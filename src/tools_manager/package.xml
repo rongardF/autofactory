@@ -20,7 +20,7 @@
   <!-- Interface field dependencies (actions require action_msgs) -->
   <depend>action_msgs</depend>
   <depend>endtools</depend>
-  <depend>rfid_sim</depend>
+  <depend>rfid_scanner</depend>
 
   <!-- Python runtime -->
   <exec_depend>rclpy</exec_depend>

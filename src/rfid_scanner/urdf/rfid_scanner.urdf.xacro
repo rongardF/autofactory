@@ -1,0 +1,154 @@
+<?xml version="1.0"?>
+<!--
+  Copyright (c) 2026, Autofactory
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+  1. Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
+  2. Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+  3. Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from
+     this software without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  POSSIBILITY OF SUCH DAMAGE.
+-->
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="rfid_scanner">
+
+  <xacro:property name="rfid_scanner_model_base" value="$(find rfid_scanner)/model"/>
+
+  <!--
+    Per-device_type specifications.
+      mesh_dir            : folder under model/ holding meshes/visual.dae + meshes/collision.stl
+      mass, size_*        : housing mass [kg] and bounding box [m] used for the box inertia
+      scanner_xyz/rpy     : pose of the antenna face (<device_name>_scanner_link) relative to <device_name>_device_origin
+      range, update_rate  : Gazebo RfidReader detection radius [m] and publication rate [Hz]
+  -->
+  <xacro:property name="rfid_scanner_specs" value="${dict(
+      simatic_rf240r=dict(
+        mesh_dir='simatic',
+        mass=0.06,
+        size_x=0.05, size_y=0.05, size_z=0.03,
+        scanner_xyz='0 0 0.03', scanner_rpy='0 0 0',
+        range=0.065,
+        update_rate=10))}"/>
+  <!-- PLACEHOLDER: simatic_rf240r mass/size are datasheet estimates (60 g, 50x50x30 mm);
+       scanner_xyz/rpy (antenna face = top face) should be measured. -->
+
+  <!--
+    RFID scanner macro.
+
+    Links (N = device_name):
+      N_device_origin  - mounting frame, attached to ${tf_prefix}${parent} + scanner housing (always present)
+      N_scanner_link   - antenna face the Gazebo RfidReader is attached to (simulated only)
+
+    In simulation the RfidReader plugin publishes on /N/detected and /N/tag_data
+    and serves writes on /N/write_tag; N must equal the node's device_name.
+  -->
+  <xacro:macro name="rfid_scanner" params="
+    device_type:=simatic_rf240r
+    device_name:=simatic_rf240r
+    simulated:=true
+    parent:=station
+    tf_prefix:=''
+    mount_origin_xyz:='0 0 0'
+    mount_origin_rpy:='0 0 0'">
+
+    <xacro:if value="${device_type not in rfid_scanner_specs}">
+      ${xacro.error('rfid_scanner: unsupported device_type ' + str(device_type) + '; supported: ' + ', '.join(python.sorted(rfid_scanner_specs.keys())))}
+    </xacro:if>
+
+    <xacro:property name="spec" value="${rfid_scanner_specs[device_type]}"/>
+    <xacro:property name="mesh_base" value="${rfid_scanner_model_base}/${spec['mesh_dir']}/meshes"/>
+    <xacro:property name="m" value="${spec['mass']}"/>
+    <xacro:property name="sx" value="${spec['size_x']}"/>
+    <xacro:property name="sy" value="${spec['size_y']}"/>
+    <xacro:property name="sz" value="${spec['size_z']}"/>
+
+    <link name="${device_name}_device_origin">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="file://${mesh_base}/visual.dae"/>
+        </geometry>
+        <material name="rfid_scanner_grey">
+          <color rgba="0.3 0.3 0.3 1"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="file://${mesh_base}/collision.stl"/>
+        </geometry>
+      </collision>
+      <!-- PLACEHOLDER: box inertia from the estimated mass and housing size. -->
+      <inertial>
+        <origin xyz="0 0 ${sz / 2.0}" rpy="0 0 0"/>
+        <mass value="${m}"/>
+        <inertia
+          ixx="${m / 12.0 * (sy * sy + sz * sz)}" ixy="0" ixz="0"
+          iyy="${m / 12.0 * (sx * sx + sz * sz)}" iyz="0"
+          izz="${m / 12.0 * (sx * sx + sy * sy)}"/>
+      </inertial>
+    </link>
+
+    <joint name="${device_name}_device_origin_joint" type="fixed">
+      <parent link="${tf_prefix}${parent}"/>
+      <child link="${device_name}_device_origin"/>
+      <origin xyz="${mount_origin_xyz}" rpy="${mount_origin_rpy}"/>
+    </joint>
+
+    <xacro:if value="${simulated}">
+      <!--
+        Antenna face. The tiny inertial keeps the URDF->SDF converter from
+        dropping a massless link, and preserveFixedJoint keeps it from being
+        lumped into its parent, so the RfidReader can resolve it by name.
+      -->
+      <link name="${device_name}_scanner_link">
+        <inertial>
+          <origin xyz="0 0 0" rpy="0 0 0"/>
+          <mass value="1e-6"/>
+          <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+        </inertial>
+      </link>
+
+      <joint name="${device_name}_scanner_joint" type="fixed">
+        <parent link="${device_name}_link"/>
+        <child link="${device_name}_scanner_link"/>
+        <origin xyz="${spec['scanner_xyz']}" rpy="${spec['scanner_rpy']}"/>
+      </joint>
+
+      <gazebo reference="${device_name}_scanner_joint">
+        <preserveFixedJoint>true</preserveFixedJoint>
+      </gazebo>
+
+      <gazebo>
+        <plugin filename="rfid_sim_systems" name="autofactory::rfid::RfidReader">
+          <link>${device_name}_scanner_link</link>
+          <range>${spec['range']}</range>
+          <update_rate>${spec['update_rate']}</update_rate>
+          <detected_topic>/${device_name}/detected</detected_topic>
+          <content_topic>/${device_name}/tag_data</content_topic>
+          <write_service>/${device_name}/write_tag</write_service>
+          <reader_id>${device_name}</reader_id>
+        </plugin>
+      </gazebo>
+    </xacro:if>
+
+  </xacro:macro>
+
+</robot>

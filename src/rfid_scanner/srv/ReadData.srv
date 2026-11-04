@@ -1,0 +1,11 @@
+# First tag memory address to read.
+uint32 start_address
+# Number of bytes to read (1..248).
+uint32 length
+---
+# True if the read succeeded.
+bool success
+# Human-readable reason when success is false; empty otherwise.
+string error_message
+# Bytes read; exactly `length` bytes on success, empty on failure.
+uint8[] data

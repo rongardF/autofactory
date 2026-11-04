@@ -21,7 +21,8 @@ All three are `rclpy` **LifecycleNode**s spun with a `MultiThreadedExecutor`.
 
 ### Supporting package
 
-Simulation relies on **`rfid_sim`**, a C++ gz-sim (Harmonic) system plugin pair:
+Simulation relies on the C++ gz-sim (Harmonic) system plugin pair that ships
+with **`rfid_scanner`** (library `rfid_sim_systems`):
 - `autofactory::rfid::RfidTag` — attaches a fixed hex payload (the tool's RFID
   tag) to a link via an `RfidTagData` ECM component.
 - `autofactory::rfid::RfidReader` — on each throttled `PostUpdate`, finds the
@@ -264,7 +265,7 @@ Launches each endtool launch file as an independent child process
 ## Launch / run
 
 ```bash
-colcon build --symlink-install --packages-select rfid_sim endtools tools_manager
+colcon build --symlink-install --packages-select rfid_scanner endtools tools_manager
 source install/setup.bash
 
 ros2 launch tools_manager tools_manager_launch.py simulated:=true
