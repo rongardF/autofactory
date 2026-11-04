@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="conveyor_srdf">
+
+  <!--
+    Disable collision between the conveyor body and the link it is mounted on.
+
+    NOTE: disable_collisions is an SRDF concept. MoveIt only reads these rules
+    from the SRDF, never from the URDF, so this macro must be invoked from the
+    assembled SRDF, not from conveyor.urdf.xacro.
+  -->
+  <xacro:macro name="conveyor_srdf" params="parent tf_prefix:=''">
+    <disable_collisions link1="${tf_prefix}conveyor_origin" link2="${tf_prefix}${parent}" reason="Adjacent"/>
+  </xacro:macro>
+
+</robot>

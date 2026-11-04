@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<!-- Standalone conveyor fixed to the Gazebo world, for testing the conveyor node. -->
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="conveyor">
+
+  <xacro:arg name="simulated" default="true"/>
+
+  <xacro:include filename="$(find product_carrier)/urdf/conveyor.urdf.xacro"/>
+
+  <!-- A joint to the 'world' link makes Gazebo fix the model to the world -->
+  <link name="world"/>
+
+  <xacro:conveyor
+    parent="world"
+    simulated="$(arg simulated)"
+    mount_origin_xyz="0 0 0"
+    mount_origin_rpy="0 0 0"
+  />
+
+</robot>
