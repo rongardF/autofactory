@@ -78,6 +78,16 @@ class CommonNodeConfigDTO(BaseModel):
         return f'/{self.product_carrier_node_name}/product_in_place'
 
     @property
+    def inject_product_service(self) -> str:
+        """Return the product carrier ``inject_product`` service."""
+        return f'/{self.product_carrier_node_name}/inject_product'
+
+    @property
+    def eject_product_service(self) -> str:
+        """Return the product carrier ``eject_product`` service."""
+        return f'/{self.product_carrier_node_name}/eject_product'
+
+    @property
     def get_production_data_service(self) -> str:
         """Return the production manager ``get_production_data`` service."""
         return f'/{self.production_manager_node_name}/get_production_data'

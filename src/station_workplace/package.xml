@@ -17,8 +17,9 @@
   <!-- Runtime interface support -->
   <exec_depend>rosidl_default_runtime</exec_depend>
 
-  <!-- Interface field dependencies -->
+  <!-- Interface field dependencies (actions require action_msgs) -->
   <depend>builtin_interfaces</depend>
+  <depend>action_msgs</depend>
   <depend>std_msgs</depend>
 
   <!-- Python runtime -->
@@ -32,6 +33,7 @@
   <exec_depend>shape_msgs</exec_depend>
   <exec_depend>moveit_msgs</exec_depend>
   <exec_depend>tf2_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
   <exec_depend>rfid_scanner</exec_depend>
   <exec_depend>production_manager</exec_depend>
   <exec_depend>repositories</exec_depend>

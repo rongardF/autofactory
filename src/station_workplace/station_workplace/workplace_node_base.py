@@ -46,8 +46,10 @@ from station_workplace.models.common_node_config_dto import CommonNodeConfigDTO,
 from station_workplace.services.moveit2_planning_scene_manager import Moveit2PlanningSceneManager
 from station_workplace.services.process_runner import ProcessRunner
 from station_workplace.services.product_origin_tf_publisher import ProductOriginTfPublisher
+from station_workplace.services.wait_routing_action_server import WaitRoutingActionServer
 from station_workplace.services.workplace_process_service import WorkplaceProcessService
 from station_workplace.services.workplace_state_publisher import WorkplaceStatePublisher
+from station_workplace.services.workplace_state_tracker import WorkplaceStateTracker
 
 
 class WorkplaceNodeBase(LifecycleNode):
@@ -59,6 +61,7 @@ class WorkplaceNodeBase(LifecycleNode):
     Interfaces (created only while active):
 
     * ``~/workplace`` (``station_workplace/WorkplaceState``, latched);
+    * ``~/wait_routing`` (``station_workplace/WaitRouting`` action);
     * TF ``estimated_product_origin`` (parent ``carrier``) on ``/tf_static``.
     """
 
@@ -92,15 +95,18 @@ class WorkplaceNodeBase(LifecycleNode):
 
         self._trigger_group = MutuallyExclusiveCallbackGroup()
         self._io_group = ReentrantCallbackGroup()
+        self._action_group = ReentrantCallbackGroup()
 
         self._config: CommonNodeConfigDTO | None = None
         self._scene: Moveit2PlanningSceneManager | None = None
         self._reader: ProductDataReader | None = None
         self._process: WorkplaceProcessService | None = None
         self._runner: ProcessRunner | None = None
-        # The publishers keep their state (last published value, TF published flag)
-        # across activations and are therefore created once.
-        self._state_publisher = WorkplaceStatePublisher()
+        self._routing: WaitRoutingActionServer | None = None
+        # The publishers and the tracker keep their state (last published value,
+        # TF published flag, settled state) across activations and are therefore created once.
+        self._state_tracker = WorkplaceStateTracker()
+        self._state_publisher = WorkplaceStatePublisher(on_settled=self._state_tracker.settle)
         self._tf_publisher = ProductOriginTfPublisher()
         self._trigger_sub: Subscription | None = None
 
@@ -178,6 +184,8 @@ class WorkplaceNodeBase(LifecycleNode):
                 self, config, scene, self._state_publisher, self._tf_publisher,
                 reader, runner, self._io_group, self._on_system_failure,
             )
+            routing = WaitRoutingActionServer(
+                self, config, self._state_tracker, self._action_group, self._io_group)
         except Exception as exc:  # noqa: BLE001 - convert to transition failure
             self.get_logger().error(f'Failed to construct the internal services: {exc}')
             return TransitionCallbackReturn.FAILURE
@@ -187,6 +195,7 @@ class WorkplaceNodeBase(LifecycleNode):
         self._scene = scene
         self._reader = reader
         self._process = process
+        self._routing = routing
         self.get_logger().info(f'Configured: {config}')
         return TransitionCallbackReturn.SUCCESS
 
@@ -196,7 +205,7 @@ class WorkplaceNodeBase(LifecycleNode):
             self._fatal_pending = False
         if (
             self._config is None or self._scene is None or self._reader is None
-            or self._process is None or self._runner is None
+            or self._process is None or self._runner is None or self._routing is None
         ):
             self.get_logger().error('Activation failed: node is not configured')
             return TransitionCallbackReturn.FAILURE
@@ -212,6 +221,7 @@ class WorkplaceNodeBase(LifecycleNode):
             self._first_after_activation = True
             self._is_active = True
             self._runner.enable()
+            self._routing.activate()
             # Created last: the latched value may be delivered immediately.
             self._trigger_sub = self.create_subscription(
                 Bool, self._config.product_in_place_topic, self._on_product_in_place,
@@ -255,11 +265,11 @@ class WorkplaceNodeBase(LifecycleNode):
 
     # region resource handling
     def _destroy_interfaces(self) -> None:
-        """Destroy the subscription, clients and publishers if they exist."""
+        """Abort a running wait_routing goal; destroy the action server, subscription, clients and publishers."""
         if self._trigger_sub is not None:
             self.destroy_subscription(self._trigger_sub)
             self._trigger_sub = None
-        for component in (self._reader, self._process, self._scene):
+        for component in (self._routing, self._reader, self._process, self._scene):
             if component is not None:
                 try:
                     component.deactivate()
@@ -269,6 +279,8 @@ class WorkplaceNodeBase(LifecycleNode):
         self._tf_publisher.deactivate()
 
     def _drop_services(self) -> None:
+        self._routing = None
+        self._state_tracker.reset()
         self._process = None
         self._reader = None
         self._scene = None

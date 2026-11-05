@@ -27,11 +27,18 @@ Both nodes share all behaviour except reading the product data
 
 An unidentified product is reported as `ProductData` with all fields `UNKNOWN`.
 
+### Actions
+
+| Action | Goal | Result | Feedback |
+|--------|------|--------|----------|
+| `WaitRouting` | `string routing_operation` (`injection` / `ejection`, constants `ROUTING_OPERATION_*`) | `int32 routing_time_s`, `bool success`, `string error_message`, `ProductData[<=1] product_data` | none |
+
 ### Provided (only while active)
 
 | Name | Type | Notes |
 |------|------|-------|
 | `~/workplace` | `station_workplace/WorkplaceState` | Latched (reliable, transient local, depth 1); published only on change |
+| `~/wait_routing` | `station_workplace/action/WaitRouting` | Action; see [wait_routing](#wait_routing) |
 | TF `carrier` → `estimated_product_origin` | `/tf_static` | Not published before the first successful injection; reset to identity on ejection / injection error; never removed |
 
 ### Consumed
@@ -39,6 +46,7 @@ An unidentified product is reported as `ProductData` with all fields `UNKNOWN`.
 | Name | Type | Used by |
 |------|------|---------|
 | `/<product_carrier_node_name>/product_in_place` | `std_msgs/Bool` (latched) | both |
+| `/<product_carrier_node_name>/inject_product`, `/eject_product` | `std_srvs/srv/Trigger` | both (`wait_routing`) |
 | `/<rfid_scanner_node_name>/tag_detected` | `std_msgs/Bool` (latched) | rfid |
 | `/<rfid_scanner_node_name>/read_data` | `rfid_scanner/srv/ReadData` | rfid |
 | `/<barcode_scanner_node_name>/label_data` | `station_workplace/msg/LabelData` | barcode |
@@ -114,13 +122,53 @@ Ejection removes all three objects, resets the TF frame and publishes
 A failed ejection, or a failure to attach the safety box, is a **system
 failure**: the node deactivates and cleans itself up (ends in *unconfigured*).
 
+## wait_routing
+
+`~/wait_routing` asks the product carrier to route a product into or out of the
+workplace and waits until the workplace has settled. It exists only while the
+node is active and handles one goal at a time; a second goal, or a goal with a
+`routing_operation` other than `injection` / `ejection`, is rejected.
+
+1. Mark the start time (node clock, respects `use_sim_time`).
+2. If the workplace is already settled in the requested state (a product is in
+   place for `injection`, none for `ejection`), finish immediately with the
+   current state without calling the carrier.
+3. Otherwise call `/<product_carrier_node_name>/inject_product` (or
+   `eject_product`), bounded by `service_call_timeout_sec`; an unavailable
+   service, a timeout or `success: false` fails the goal.
+4. Wait, without a timeout, until the next injection (or ejection) process
+   finishes, i.e. until the node publishes the resulting `~/workplace` state.
+   The wait also finishes when that state equals the previous one and so is
+   not re-published.
+
+| Outcome | Goal status | `success` | `error_message` | `product_data` |
+|---------|-------------|-----------|-----------------|----------------|
+| Injection, product identified | SUCCEEDED | true | `''` | `[product]` |
+| Injection, product `UNKNOWN` (injection error) | ABORTED | false | `Unknown product in station workplace` | `[UNKNOWN]` |
+| Ejection finished | SUCCEEDED | true | `''` | `[]` |
+| Carrier service failure | ABORTED | false | service error | `[]` |
+| Client cancel | CANCELED | false | `wait_routing cancelled by the client` | `[]` |
+| Node deactivated (also self-transition on a system failure) | ABORTED | false | `wait_routing aborted: node deactivated` | `[]` |
+
+`routing_time_s` (whole seconds, rounded down) is reported in every case.
+Cancelling only stops the wait; the carrier operation and the workplace
+process are not affected. An injection that is cancelled by the product
+leaving does not complete an `injection` goal; it keeps waiting until the
+next injection finishes, the client cancels or the node deactivates.
+
+```bash
+ros2 action send_goal /workplace_rfid_scanner/wait_routing \
+  station_workplace/action/WaitRouting "{routing_operation: injection}"
+```
+
 ## Lifecycle
 
 The nodes start *unconfigured*; transitions are driven externally.
 
 - **configure** validates the parameters (no ROS interfaces are created).
 - **activate** creates all interfaces and starts reacting to `product_in_place`.
-- **deactivate** abandons a running process and destroys the interfaces;
+- **deactivate** abandons a running process, aborts a running `wait_routing`
+  goal (the client still receives its result) and destroys the interfaces;
   planning-scene objects and the TF frame stay. The last published workplace
   state is remembered, so an identical state is not re-published after re-activation.
 - **cleanup** / **shutdown** drop the configuration and the remembered state.

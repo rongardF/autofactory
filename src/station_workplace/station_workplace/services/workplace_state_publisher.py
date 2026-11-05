@@ -27,6 +27,7 @@
 """Publisher of the latched ``~/workplace`` state."""
 
 import threading
+from collections.abc import Callable
 
 from rclpy.lifecycle import LifecycleNode, LifecyclePublisher
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
@@ -49,7 +50,13 @@ class WorkplaceStatePublisher:
         depth=1,
     )
 
-    def __init__(self) -> None:
+    def __init__(self, on_settled: Callable[[WorkplaceStateDTO], None] | None = None) -> None:
+        """Create the publisher state; the ROS publisher is created in :meth:`activate`.
+
+        :param on_settled: Called after every successful :meth:`publish` call,
+            including calls skipped because the state did not change.
+        """
+        self._on_settled = on_settled
         self._lock = threading.Lock()
         self._node: LifecycleNode | None = None
         self._publisher: LifecyclePublisher | None = None
@@ -82,11 +89,14 @@ class WorkplaceStatePublisher:
         :raises RuntimeError: If the publisher does not exist.
         """
         with self._lock:
-            if state == self._last_published:
-                return False
-            if self._publisher is None or self._node is None:
-                raise RuntimeError('workplace publisher is not active')
-            self._publisher.publish(state.to_msg())
-            self._last_published = state
-            self._node.get_logger().info(f'Published workplace state: {state}')
-            return True
+            published = False
+            if state != self._last_published:
+                if self._publisher is None or self._node is None:
+                    raise RuntimeError('workplace publisher is not active')
+                self._publisher.publish(state.to_msg())
+                self._last_published = state
+                self._node.get_logger().info(f'Published workplace state: {state}')
+                published = True
+        if self._on_settled is not None:
+            self._on_settled(state)
+        return published

@@ -39,8 +39,9 @@ find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
-# Interface field dependencies
+# Interface field dependencies (actions require action_msgs)
 find_package(builtin_interfaces REQUIRED)
+find_package(action_msgs REQUIRED)
 
 # Python version — needed to compute the correct site-packages install path
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
@@ -51,29 +52,32 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
 # internally, which would conflict with our own call below.
 # See: https://github.com/ros2/rosidl_python/issues/141
 # --------------------------------------------------------------------------
-set(interface_names ProductData WorkplaceState LabelData)
-set(interface_files "")
-foreach(name ${interface_names})
-  list(APPEND interface_files "msg/${name}.msg")
-endforeach()
+set(interface_files
+  msg/ProductData.msg
+  msg/WorkplaceState.msg
+  msg/LabelData.msg
+  action/WaitRouting.action
+)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   ${interface_files}
-  DEPENDENCIES builtin_interfaces
+  DEPENDENCIES builtin_interfaces action_msgs
   SKIP_INSTALL
 )
 
 # SKIP_INSTALL also skips installing the interface definitions and registering
 # them in the ament index, which `ros2 interface show/list` rely on.
 set(interface_index_lines "")
-foreach(name ${interface_names})
+foreach(file ${interface_files})
+  get_filename_component(dir "${file}" DIRECTORY)
+  get_filename_component(name "${file}" NAME_WE)
   install(
     FILES
-      "msg/${name}.msg"
-      "${CMAKE_CURRENT_BINARY_DIR}/rosidl_adapter/${PROJECT_NAME}/msg/${name}.idl"
-    DESTINATION share/${PROJECT_NAME}/msg
+      "${file}"
+      "${CMAKE_CURRENT_BINARY_DIR}/rosidl_adapter/${PROJECT_NAME}/${dir}/${name}.idl"
+    DESTINATION share/${PROJECT_NAME}/${dir}
   )
-  list(APPEND interface_index_lines "msg/${name}.idl" "msg/${name}.msg")
+  list(APPEND interface_index_lines "${dir}/${name}.idl" "${file}")
 endforeach()
 list(SORT interface_index_lines)
 string(REPLACE ";" "\n" interface_index_lines "${interface_index_lines}")
@@ -176,5 +180,6 @@ endif()
 ament_export_dependencies(
   rosidl_default_runtime
   builtin_interfaces
+  action_msgs
 )
 ament_package()
