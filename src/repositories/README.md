@@ -85,10 +85,14 @@ Existing cached entries are reused, never re-downloaded.
 
 | Kind | Name | Type | Notes |
 |------|------|------|-------|
-| Service | `~/get_models_info` | `ObjectModelStorageGetModelsInfo` | Models carrying **all** requested `filter_keys` pairs; empty filter returns all. |
+| Service | `~/get_models_info` | `ObjectModelStorageGetModelsInfo` | One model by `model_id`, or models carrying **all** requested `filter_keys` pairs; empty filter returns all. |
 | Service | `~/get_model` | `ObjectModelStorageGetModel` | Returns the absolute local path of one model. |
 | Action | `~/get_models` | `ObjectModelStorageGetModels` | Processes `model_ids` in order, feedback (`model_id`, `local_path`) per model; fail-fast; cancelable between models. |
 | Topic | `~/cached_models` | `ObjectModelStorageCachedModels` | Latched (transient local, depth 1); published on activate and after successful `get_model`/`get_models`. |
+
+`~/get_models_info` lookup by id: a non-empty `model_id` (UUID4) takes precedence
+and `filter_keys` are ignored. An unknown `model_id` returns `success=true` with an
+empty `models` list; a malformed (non-UUID4) `model_id` returns `success=false`.
 
 All responses carry `success` + `error_message`; failures never raise across the
 ROS boundary.
