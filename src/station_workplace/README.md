@@ -50,6 +50,7 @@ An unidentified product is reported as `ProductData` with all fields `UNKNOWN`.
 | `~/spawn_product` | `station_workplace/srv/SpawnProduct` | Only if `simulated`; see [Simulation](#simulation) |
 | `~/remove_product` | `station_workplace/srv/RemoveProduct` | Only if `simulated`; see [Simulation](#simulation) |
 | `/<barcode_scanner_node_name>/simulated_label_data` | `station_workplace/msg/LabelData` | barcode, only if `simulated`; latched (reliable, transient local, depth 1) |
+| `/<simulation.station_link>/<simulation.carrier_model_name>/detach`, `/<simulation.carrier_link>/<simulation.product_model_name>/detach` | `std_msgs/msg/Empty` | Only if `simulated`; see [`remove_product`](#remove_product) |
 
 ### Consumed
 
@@ -65,6 +66,7 @@ An unidentified product is reported as `ProductData` with all fields `UNKNOWN`.
 | `/<object_model_repository_node_name>/get_model` | `repositories/srv/ObjectModelStorageGetModel` | both |
 | `/get_planning_scene`, `/apply_planning_scene` | `moveit_msgs/srv/GetPlanningScene`, `ApplyPlanningScene` | both |
 | `/world/<simulation.world_name>/create/blocking`, `/remove/blocking` | `ros_gz_interfaces/srv/SpawnEntity`, `DeleteEntity` | both, only if `simulated` |
+| `/<simulation.station_link>/<simulation.carrier_model_name>/state`, `/<simulation.carrier_link>/<simulation.product_model_name>/state` | `std_msgs/String` | both, only if `simulated` |
 | TF `world` → `<simulation.station_link>` | `/tf`, `/tf_static` | both, only if `simulated` |
 
 ## Parameters
@@ -217,7 +219,11 @@ first) before the failure is returned.
 
 ### `remove_product`
 
-Removes the recorded models, product first. Returns success immediately when
+Removes the recorded models, product first. Each model's `DetachableJoint` is
+detached first (`<prefix>/detach`, repeated until `<prefix>/state` reports
+`detached`, bounded by `service_call_timeout_sec`; an unconfirmed detach is only
+logged): gz-sim keeps the fixed joint of a removed model, which would leave the
+station link welded in place. Returns success immediately when
 nothing is recorded. A failed removal returns `success=false`; models not
 removed stay recorded so a later call retries them. The record survives
 deactivate/activate (the models stay in the world when the node deactivates),
@@ -236,6 +242,10 @@ but not a process restart.
   or quaternions, and link/collision poses `relative_to` other frames fail the call.
 - The carrier model has the link `simulation.carrier_link`; the product metadata
   contains `carrier_model_id`.
+- Each model welds itself with a `gz::sim::systems::DetachableJoint` whose
+  `<detach_topic>` / `<output_topic>` are `<prefix>/detach` / `<prefix>/state`, with
+  `<prefix>` = `/<station_link>/<model_name>` for the carrier and
+  `/<carrier_link>/<model_name>` for the product (xacro arguments).
 
 ### Intersection check
 
@@ -283,4 +293,22 @@ Every parameter is a launch argument of the same name (plus `node_name` and
 `use_sim_time`), e.g. `safety_object.x:=0.3` or
 `tag_registers.serial_number.length:=16`. With `simulated:=true` the launch
 files also start a `ros_gz_bridge` (`<node_name>_gz_bridge`) for the world's
-`create/blocking` and `remove/blocking` services.
+`create/blocking` and `remove/blocking` services and the carrier/product
+`DetachableJoint` `detach` / `state` topics.
+
+## Testbench
+
+`tests/testbench/` runs `workplace_rfid_scanner` against simulated / local-mode
+dependencies: Gazebo (GUI) with a conveyor and an RF240R scanner
+(`test.urdf.xacro`, `test.srdf.xacro`, `testbench_world.sdf`), `move_group`, RViz,
+`conveyor`, `simatic_rf240r_ascii`, `production_manager` and `object_model_storage`.
+
+```bash
+src/station_workplace/tests/testbench/setup.sh   # copies assets/ to /tmp/station and launches
+```
+
+All lifecycle nodes start unconfigured; drive them and the scenario (set
+operation, spawn product, `wait_routing`, remove product) from
+`tests/testbench/workplace_testbench.ipynb`. The carrier is moved in the Gazebo
+GUI (Joint Position Controller, model `station`, `base_carrier_joint`: `-0.6` in
+place, `0.0` out).

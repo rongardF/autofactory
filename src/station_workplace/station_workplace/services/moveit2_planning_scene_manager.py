@@ -355,7 +355,9 @@ class Moveit2PlanningSceneManager(PlanningSceneManager):
     def _load_mesh(path: Path) -> Mesh:
         """Load an STL file (meters, no scaling) into a ``shape_msgs/Mesh``."""
         try:
-            loaded = trimesh.load(str(path), force='mesh')
+            # object_model_storage names cached files by model ID without an
+            # extension, so the type cannot be inferred from the path
+            loaded = trimesh.load(str(path), file_type='stl', force='mesh')
         except Exception as exc:  # noqa: BLE001 - any loader failure is a mesh error
             raise PlanningSceneError(f"failed to load mesh '{path}': {exc}") from exc
         if not isinstance(loaded, trimesh.Trimesh) or len(loaded.faces) == 0:

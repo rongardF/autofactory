@@ -1,0 +1,73 @@
+<?xml version="1.0"?>
+<!--
+  Copyright (c) 2026, Autofactory
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+  1. Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
+  2. Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+  3. Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from
+     this software without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  POSSIBILITY OF SUCH DAMAGE.
+-->
+<!--
+  Testbench scene for the station_workplace nodes: a conveyor fixed to the
+  world and a SIMATIC RF240R RFID scanner under the in-place tag position.
+
+  Spawned in Gazebo as model 'station' (workplace simulation.station_model_name);
+  the conveyor 'carrier' link is the workplace simulation.station_link.
+
+  Geometry (conveyor_origin = world origin):
+    carrier link  = (1.051 + q, 0.3, 0.84), q = base_carrier_joint in [-0.6, 0]
+    in place      : q = -0.6 -> carrier at (0.451, 0.3, 0.84); the pallet covers
+                    the presence lidar at (0.1, 0.08)
+    RFID tag      = carrier + (-0.2, 0, -0.01) (carrier model rfid_tag_link)
+                    -> (0.251, 0.3, 0.83) in place
+    RFID scanner  : antenna face (device_origin + 0.03 m) at (0.251, 0.3, 0.80),
+                    0.03 m under the tag (reader range 0.065 m); with the carrier
+                    out (q = 0) the tag is 0.6 m away
+-->
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="testbench">
+
+  <xacro:arg name="simulated" default="true"/>
+
+  <xacro:include filename="$(find product_carrier)/urdf/conveyor.urdf.xacro"/>
+  <xacro:include filename="$(find rfid_scanner)/urdf/rfid_scanner.urdf.xacro"/>
+
+  <!-- A joint to the 'world' link makes Gazebo fix the model to the world -->
+  <link name="world"/>
+
+  <xacro:conveyor
+    parent="world"
+    simulated="$(arg simulated)"
+    mount_origin_xyz="0 0 0"
+    mount_origin_rpy="0 0 0"
+  />
+
+  <xacro:rfid_scanner
+    device_type="simatic_rf240r"
+    device_name="simatic_rf240r"
+    simulated="$(arg simulated)"
+    parent="conveyor_origin"
+    mount_origin_xyz="0.251 0.3 0.77"
+    mount_origin_rpy="0 0 1.5708"
+  />
+
+</robot>

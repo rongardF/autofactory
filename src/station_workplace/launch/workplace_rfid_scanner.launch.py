@@ -28,7 +28,8 @@
 
 The node is started *unconfigured*; an external lifecycle manager drives the
 transitions. With ``simulated:=true`` a ``ros_gz_bridge`` for the Gazebo world
-``create/blocking``/``remove/blocking`` services is started as well. Every node parameter is
+``create/blocking``/``remove/blocking`` services and the carrier/product ``DetachableJoint``
+``detach``/``state`` topics is started as well. Every node parameter is
 exposed as a launch argument of the same name (e.g. ``safety_object.x:=0.3``).
 """
 
@@ -37,6 +38,8 @@ from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.launch_context import LaunchContext
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import LifecycleNode, Node
+
+from station_workplace.models.simulation_config_dto import SimulationConfigDTO
 
 _FIELDS = ('product_number', 'product_revision', 'serial_number')
 
@@ -97,14 +100,23 @@ def _launch_node(context: LaunchContext) -> list:
     parameters['use_sim_time'] = arg('use_sim_time').lower() == 'true'
     actions = []
     if parameters['simulated']:
-        world = parameters['simulation.world_name']
+        simulation = SimulationConfigDTO(**{
+            name.removeprefix('simulation.'): value for name, value in parameters.items()
+            if name.startswith('simulation.')})
+        detachable_joints = []
+        for prefix in simulation.detachable_joint_topics.values():
+            detachable_joints += [
+                f'{prefix}/detach@std_msgs/msg/Empty]gz.msgs.Empty',
+                f'{prefix}/state@std_msgs/msg/String[gz.msgs.StringMsg',
+            ]
         actions.append(Node(
             package='ros_gz_bridge',
             executable='parameter_bridge',
             name=f"{arg('node_name')}_gz_bridge",
             arguments=[
-                f'/world/{world}/create/blocking@ros_gz_interfaces/srv/SpawnEntity',
-                f'/world/{world}/remove/blocking@ros_gz_interfaces/srv/DeleteEntity',
+                f'{simulation.create_service}@ros_gz_interfaces/srv/SpawnEntity',
+                f'{simulation.remove_service}@ros_gz_interfaces/srv/DeleteEntity',
+                *detachable_joints,
             ],
             parameters=[{'use_sim_time': parameters['use_sim_time']}],
             output='screen',

@@ -29,21 +29,44 @@
 The blocking ``/world/<world>/create/blocking`` and ``/remove/blocking`` services
 are used: they report the actual outcome, whereas the non-blocking variants
 report success as soon as the request is queued.
+
+Before a model is removed, its ``DetachableJoint`` is detached over the bridged
+``<prefix>/detach`` / ``<prefix>/state`` topics: gz-sim keeps the joint of a
+removed model in the physics engine, which would leave the station link welded
+in place.
 """
 
 import threading
+import time
 
 from geometry_msgs.msg import Pose
 from rclpy.callback_groups import CallbackGroup
 from rclpy.client import Client
 from rclpy.node import Node
+from rclpy.publisher import Publisher
+from rclpy.subscription import Subscription
 from ros_gz_interfaces.msg import Entity, EntityFactory
 from ros_gz_interfaces.srv import DeleteEntity, SpawnEntity
+from std_msgs.msg import Empty, String
 
 from station_workplace.exceptions.world_manager_error import WorldManagerError
 from station_workplace.interface.world_manager import WorldManager
 from station_workplace.models.simulation_config_dto import SimulationConfigDTO
 from station_workplace.utils.async_service_caller import call_service
+
+_DETACHED_STATE = 'detached'
+_DETACH_RETRY_PERIOD_SEC = 0.2
+
+
+class _DetachableJoint:
+    """ROS side of one model's bridged ``DetachableJoint`` topics."""
+
+    def __init__(
+        self, publisher: Publisher, subscription: Subscription, detached: threading.Event,
+    ) -> None:
+        self.publisher = publisher
+        self.subscription = subscription
+        self.detached = detached
 
 
 class GazeboWorldManager(WorldManager):
@@ -62,25 +85,39 @@ class GazeboWorldManager(WorldManager):
         self._timeout_sec = 5.0
         self._create_client: Client | None = None
         self._remove_client: Client | None = None
+        self._joints: dict[str, _DetachableJoint] = {}
         self._never_cancelled = threading.Event()
 
     def activate(
         self, config: SimulationConfigDTO, timeout_sec: float, callback_group: CallbackGroup,
     ) -> None:
-        """Create the Gazebo world service clients."""
+        """Create the Gazebo world service clients and the DetachableJoint topics."""
         self._timeout_sec = timeout_sec
         self._create_client = self._node.create_client(
             SpawnEntity, config.create_service, callback_group=callback_group)
         self._remove_client = self._node.create_client(
             DeleteEntity, config.remove_service, callback_group=callback_group)
+        for name, prefix in config.detachable_joint_topics.items():
+            detached = threading.Event()
+            self._joints[name] = _DetachableJoint(
+                self._node.create_publisher(Empty, f'{prefix}/detach', 10),
+                self._node.create_subscription(
+                    String, f'{prefix}/state', self._state_callback(detached), 10,
+                    callback_group=callback_group),
+                detached,
+            )
 
     def deactivate(self) -> None:
-        """Destroy the clients; the record of spawned models is kept."""
+        """Destroy the clients and topics; the record of spawned models is kept."""
         for name in ('_create_client', '_remove_client'):
             client = getattr(self, name)
             if client is not None:
                 self._node.destroy_client(client)
                 setattr(self, name, None)
+        for joint in self._joints.values():
+            self._node.destroy_publisher(joint.publisher)
+            self._node.destroy_subscription(joint.subscription)
+        self._joints = {}
 
     @property
     def spawned_models(self) -> tuple[str, ...]:
@@ -115,6 +152,7 @@ class GazeboWorldManager(WorldManager):
         """Try to remove an unrecorded model; failures are only logged."""
         if self._remove_client is None:
             return
+        self._detach(name)
         request = DeleteEntity.Request(entity=Entity(name=name, type=Entity.MODEL))
         try:
             call_service(
@@ -124,7 +162,8 @@ class GazeboWorldManager(WorldManager):
             self._logger.warning(f"Best-effort removal of model '{name}' failed: {exc}")
 
     def remove_model(self, name: str) -> None:
-        """Remove a model from the world and forget it (see :class:`WorldManager`)."""
+        """Detach, remove a model from the world and forget it (see :class:`WorldManager`)."""
+        self._detach(name)
         request = DeleteEntity.Request(entity=Entity(name=name, type=Entity.MODEL))
         response = call_service(
             self._require(self._remove_client), request, self._timeout_sec,
@@ -135,6 +174,37 @@ class GazeboWorldManager(WorldManager):
             if name in self._spawned:
                 self._spawned.remove(name)
         self._logger.info(f"Removed model '{name}'")
+
+    @staticmethod
+    def _state_callback(detached: threading.Event):
+        def callback(msg: String) -> None:
+            if msg.data == _DETACHED_STATE:
+                detached.set()
+        return callback
+
+    def _detach(self, name: str) -> None:
+        """Detach the model's DetachableJoint and wait for the ``detached`` state.
+
+        The request is repeated until confirmed, since a message published
+        before the bridge has discovered the model's subscriber is lost. An
+        unconfirmed detach (e.g. the joint was already detached, so no new
+        state is published) is only logged; the removal goes ahead.
+        """
+        joint = self._joints.get(name)
+        if joint is None:
+            return
+        joint.detached.clear()
+        deadline = time.monotonic() + self._timeout_sec
+        while True:
+            joint.publisher.publish(Empty())
+            if joint.detached.wait(_DETACH_RETRY_PERIOD_SEC):
+                self._logger.info(f"Detached model '{name}'")
+                return
+            if time.monotonic() > deadline:
+                self._logger.warning(
+                    f"Detaching model '{name}' was not confirmed within {self._timeout_sec} s; "
+                    'removing it anyway')
+                return
 
     @staticmethod
     def _require(client: Client | None) -> Client:

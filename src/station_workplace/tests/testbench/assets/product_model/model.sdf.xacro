@@ -1,0 +1,75 @@
+<?xml version="1.0" ?>
+<sdf version="1.6" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="product_model"
+      params="
+        model_name:=product_model
+        carrier_model_name:=carrier_model
+        carrier_link:=carrier_link
+      ">
+
+    <model name="${model_name}">
+      <link name="product_link">
+        <!-- Box inertia of the 0.2 x 0.2 x 0.1 m product (origin at its bottom centre) -->
+        <inertial>
+          <pose>0 0 0.05 0 0 0</pose>
+          <mass>2.0</mass>
+          <inertia>
+            <ixx>0.008333</ixx><iyy>0.008333</iyy><izz>0.013333</izz>
+            <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+          </inertia>
+        </inertial>
+        <collision name="collision">
+          <geometry>
+            <mesh>
+              <uri>model://fd71afb0-d3e9-428c-a7e6-b2613b877088/meshes/collision.stl</uri>
+            </mesh>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <mesh>
+              <uri>model://fd71afb0-d3e9-428c-a7e6-b2613b877088/meshes/collision.stl</uri>
+            </mesh>
+          </geometry>
+          <material>
+              <ambient>0 0.6 0 1</ambient>
+              <diffuse>0 0.6 0 1</diffuse>
+          </material>
+        </visual>
+      </link>
+
+      <!--
+      IMPORTANT (gz-sim 8.11.0): this plugin STARTS ATTACHED. Its
+      internal attachRequested flag defaults to true, so a fixed joint
+      is created on the very first simulation step at the parts'
+      INITIAL relative pose. There is no <start_detached> option in
+      this version; <attach_topic> only RE-attaches after a detach.
+
+      Parent_link must be a DIRECT link of the model hosting this
+      plugin
+      -->
+      <plugin filename="gz-sim-detachable-joint-system"
+              name="gz::sim::systems::DetachableJoint">
+          <parent_link>product_link</parent_link>
+          <child_model>${carrier_model_name}</child_model>
+          <child_link>${carrier_link}</child_link>
+          <attach_topic>/${carrier_link}/${model_name}/attach</attach_topic>
+          <detach_topic>/${carrier_link}/${model_name}/detach</detach_topic>
+          <output_topic>/${carrier_link}/${model_name}/state</output_topic>
+      </plugin>
+    </model>
+
+  </xacro:macro>
+
+  <xacro:arg name="model_name"                  default="product_model"/>
+  <xacro:arg name="carrier_model_name"          default="carrier_model"/>
+  <xacro:arg name="carrier_link"                default="carrier_link"/>
+
+  <xacro:product_model
+      model_name="$(arg model_name)"
+      carrier_model_name="$(arg carrier_model_name)"
+      carrier_link="$(arg carrier_link)"
+  />
+
+</sdf>

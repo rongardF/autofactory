@@ -82,3 +82,16 @@ class SimulationConfigDTO(BaseModel):
     def remove_service(self) -> str:
         """Return the Gazebo world ``remove/blocking`` service."""
         return f'/world/{self.world_name}/remove/blocking'
+
+    @property
+    def detachable_joint_topics(self) -> dict[str, str]:
+        """Return the DetachableJoint topic prefix of each spawned model, by model name.
+
+        The models weld themselves with a ``DetachableJoint`` whose
+        ``<prefix>/detach`` (``gz.msgs.Empty``) and ``<prefix>/state``
+        (``gz.msgs.StringMsg``) topics follow this contract.
+        """
+        return {
+            self.carrier_model_name: f'/{self.station_link}/{self.carrier_model_name}',
+            self.product_model_name: f'/{self.carrier_link}/{self.product_model_name}',
+        }
