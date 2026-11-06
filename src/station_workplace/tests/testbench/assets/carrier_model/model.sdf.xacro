@@ -1,0 +1,105 @@
+<?xml version="1.0" ?>
+<sdf version="1.6" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="carrier_model"
+      params="
+        model_name:=carrier_model
+        station_model_name:=station
+        station_link:=carrier
+        tag_data
+      ">
+
+    <model name="${model_name}">
+      <link name="carrier_link">
+        <!-- Box inertia of the 0.4 x 0.535 x 0.03 m pallet (origin at its +X end) -->
+        <inertial>
+          <pose>-0.2 0 0.005 0 0 0</pose>
+          <mass>2.0</mass>
+          <inertia>
+            <ixx>0.0479</ixx><iyy>0.0268</iyy><izz>0.0744</izz>
+            <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+          </inertia>
+        </inertial>
+        <collision name="collision">
+          <geometry>
+            <mesh>
+              <uri>model://c4e38990-3383-4375-b2ac-0d1468d6604f/meshes/collision.stl</uri>
+            </mesh>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <mesh>
+              <uri>model://c4e38990-3383-4375-b2ac-0d1468d6604f/meshes/collision.stl</uri>
+            </mesh>
+          </geometry>
+          <material>
+              <ambient>1 0 0 1</ambient>
+              <diffuse>1 0 0 1</diffuse>
+          </material>
+        </visual>
+      </link>
+
+      <!--
+      The link pose (relative to the model frame = carrier_link) places the
+      tag; a joint <pose> would be relative to the child link instead.
+      -->
+      <link name="rfid_tag_link">
+        <pose>-0.2 0 -0.01 0 0 0</pose>
+        <inertial>
+          <mass>0.001</mass>
+          <inertia>
+            <ixx>1e-6</ixx><iyy>1e-6</iyy><izz>1e-6</izz>
+            <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+          </inertia>
+        </inertial>
+      </link>
+
+      <joint name="rfid_tag_link_joint" type="fixed">
+          <parent>carrier_link</parent>
+          <child>rfid_tag_link</child>
+      </joint>
+
+      <!--
+      IMPORTANT (gz-sim 8.11.0): this plugin STARTS ATTACHED. Its
+      internal attachRequested flag defaults to true, so a fixed joint
+      is created on the very first simulation step at the parts'
+      INITIAL relative pose. There is no <start_detached> option in
+      this version; <attach_topic> only RE-attaches after a detach.
+
+      Parent_link must be a DIRECT link of the model hosting this
+      plugin
+      -->
+      <plugin filename="gz-sim-detachable-joint-system"
+              name="gz::sim::systems::DetachableJoint">
+          <parent_link>carrier_link</parent_link>
+          <child_model>${station_model_name}</child_model>
+          <child_link>${station_link}</child_link>
+          <attach_topic>/${station_link}/${model_name}/attach</attach_topic>
+          <detach_topic>/${station_link}/${model_name}/detach</detach_topic>
+          <output_topic>/${station_link}/${model_name}/state</output_topic>
+      </plugin>
+
+      <plugin filename="rfid_sim_systems"
+              name="autofactory::rfid::RfidTag">
+        <id>${model_name}</id>
+        <link>rfid_tag_link</link>
+        <data encoding="hex">${tag_data}</data>
+      </plugin>
+    </model>
+
+  </xacro:macro>
+
+  <xacro:arg name="model_name"                  default="carrier_model"/>
+  <xacro:arg name="station_model_name"          default="station"/>
+  <xacro:arg name="station_link"                default="carrier"/>
+  <xacro:arg name="tag_data"                    default=""/>
+
+  <xacro:carrier_model
+      model_name="$(arg model_name)"
+      station_model_name="$(arg station_model_name)"
+      station_link="$(arg station_link)"
+      tag_data="$(arg tag_data)"
+  />
+
+</sdf>

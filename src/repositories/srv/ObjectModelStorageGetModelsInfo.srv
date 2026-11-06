@@ -1,3 +1,4 @@
+string                            model_id       # UUID4; if non-empty, takes precedence and filter_keys are ignored
 ObjectModelStorageMappingValue[]  filter_keys    # a model matches only if it has ALL pairs; empty returns all
 ---
 ObjectModelStorageModelInfo[]     models         # matching models (empty on failure)

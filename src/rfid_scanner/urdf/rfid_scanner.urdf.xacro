@@ -127,7 +127,7 @@
       </link>
 
       <joint name="${device_name}_scanner_joint" type="fixed">
-        <parent link="${device_name}_link"/>
+        <parent link="${device_name}_device_origin"/>
         <child link="${device_name}_scanner_link"/>
         <origin xyz="${spec['scanner_xyz']}" rpy="${spec['scanner_rpy']}"/>
       </joint>

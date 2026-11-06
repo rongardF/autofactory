@@ -71,6 +71,7 @@ from repositories.services.object_model_storage.local_model_storage_backend impo
 )
 from repositories.services.object_model_storage.model_cache import ModelCache
 from repositories.srv import ObjectModelStorageGetModel, ObjectModelStorageGetModelsInfo
+from repositories.utils.model_info_selector import select_models_info
 from repositories.utils.uuid_validator import parse_uuid4
 
 
@@ -357,10 +358,16 @@ class ObjectModelStorage(LifecycleNode):
         request: ObjectModelStorageGetModelsInfo.Request,
         response: ObjectModelStorageGetModelsInfo.Response,
     ) -> ObjectModelStorageGetModelsInfo.Response:
-        """Return every model carrying ALL requested ``filter_keys`` pairs.
+        """Return the info of one model, or of every model matching filters.
+
+        A non-empty ``model_id`` takes precedence and ``filter_keys`` are
+        ignored: only that model is returned, or an empty list (with
+        ``success=true``) if it is unknown. An invalid ``model_id`` fails the
+        request. With an empty ``model_id`` every model carrying ALL requested
+        ``filter_keys`` pairs is returned.
 
         Args:
-            request: Request carrying the ``filter_keys`` to match.
+            request: Request carrying the ``model_id`` or ``filter_keys``.
             response: Response to populate.
 
         Returns:
@@ -372,10 +379,9 @@ class ObjectModelStorage(LifecycleNode):
                 MappingValueDTO(key=item.key, value=item.value)
                 for item in request.filter_keys
             ]
-            matched = [
-                model for model in self._fetch_models_info()
-                if model.matches_all(filters)
-            ]
+            matched = select_models_info(
+                self._fetch_models_info(), request.model_id, filters,
+            )
         except Exception as exc:  # noqa: BLE001 - convert to failure result
             message = f'failed to get models info: {exc}'
             self.get_logger().error(message)
@@ -386,10 +392,15 @@ class ObjectModelStorage(LifecycleNode):
         response.models = [model.to_msg() for model in matched]
         response.success = True
         response.error_message = ''
-        self.get_logger().info(
-            f'get_models_info: {len(matched)} models match '
-            f'{len(filters)} filter keys.'
-        )
+        if request.model_id:
+            self.get_logger().info(
+                f'get_models_info: model_id={request.model_id} -> {len(matched)} models.'
+            )
+        else:
+            self.get_logger().info(
+                f'get_models_info: {len(matched)} models match '
+                f'{len(filters)} filter keys.'
+            )
         return response
 
     def _on_get_model(
