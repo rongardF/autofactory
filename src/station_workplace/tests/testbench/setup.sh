@@ -68,9 +68,9 @@ cp "${ASSETS_DIR}/local_storage.json" "${DOWNLOAD_PATH}/local_storage.json"
 cp "${ASSETS_DIR}/mock_assembly_file.json" "${DOWNLOAD_PATH}/mock_assembly_file.json"
 
 cp -r "${ASSETS_DIR}/carrier_model" "${DOWNLOAD_PATH}/${CARRIER_SDF_ID}"
-cp -r "${ASSETS_DIR}/product_model" "${DOWNLOAD_PATH}/${PRODUCT_SDF_ID}"
+cp -r "${ASSETS_DIR}/mock_product" "${DOWNLOAD_PATH}/${PRODUCT_SDF_ID}"
 cp "${ASSETS_DIR}/carrier_model/meshes/collision.stl" "${DOWNLOAD_PATH}/${CARRIER_STL_ID}"
-cp "${ASSETS_DIR}/product_model/meshes/collision.stl" "${DOWNLOAD_PATH}/${PRODUCT_STL_ID}"
+cp "${ASSETS_DIR}/mock_product/meshes/collision.stl" "${DOWNLOAD_PATH}/${PRODUCT_STL_ID}"
 
 # Gazebo resolves model://<model_id>/... from the download path
 export GZ_SIM_RESOURCE_PATH="${DOWNLOAD_PATH}${GZ_SIM_RESOURCE_PATH:+:${GZ_SIM_RESOURCE_PATH}}"
