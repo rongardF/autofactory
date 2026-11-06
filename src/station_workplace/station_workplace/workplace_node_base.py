@@ -42,10 +42,14 @@ from std_msgs.msg import Bool
 from station_workplace.enums.constants import ATTACH_LINK
 from station_workplace.enums.process_type_enum import ProcessTypeEnum
 from station_workplace.interface.product_data_reader import ProductDataReader
+from station_workplace.interface.simulation_hooks import SimulationHooks
 from station_workplace.models.common_node_config_dto import CommonNodeConfigDTO, SafetyObjectConfigDTO
+from station_workplace.models.simulation_config_dto import SimulationConfigDTO
+from station_workplace.services.gazebo_world_manager import GazeboWorldManager
 from station_workplace.services.moveit2_planning_scene_manager import Moveit2PlanningSceneManager
 from station_workplace.services.process_runner import ProcessRunner
 from station_workplace.services.product_origin_tf_publisher import ProductOriginTfPublisher
+from station_workplace.services.simulated_product_spawner import SimulatedProductSpawner
 from station_workplace.services.wait_routing_action_server import WaitRoutingActionServer
 from station_workplace.services.workplace_process_service import WorkplaceProcessService
 from station_workplace.services.workplace_state_publisher import WorkplaceStatePublisher
@@ -62,7 +66,8 @@ class WorkplaceNodeBase(LifecycleNode):
 
     * ``~/workplace`` (``station_workplace/WorkplaceState``, latched);
     * ``~/wait_routing`` (``station_workplace/WaitRouting`` action);
-    * TF ``estimated_product_origin`` (parent ``carrier``) on ``/tf_static``.
+    * TF ``estimated_product_origin`` (parent ``carrier``) on ``/tf_static``;
+    * ``~/spawn_product`` and ``~/remove_product`` services, only if ``simulated``.
     """
 
     _PRODUCT_IN_PLACE_QOS = QoSProfile(
@@ -91,6 +96,10 @@ class WorkplaceNodeBase(LifecycleNode):
         self._declare('safety_object.z', safety.z, 'Safety box size along Z [m] (> 0).')
         self._declare('service_call_timeout_sec', defaults.service_call_timeout_sec,
                       'Timeout for service availability and response [s] (> 0).')
+        self._declare('simulated', defaults.simulated,
+                      'Provide the spawn_product/remove_product simulation services.')
+        for name, field in SimulationConfigDTO.model_fields.items():
+            self._declare(f'simulation.{name}', field.default, field.description or name)
         self._declare_specific_parameters()
 
         self._trigger_group = MutuallyExclusiveCallbackGroup()
@@ -103,6 +112,9 @@ class WorkplaceNodeBase(LifecycleNode):
         self._process: WorkplaceProcessService | None = None
         self._runner: ProcessRunner | None = None
         self._routing: WaitRoutingActionServer | None = None
+        self._spawner: SimulatedProductSpawner | None = None
+        # Created once so the record of spawned models survives activation cycles.
+        self._world = GazeboWorldManager(self)
         # The publishers and the tracker keep their state (last published value,
         # TF published flag, settled state) across activations and are therefore created once.
         self._state_tracker = WorkplaceStateTracker()
@@ -134,6 +146,10 @@ class WorkplaceNodeBase(LifecycleNode):
     def _create_reader(self, config: CommonNodeConfigDTO) -> ProductDataReader:
         """Create the node-specific product data reader."""
         raise NotImplementedError
+
+    def _create_simulation_hooks(self, config: CommonNodeConfigDTO) -> SimulationHooks:
+        """Create the node-specific hooks of the simulated product spawning."""
+        raise NotImplementedError
     # endregion subclass hooks
 
     # region parameters
@@ -155,6 +171,11 @@ class WorkplaceNodeBase(LifecycleNode):
                 'z': self._param('safety_object.z'),
             },
             'service_call_timeout_sec': self._param('service_call_timeout_sec'),
+            'simulated': self._param('simulated'),
+            'simulation': {
+                name: self._param(f'simulation.{name}')
+                for name in SimulationConfigDTO.model_fields
+            },
         }
     # endregion parameters
 
@@ -186,6 +207,11 @@ class WorkplaceNodeBase(LifecycleNode):
             )
             routing = WaitRoutingActionServer(
                 self, config, self._state_tracker, self._action_group, self._io_group)
+            spawner = None
+            if config.simulated:
+                spawner = SimulatedProductSpawner(
+                    self, config, self._world, self._create_simulation_hooks(config),
+                    self._io_group)
         except Exception as exc:  # noqa: BLE001 - convert to transition failure
             self.get_logger().error(f'Failed to construct the internal services: {exc}')
             return TransitionCallbackReturn.FAILURE
@@ -196,6 +222,7 @@ class WorkplaceNodeBase(LifecycleNode):
         self._reader = reader
         self._process = process
         self._routing = routing
+        self._spawner = spawner
         self.get_logger().info(f'Configured: {config}')
         return TransitionCallbackReturn.SUCCESS
 
@@ -222,6 +249,8 @@ class WorkplaceNodeBase(LifecycleNode):
             self._is_active = True
             self._runner.enable()
             self._routing.activate()
+            if self._spawner is not None:
+                self._spawner.activate()
             # Created last: the latched value may be delivered immediately.
             self._trigger_sub = self.create_subscription(
                 Bool, self._config.product_in_place_topic, self._on_product_in_place,
@@ -269,7 +298,8 @@ class WorkplaceNodeBase(LifecycleNode):
         if self._trigger_sub is not None:
             self.destroy_subscription(self._trigger_sub)
             self._trigger_sub = None
-        for component in (self._routing, self._reader, self._process, self._scene):
+        components = (self._spawner, self._routing, self._reader, self._process, self._scene)
+        for component in components:
             if component is not None:
                 try:
                     component.deactivate()
@@ -279,6 +309,7 @@ class WorkplaceNodeBase(LifecycleNode):
         self._tf_publisher.deactivate()
 
     def _drop_services(self) -> None:
+        self._spawner = None
         self._routing = None
         self._state_tracker.reset()
         self._process = None

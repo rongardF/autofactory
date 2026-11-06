@@ -37,9 +37,11 @@ from typing import Any
 import rclpy
 
 from station_workplace.interface.product_data_reader import ProductDataReader
+from station_workplace.interface.simulation_hooks import SimulationHooks
 from station_workplace.models.common_node_config_dto import CommonNodeConfigDTO
 from station_workplace.models.rfid_node_config_dto import RfidNodeConfigDTO, TagRegistersDTO
 from station_workplace.services.rfid_product_data_reader import RfidProductDataReader
+from station_workplace.services.rfid_simulation_hooks import RfidSimulationHooks
 from station_workplace.workplace_node_base import WorkplaceNodeBase, spin_node
 
 
@@ -83,6 +85,10 @@ class WorkplaceRfidScanner(WorkplaceNodeBase):
     def _create_reader(self, config: CommonNodeConfigDTO) -> ProductDataReader:
         assert isinstance(config, RfidNodeConfigDTO)
         return RfidProductDataReader(config)
+
+    def _create_simulation_hooks(self, config: CommonNodeConfigDTO) -> SimulationHooks:
+        assert isinstance(config, RfidNodeConfigDTO)
+        return RfidSimulationHooks(config)
 
 
 def main(args: list[str] | None = None) -> None:

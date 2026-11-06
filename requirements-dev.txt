@@ -30,3 +30,9 @@ mccabe==0.7.0
 
 # noVNC/websockify system dependencies also require Python timezone metadata.
 tzdata==2026.5
+
+# Collision checking of simulated (Gazebo SDF) models before spawning.
+python-fcl==0.7.0.11
+Cython==3.3.1
+# COLLADA (.dae) mesh loading for trimesh.
+pycollada==0.9.3

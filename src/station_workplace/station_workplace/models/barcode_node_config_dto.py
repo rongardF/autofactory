@@ -80,3 +80,8 @@ class BarcodeNodeConfigDTO(CommonNodeConfigDTO):
     def label_data_topic(self) -> str:
         """Return the barcode scanner ``label_data`` topic."""
         return f'/{self.barcode_scanner_node_name}/label_data'
+
+    @property
+    def simulated_label_data_topic(self) -> str:
+        """Return the barcode scanner ``simulated_label_data`` topic."""
+        return f'/{self.barcode_scanner_node_name}/simulated_label_data'

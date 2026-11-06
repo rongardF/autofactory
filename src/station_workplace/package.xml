@@ -38,6 +38,12 @@
   <exec_depend>production_manager</exec_depend>
   <exec_depend>repositories</exec_depend>
 
+  <!-- Simulation (Gazebo) -->
+  <exec_depend>ros_gz_interfaces</exec_depend>
+  <exec_depend>ros_gz_bridge</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>xacro</exec_depend>
+
   <!-- Launch -->
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>

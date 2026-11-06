@@ -43,3 +43,6 @@ PRODUCT_ORIGIN_FRAME = 'estimated_product_origin'
 
 UNKNOWN = 'UNKNOWN'
 """Product data value used when the product could not be identified."""
+
+ROS_NAME_PATTERN = r'^[A-Za-z_][A-Za-z0-9_]*$'
+"""Pattern of a node name used to build absolute interface names."""

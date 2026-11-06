@@ -27,18 +27,29 @@
 """Launch the ``workplace_barcode_scanner`` lifecycle node.
 
 The node is started *unconfigured*; an external lifecycle manager drives the
-transitions. Every node parameter is exposed as a launch argument of the same
-name (e.g. ``label_patterns.serial_number:='SN:(\\w+)'``). The
-``label_patterns.*`` arguments must be set, otherwise configure fails.
+transitions. With ``simulated:=true`` a ``ros_gz_bridge`` for the Gazebo world
+``create/blocking``/``remove/blocking`` services is started as well. Every node parameter is
+exposed as a launch argument of the same name
+(e.g. ``label_patterns.serial_number:='SN:(\\w+)'``). The ``label_patterns.*``
+arguments must be set, otherwise configure fails.
 """
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.launch_context import LaunchContext
 from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import LifecycleNode
+from launch_ros.actions import LifecycleNode, Node
 
 _FIELDS = ('product_number', 'product_revision', 'serial_number')
+
+
+def _to_bool(value: str) -> bool:
+    """Convert a launch argument to a bool ('true'/'false', case-insensitive)."""
+    lowered = value.strip().lower()
+    if lowered not in ('true', 'false'):
+        raise ValueError(f"expected 'true' or 'false', got '{value}'")
+    return lowered == 'true'
+
 
 # (name, default, description, type)
 _PARAMETERS = [
@@ -54,6 +65,18 @@ _PARAMETERS = [
     ('safety_object.z', '0.3', 'Safety box size along Z [m].', float),
     ('service_call_timeout_sec', '5.0', 'Timeout for service availability and response [s].',
      float),
+    ('simulated', 'true',
+     'Provide spawn_product/remove_product and bridge the Gazebo world services.', _to_bool),
+    ('simulation.world_name', 'default', 'Gazebo world name.', str),
+    ('simulation.station_model_name', 'station', 'Station model name in Gazebo.', str),
+    ('simulation.station_link', 'carrier',
+     'Station link (and TF frame) the carrier model is spawned at and welded to.', str),
+    ('simulation.carrier_model_name', 'carrier_model', 'Name of the spawned carrier model.', str),
+    ('simulation.carrier_link', 'carrier_link',
+     'Carrier model link the product is placed relative to and welded to.', str),
+    ('simulation.product_model_name', 'product_model', 'Name of the spawned product model.', str),
+    ('simulation.penetration_tolerance', '0.001',
+     'Product/carrier penetration depth still treated as touching [m].', float),
     ('barcode_scanner_node_name', 'barcode_scanner', 'Barcode scanner node name.', str),
 ]
 for _field in _FIELDS:
@@ -69,7 +92,21 @@ def _launch_node(context: LaunchContext) -> list:
 
     parameters = {name: cast(arg(name)) for name, _, _, cast in _PARAMETERS}
     parameters['use_sim_time'] = arg('use_sim_time').lower() == 'true'
-    return [
+    actions = []
+    if parameters['simulated']:
+        world = parameters['simulation.world_name']
+        actions.append(Node(
+            package='ros_gz_bridge',
+            executable='parameter_bridge',
+            name=f"{arg('node_name')}_gz_bridge",
+            arguments=[
+                f'/world/{world}/create/blocking@ros_gz_interfaces/srv/SpawnEntity',
+                f'/world/{world}/remove/blocking@ros_gz_interfaces/srv/DeleteEntity',
+            ],
+            parameters=[{'use_sim_time': parameters['use_sim_time']}],
+            output='screen',
+        ))
+    return actions + [
         LifecycleNode(
             package='station_workplace',
             executable='workplace_barcode_scanner',

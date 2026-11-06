@@ -57,6 +57,8 @@ set(interface_files
   msg/WorkplaceState.msg
   msg/LabelData.msg
   action/WaitRouting.action
+  srv/SpawnProduct.srv
+  srv/RemoveProduct.srv
 )
 
 rosidl_generate_interfaces(${PROJECT_NAME}

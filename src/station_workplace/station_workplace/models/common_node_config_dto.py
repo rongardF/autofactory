@@ -28,8 +28,10 @@
 
 from pydantic import BaseModel, ConfigDict, Field
 
-ROS_NAME_PATTERN = r'^[A-Za-z_][A-Za-z0-9_]*$'
-"""Pattern of a node name used to build absolute interface names."""
+from station_workplace.enums.constants import ROS_NAME_PATTERN
+from station_workplace.models.simulation_config_dto import SimulationConfigDTO
+
+__all__ = ['ROS_NAME_PATTERN', 'CommonNodeConfigDTO', 'SafetyObjectConfigDTO']
 
 
 class SafetyObjectConfigDTO(BaseModel):
@@ -70,6 +72,14 @@ class CommonNodeConfigDTO(BaseModel):
     service_call_timeout_sec: float = Field(
         default=5.0, gt=0,
         description='Timeout for service availability and response [s].',
+    )
+    simulated: bool = Field(
+        default=False,
+        description='Enable the simulation services (spawn_product, remove_product).',
+    )
+    simulation: SimulationConfigDTO = Field(
+        default_factory=SimulationConfigDTO,
+        description='Simulation (Gazebo) settings; used only when simulated is true.',
     )
 
     @property

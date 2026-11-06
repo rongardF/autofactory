@@ -37,9 +37,11 @@ from typing import Any
 import rclpy
 
 from station_workplace.interface.product_data_reader import ProductDataReader
+from station_workplace.interface.simulation_hooks import SimulationHooks
 from station_workplace.models.barcode_node_config_dto import BarcodeNodeConfigDTO
 from station_workplace.models.common_node_config_dto import CommonNodeConfigDTO
 from station_workplace.services.barcode_product_data_reader import BarcodeProductDataReader
+from station_workplace.services.barcode_simulation_hooks import BarcodeSimulationHooks
 from station_workplace.workplace_node_base import WorkplaceNodeBase, spin_node
 
 
@@ -72,6 +74,10 @@ class WorkplaceBarcodeScanner(WorkplaceNodeBase):
     def _create_reader(self, config: CommonNodeConfigDTO) -> ProductDataReader:
         assert isinstance(config, BarcodeNodeConfigDTO)
         return BarcodeProductDataReader(config, self.get_logger())
+
+    def _create_simulation_hooks(self, config: CommonNodeConfigDTO) -> SimulationHooks:
+        assert isinstance(config, BarcodeNodeConfigDTO)
+        return BarcodeSimulationHooks(config)
 
 
 def main(args: list[str] | None = None) -> None:
