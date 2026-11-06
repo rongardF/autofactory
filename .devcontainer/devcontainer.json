@@ -46,6 +46,7 @@
     ".devcontainer/scripts/configure.py"
   ],
   "postCreateCommand": "git config --global --add safe.directory ${containerWorkspaceFolder}",
+  "postStartCommand": "echo '. /opt/ros/jazzy/setup.bash' >> ~/.bashrc; echo '. /workspaces/autofactory/install/setup.bash' >> ~/.bashrc;",
   "overrideCommand": false,
   "shutdownAction": "stopCompose",
   "remoteUser": "ros",
