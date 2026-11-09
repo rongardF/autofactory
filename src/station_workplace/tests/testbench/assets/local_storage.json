@@ -1,0 +1,38 @@
+[
+    {
+        "model_id": "edf9129e-6656-4d99-895a-85d6b7de4ac7",
+        "model_type": "stl",
+        "filter_keys": [],
+        "metadata_json": {
+            "estimated_product_origin_pose": [
+                -0.35,
+                0.25,
+                0.02,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "carrier_model_id": "382eb88f-e429-46bd-a4e0-3a6dbd8564a0"
+        }
+    },
+    {
+        "model_id": "382eb88f-e429-46bd-a4e0-3a6dbd8564a0",
+        "model_type": "stl",
+        "filter_keys": [],
+        "metadata_json": null
+    },
+    {
+        "model_id": "fd71afb0-d3e9-428c-a7e6-b2613b877088",
+        "model_type": "sdf",
+        "filter_keys": [],
+        "metadata_json": {
+            "carrier_model_id": "c4e38990-3383-4375-b2ac-0d1468d6604f"
+        }
+    },
+    {
+        "model_id": "c4e38990-3383-4375-b2ac-0d1468d6604f",
+        "model_type": "sdf",
+        "filter_keys": [],
+        "metadata_json": null
+    }
+]

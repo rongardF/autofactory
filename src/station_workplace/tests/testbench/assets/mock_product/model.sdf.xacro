@@ -1,0 +1,87 @@
+<?xml version="1.0" ?>
+<sdf version="1.6" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="mock_product"
+      params="
+        model_name:=product_model
+        carrier_model_name:=carrier_model
+        carrier_link:=carrier_link
+      ">
+
+    <model name="${model_name}">
+      <link name="product_link">
+        <!-- Aluminium heatsink 0.3 x 0.5 x 0.15 m (origin at a bottom corner,
+             extends along +x, -y, +z); ~33% fill factor of solid aluminium
+             -> ~20 kg. Inertia from homogeneous-box model, COM measured in CAD. -->
+        <inertial>
+          <pose>0.1512 -0.2519 0.1273 0 0 0</pose>
+          <mass>20.0</mass>
+          <inertia>
+            <ixx>0.4542</ixx><iyy>0.1875</iyy><izz>0.5667</izz>
+            <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+          </inertia>
+        </inertial>
+        <collision name="collision">
+          <geometry>
+            <mesh>
+              <uri>model://fd71afb0-d3e9-428c-a7e6-b2613b877088/meshes/collision.stl</uri>
+            </mesh>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <mesh>
+              <uri>model://fd71afb0-d3e9-428c-a7e6-b2613b877088/meshes/visual.obj</uri>
+            </mesh>
+          </geometry>
+          <material>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+            <specular>0.45 0.45 0.45 1</specular>
+            <emissive>0 0 0 1</emissive>
+            <pbr>
+              <metal>
+                <albedo_map>model://fd71afb0-d3e9-428c-a7e6-b2613b877088/materials/brushed_albedo.png</albedo_map>
+                <normal_map>model://fd71afb0-d3e9-428c-a7e6-b2613b877088/materials/brushed_normal.png</normal_map>
+                <roughness_map>model://fd71afb0-d3e9-428c-a7e6-b2613b877088/materials/brushed_rough.png</roughness_map>
+                <metalness_map>model://fd71afb0-d3e9-428c-a7e6-b2613b877088/materials/brushed_metalness.png</metalness_map>
+              </metal>
+            </pbr>
+          </material>
+        </visual>
+      </link>
+
+      <!--
+      IMPORTANT (gz-sim 8.11.0): this plugin STARTS ATTACHED. Its
+      internal attachRequested flag defaults to true, so a fixed joint
+      is created on the very first simulation step at the parts'
+      INITIAL relative pose. There is no <start_detached> option in
+      this version; <attach_topic> only RE-attaches after a detach.
+
+      Parent_link must be a DIRECT link of the model hosting this
+      plugin
+      -->
+      <plugin filename="gz-sim-detachable-joint-system"
+              name="gz::sim::systems::DetachableJoint">
+          <parent_link>product_link</parent_link>
+          <child_model>${carrier_model_name}</child_model>
+          <child_link>${carrier_link}</child_link>
+          <attach_topic>/${carrier_link}/${model_name}/attach</attach_topic>
+          <detach_topic>/${carrier_link}/${model_name}/detach</detach_topic>
+          <output_topic>/${carrier_link}/${model_name}/state</output_topic>
+      </plugin>
+    </model>
+
+  </xacro:macro>
+
+  <xacro:arg name="model_name"                  default="product_model"/>
+  <xacro:arg name="carrier_model_name"          default="carrier_model"/>
+  <xacro:arg name="carrier_link"                default="carrier_link"/>
+
+  <xacro:mock_product
+      model_name="$(arg model_name)"
+      carrier_model_name="$(arg carrier_model_name)"
+      carrier_link="$(arg carrier_link)"
+  />
+
+</sdf>
