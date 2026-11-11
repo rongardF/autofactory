@@ -57,6 +57,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Slots.msg"
   "action/MountTool.action"
   "action/UnmountTool.action"
+  "srv/GetToolSerial.srv"
   DEPENDENCIES action_msgs
   SKIP_INSTALL
 )
