@@ -1,9 +1,11 @@
 # Image capture poses of the product localization.
 # Each pose is [x, y, z, roll, pitch, yaw] (m, rad) of the camera TCP relative to the
-# 'localization_origin' frame. The values are placeholders; tune them for the station.
+# 'localization_origin' frame. The camera looks along the TCP x axis, so pitch pi/2 looks
+# straight down. Every pose is 0.3 m off the product centre and 0.5 m above it, looking at the
+# centre 30 deg off vertical (pitch 60 deg). Poses 2-4 are pose 1 rotated about the vertical
+# axis, so the yaw is the azimuth of the viewpoint; roll stays 0 to avoid the pitch pi/2 gimbal
+# singularity. The values are placeholders; tune them for the station.
 poses:
   - [0.0, 0.0, 0.5, 0.0, 1.5708, 0.0]
-  - [-0.1, 0.0, 0.5, 0.0, 1.5708, 0.0]
-  - [0.05, 0.0, 0.5, 0.0, 1.5708, 0.0]
-  - [0.0, 0.1, 0.5, 0.0, 1.5708, 0.0]
-  - [0.0, -0.1, 0.5, 0.0, 1.5708, 0.0]
+  - [-0.3, 0.0, 0.5, 0.0, 1.0472, 0.0]
+  - [0.1, 0.0, 0.4, 0.0, 1.7453, 0.0]
