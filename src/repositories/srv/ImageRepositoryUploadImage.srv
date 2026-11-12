@@ -1,0 +1,7 @@
+sensor_msgs/Image image
+string            image_name
+string            metadata        # raw JSON string; empty = no metadata
+---
+string            image_id        # UUID4; empty string when success=false
+bool              success
+string            error_message   # empty on success

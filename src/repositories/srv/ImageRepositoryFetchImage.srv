@@ -1,0 +1,7 @@
+string            image_id
+---
+sensor_msgs/Image[] image         # 1 element on success, empty otherwise (optional-field idiom)
+string[]            image_name    # same length as image
+string              metadata      # JSON string; '' if no metadata or on failure
+bool                success
+string              error_message

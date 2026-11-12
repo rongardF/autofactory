@@ -12,6 +12,7 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 find_package(action_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 # Python version — needed to compute the correct site-packages install path
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
@@ -52,14 +53,19 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/OperationRepositoryDispensingPattern.msg"
   "msg/OperationRepositoryOperation.msg"
   "srv/OperationRepositoryGetOperation.srv"
-  DEPENDENCIES builtin_interfaces action_msgs geometry_msgs
+  # image_repository interfaces
+  "srv/ImageRepositoryUploadImage.srv"
+  "srv/ImageRepositoryUploadImages.srv"
+  "srv/ImageRepositoryFetchImage.srv"
+  "srv/ImageRepositoryFetchImages.srv"
+  DEPENDENCIES builtin_interfaces action_msgs geometry_msgs sensor_msgs
   SKIP_INSTALL
 )
 
 ament_index_register_resource(
   "rosidl_interfaces"
   CONTENT
-    "msg/StationCacheStringCache.msg\nmsg/StationCacheBooleanCache.msg\nmsg/StationCacheNumberCache.msg\nmsg/StationCacheStringArrayCache.msg\nmsg/StationCacheBytesCache.msg\nmsg/StationCacheNumberArrayCache.msg\nsrv/StationCacheStoreString.srv\nsrv/StationCacheFetchString.srv\nsrv/StationCacheStoreBoolean.srv\nsrv/StationCacheFetchBoolean.srv\nsrv/StationCacheStoreNumber.srv\nsrv/StationCacheFetchNumber.srv\nsrv/StationCacheStoreStringArray.srv\nsrv/StationCacheFetchStringArray.srv\nsrv/StationCacheStoreBytes.srv\nsrv/StationCacheFetchBytes.srv\nsrv/StationCacheStoreNumberArray.srv\nsrv/StationCacheFetchNumberArray.srv\nsrv/StationCacheDelete.srv\nmsg/ObjectModelStorageMappingValue.msg\nmsg/ObjectModelStorageModelInfo.msg\nmsg/ObjectModelStorageCachedModels.msg\nsrv/ObjectModelStorageGetModelsInfo.srv\nsrv/ObjectModelStorageGetModel.srv\naction/ObjectModelStorageGetModels.action\nmsg/OperationRepositoryArg.msg\nmsg/OperationRepositoryMaterial.msg\nmsg/OperationRepositoryEndTool.msg\nmsg/OperationRepositoryPatternAction.msg\nmsg/OperationRepositoryDispensingMovement.msg\nmsg/OperationRepositoryDispensingPattern.msg\nmsg/OperationRepositoryOperation.msg\nsrv/OperationRepositoryGetOperation.srv"
+    "msg/StationCacheStringCache.msg\nmsg/StationCacheBooleanCache.msg\nmsg/StationCacheNumberCache.msg\nmsg/StationCacheStringArrayCache.msg\nmsg/StationCacheBytesCache.msg\nmsg/StationCacheNumberArrayCache.msg\nsrv/StationCacheStoreString.srv\nsrv/StationCacheFetchString.srv\nsrv/StationCacheStoreBoolean.srv\nsrv/StationCacheFetchBoolean.srv\nsrv/StationCacheStoreNumber.srv\nsrv/StationCacheFetchNumber.srv\nsrv/StationCacheStoreStringArray.srv\nsrv/StationCacheFetchStringArray.srv\nsrv/StationCacheStoreBytes.srv\nsrv/StationCacheFetchBytes.srv\nsrv/StationCacheStoreNumberArray.srv\nsrv/StationCacheFetchNumberArray.srv\nsrv/StationCacheDelete.srv\nmsg/ObjectModelStorageMappingValue.msg\nmsg/ObjectModelStorageModelInfo.msg\nmsg/ObjectModelStorageCachedModels.msg\nsrv/ObjectModelStorageGetModelsInfo.srv\nsrv/ObjectModelStorageGetModel.srv\naction/ObjectModelStorageGetModels.action\nmsg/OperationRepositoryArg.msg\nmsg/OperationRepositoryMaterial.msg\nmsg/OperationRepositoryEndTool.msg\nmsg/OperationRepositoryPatternAction.msg\nmsg/OperationRepositoryDispensingMovement.msg\nmsg/OperationRepositoryDispensingPattern.msg\nmsg/OperationRepositoryOperation.msg\nsrv/OperationRepositoryGetOperation.srv\nsrv/ImageRepositoryUploadImage.srv\nsrv/ImageRepositoryUploadImages.srv\nsrv/ImageRepositoryFetchImage.srv\nsrv/ImageRepositoryFetchImages.srv"
 )
 
 # Generated headers include their package-qualified paths (for example
@@ -206,6 +212,11 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
   RENAME operation_repository
 )
+install(PROGRAMS
+  ${PROJECT_NAME}/image_repository.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME image_repository
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -224,5 +235,6 @@ ament_export_dependencies(
   builtin_interfaces
   service_msgs
   geometry_msgs
+  sensor_msgs
 )
 ament_package()
