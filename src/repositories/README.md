@@ -13,10 +13,11 @@ repositories/
 ├── station_cache.py               # station_cache node
 ├── object_model_storage.py        # object_model_storage node
 ├── operation_repository.py        # operation_repository node
-├── enums/{station_cache,object_model_storage,operation_repository}/
-├── interfaces/{station_cache,object_model_storage,operation_repository}/
-├── models/{station_cache,object_model_storage,operation_repository}/
-├── services/{station_cache,object_model_storage,operation_repository}/
+├── image_repository.py            # image_repository node
+├── enums/{station_cache,object_model_storage,operation_repository,image_repository}/
+├── interfaces/{station_cache,object_model_storage,operation_repository,image_repository}/
+├── models/{station_cache,object_model_storage,operation_repository,image_repository}/
+├── services/{station_cache,object_model_storage,operation_repository,image_repository}/
 └── utils/                         # shared helpers
 ```
 
@@ -198,6 +199,61 @@ non-empty and homogeneous so their element type can be inferred. The shared
 `flowrate_m3_s` float argument, and wait actions require their `wait_time_s`
 float argument.
 
+## `image_repository` node
+
+Lets other nodes **upload** images to and **fetch** images from a storage. Every
+image is kept on the local filesystem; in remote mode the remote image service is
+the source of truth and the local directory is a cache.
+
+- **Class:** `ImageRepository` (`rclpy.lifecycle.LifecycleNode`)
+- **Executable:** `image_repository`
+- **Backends:** local filesystem only (default) / `RemoteImageBackend` (REST —
+  stubbed this iteration; every remote call returns `remote mode not implemented`)
+
+### Service surface (node-relative, resolve to `/image_repository/<name>`)
+
+| Service | Type | Notes |
+|---------|------|-------|
+| `~/upload_image` | `ImageRepositoryUploadImage` | Stores one `sensor_msgs/Image` with a name and optional JSON metadata; returns a UUID4 `image_id`. |
+| `~/upload_images` | `ImageRepositoryUploadImages` | Same for several images; all-or-nothing with rollback. |
+| `~/fetch_image` | `ImageRepositoryFetchImage` | Returns the image, name and metadata for one `image_id`. |
+| `~/fetch_images` | `ImageRepositoryFetchImages` | Same for several ids; all-or-nothing. |
+
+All responses carry `success` + `error_message`; failures never raise across the
+ROS boundary. Metadata must be valid JSON (or empty) and is returned in compact
+form. Supported encodings: `mono8`, `mono16`, `rgb8`, `bgr8`, `rgba8`, `bgra8`,
+`rgb16`, `bgr16`, `rgba16`, `bgra16`.
+
+### Parameters
+
+| Parameter | Type | Default | Notes |
+|-----------|------|---------|-------|
+| `local_storage` | bool | `true` | `true` → local only; `false` → remote service plus local cache (stubbed). |
+| `local_storage_path` | string | `/tmp/station/images` | Must be absolute; created on `configure` if missing. |
+| `station_id` | string | `''` | **Required** in both modes. Must be a UUID4 string. |
+| `image_service_url` | string | `''` | Required only when `local_storage = false`. |
+| `request_timeout_sec` | double | `5.0` | Must be `> 0`; unused until remote mode is implemented. |
+| `cache_size_mb` | int | `50` | Must be `> 10`. Eviction starts when the directory exceeds `cache_size_mb - 10` MB. |
+| `cache_check_interval_sec` | double | `60.0` | Must be `> 0`. Period of the size check while `active`. |
+
+### Storage layout and cache eviction
+
+`local_storage_path` holds `<image_id>` (PNG, no extension) and
+`<image_id>_metadata.json` per image. **The directory must be dedicated to this
+node:** on `configure`, orphaned files, leftover temp files and any other regular
+file are deleted (subdirectories and symlinks are left alone).
+
+When the directory would exceed `cache_size_mb - 10` MB (before a write, after a
+store, on `configure` and periodically while active), the oldest image/metadata
+pairs are deleted together until it fits. The images of the current request and
+the most recently stored image are never evicted, and uploads never fail for lack
+of cache space. In remote mode eviction only drops the local copy; in local mode
+it permanently deletes the image.
+
+```bash
+ros2 run repositories image_repository --ros-args \
+  -p station_id:=<uuid4> -p local_storage_path:=/tmp/station/images
+```
 ## Build
 
 ```bash

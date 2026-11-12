@@ -1,0 +1,7 @@
+sensor_msgs/Image[] images
+string[]            image_names   # same length as images
+string[]            metadata      # same length as images; '' = no metadata
+---
+string[]            image_ids     # same length/order as images; empty array when success=false
+bool                success
+string              error_message

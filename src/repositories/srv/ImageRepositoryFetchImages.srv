@@ -1,0 +1,8 @@
+string[]            image_ids
+---
+sensor_msgs/Image[] images        # same length and order as image_ids on success
+string[]            image_names   # same length as images
+string[]            returned_ids  # same length as images; echoes the requested ids
+string[]            metadata      # same length as images; '' where no metadata
+bool                success
+string              error_message
