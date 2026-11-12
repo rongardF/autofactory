@@ -145,8 +145,8 @@ managers, and the launcher.
 6. If a tool is **on the mount**, do the same with `mounted:=true`, attaching to
    `tool_mount_tcp`.
 7. Create the `tool_mount/lock` service client, the movement-controller
-   `ExecuteTrajectory` action client, and the two action servers
-   `~/mount_tool` and `~/unmount_tool`.
+   `ExecuteTrajectory` action client, the two action servers
+   `~/mount_tool` and `~/unmount_tool`, and the `~/get_tool_serial` service.
 8. On `ActivationFailedException`, unwind everything created so far and return
    `FAILURE`.
 
@@ -157,8 +157,14 @@ Both are `tools_manager` actions with goal `string tool_sn` and result
 
 #### `~/mount_tool` (pick a tool off the rack)
 Serialized by a non-blocking `RLock` (concurrent mount/unmount is rejected).
-Pre-checks: nothing already mounted, slots known, collaborators initialized, the
-requested serial actually on the rack. Then:
+Pre-checks: slots known, collaborators initialized, the requested serial
+actually on the rack. If the requested tool is already mounted the goal
+succeeds immediately (`success=true`, no motion). If a **different** tool is
+mounted, it is first returned to its slot (the `~/unmount_tool` sequence below,
+run on the same goal handle) and then the requested tool is mounted; a failure
+in either part aborts the goal with a single failed result and no rollback.
+The unmount pre-checks (mounted tool's slot known and empty) run before any
+motion. Then:
 
 1. Resolve the tool's three frames (`slide_in`, `attached`, `lifted`). All robot
    moves target a **zero "unity" pose** in those frames, i.e. "make
@@ -184,6 +190,17 @@ is empty. Sequence: PTP → `lifted`, allow collisions, LIN → `attached`, **re
 model back to the rack slot link**, `lock` unlock, wait up to 10 s for the rack
 to re-detect the tool, LIN → `slide_in`, re-disable collisions,
 `_endtool_mounted(tool_sn, False)`, succeed.
+
+### Services
+
+#### `~/get_tool_serial` (`tools_manager/srv/GetToolSerial`)
+Only available while the node is **active**. Request (all mandatory):
+`tool_part_number`, `tool_part_revision`, `material_part_number`,
+`material_part_revision`. It searches the tools on the rack (`tool_rack/slots`)
+and the currently mounted tool; a tool matches only if all four fields are
+equal (exact, case-sensitive, no wildcards). Response: `bool success`,
+`string message`, `string[] tool_sn` (serials of all matches; empty and
+`success=false` when nothing matches).
 
 ### Movement + service plumbing
 - `_call_action` — `wait_for_server`, `send_goal_async`, polls the future via
@@ -255,6 +272,7 @@ Launches each endtool launch file as an independent child process
 | `tool_mount/tool_mounted` | `tools_manager/ToolInfo` (latched) | mount → manager |
 | `tool_mount/lock` | `std_srvs/SetBool` | manager → mount |
 | `~/mount_tool`, `~/unmount_tool` | `tools_manager/MountTool`, `UnmountTool` | clients → manager |
+| `~/get_tool_serial` | `tools_manager/GetToolSerial` | clients → manager |
 | `<movement_controller>/execute_trajectory` | `movement_controller/ExecuteTrajectory` | manager → mover |
 | `/world/<world>/{create,remove,set_pose}` | `ros_gz_interfaces/*` | manager → Gazebo (sim) |
 | `/<link>/<model>/{attach,detach,state}` | `std_msgs/Empty` / `String` | manager ↔ Gazebo joints (sim) |

@@ -45,6 +45,7 @@ from rclpy.subscription import Subscription
 from rclpy.action import ActionServer
 from rclpy.action.server import ServerGoalHandle
 from rclpy.client import Client as ServiceClient
+from rclpy.service import Service
 from rclpy.callback_groups import ReentrantCallbackGroup
 
 from geometry_msgs.msg import PoseStamped, Pose
@@ -54,6 +55,7 @@ from movement_controller.action import ExecuteTrajectory
 from movement_controller.msg import TrajectoryPath
 from tools_manager.msg import Slots, ToolInfo
 from tools_manager.action import MountTool, UnmountTool
+from tools_manager.srv import GetToolSerial
 
 from tools_manager.utils.config_reader import read_config_file
 from tools_manager.exception.activation_failed_exception import ActivationFailedException
@@ -148,6 +150,9 @@ class ToolsManager(LifecycleNode):
         # action servers and clients
         self._mount_tool_action: ActionServer|None = None
         self._unmount_tool_action: ActionServer|None = None
+
+        # service servers
+        self._get_tool_serial_service: Service|None = None
 
         self._movement_controller_action_client: ActionClient|None = None
 
@@ -436,6 +441,13 @@ class ToolsManager(LifecycleNode):
                 cancel_callback=self._cancel_tool_action_callback,
                 callback_group=self._action_callback_group,
             )
+
+            self._get_tool_serial_service = self.create_service(
+                srv_type=GetToolSerial,
+                srv_name='~/get_tool_serial',
+                callback=self._get_tool_serial_callback,
+                callback_group=self._action_callback_group,
+            )
             
         except ActivationFailedException as e:
             self.get_logger().error(f'Activation failed: {e}')
@@ -476,6 +488,9 @@ class ToolsManager(LifecycleNode):
             if self._unmount_tool_action is not None:
                 self._unmount_tool_action.destroy()
                 self._unmount_tool_action = None
+            if self._get_tool_serial_service is not None:
+                self.destroy_service(self._get_tool_serial_service)
+                self._get_tool_serial_service = None
             
             return TransitionCallbackReturn.FAILURE
 
@@ -515,6 +530,10 @@ class ToolsManager(LifecycleNode):
         if self._unmount_tool_action is not None:
             self._unmount_tool_action.destroy()
             self._unmount_tool_action = None
+
+        if self._get_tool_serial_service is not None:
+            self.destroy_service(self._get_tool_serial_service)
+            self._get_tool_serial_service = None
 
         if self._tool_mount_lock is not None:
             self._tool_mount_lock.destroy()
@@ -594,10 +613,10 @@ class ToolsManager(LifecycleNode):
             tool_rack_slots = self.tool_rack_slots
             tool_mounted = self.tool_mounted
 
-            if tool_mounted is not None:
-                response.success = False
-                response.message = "A tool is already mounted. Please unmount it first."
-                goal_handle.abort()
+            if tool_mounted is not None and tool_mounted.tool_sn == request.tool_sn:
+                response.success = True
+                response.message = f"Tool with serial number '{request.tool_sn}' is already mounted."
+                goal_handle.succeed()
                 return response
 
             if tool_rack_slots is None:
@@ -639,6 +658,18 @@ class ToolsManager(LifecycleNode):
                 goal_handle.abort()
                 return response
             frames, unity_pose = result
+
+            # wrong tool is mounted: swap by returning it to its slot first; the lock is
+            # reentrant and the unmount aborts this same goal on failure
+            if tool_mounted is not None:
+                self.get_logger().info(
+                    f"Tool '{tool_mounted.tool_sn}' is mounted, unmounting it before mounting '{tool_sn}'."
+                )
+                unmount_result = self._unmount_tool_callback(goal_handle, finalize=False)
+                if not unmount_result.success:
+                    response.success = False
+                    response.message = f"Failed to unmount tool '{tool_mounted.tool_sn}': {unmount_result.message}"
+                    return response
 
             # move to tool_slide in pose with 'tool_mount_tcp' 
             path = TrajectoryPath()
@@ -764,7 +795,13 @@ class ToolsManager(LifecycleNode):
             goal_handle.succeed()
             return response
 
-    def _unmount_tool_callback(self, goal_handle: ServerGoalHandle) -> UnmountTool.Result:
+    def _unmount_tool_callback(self, goal_handle: ServerGoalHandle, finalize: bool = True) -> UnmountTool.Result:
+        """Return the mounted tool to its rack slot.
+
+        :param goal_handle: Goal handle to abort on failure (and succeed when ``finalize``).
+        :param finalize: ``False`` when called as a step of a larger goal (tool swap) so
+            the goal is not marked succeeded here.
+        """
         request: UnmountTool.Goal = goal_handle.request
         response = UnmountTool.Result()
 
@@ -939,8 +976,36 @@ class ToolsManager(LifecycleNode):
             self._endtool_mounted(tool_sn, False)
 
             response.success = True
-            goal_handle.succeed()
+            if finalize:
+                goal_handle.succeed()
             return response
+
+    def _get_tool_serial_callback(
+        self, request: GetToolSerial.Request, response: GetToolSerial.Response
+    ) -> GetToolSerial.Response:
+        candidates: list[ToolInfoDto] = []
+        slots = self.tool_rack_slots
+        if slots is not None:
+            candidates.extend(slots.tools_mounted)
+        tool_mounted = self.tool_mounted
+        if tool_mounted is not None:
+            candidates.append(tool_mounted)
+
+        response.tool_sn = [
+            tool.tool_sn for tool in candidates
+            if (
+                tool.tool_part_number == request.tool_part_number
+                and tool.tool_part_revision == request.tool_part_revision
+                and tool.material_part_number == request.material_part_number
+                and tool.material_part_revision == request.material_part_revision
+            )
+        ]
+        response.success = len(response.tool_sn) > 0
+        response.message = '' if response.success else (
+            f"No tool found with tool part '{request.tool_part_number}' rev '{request.tool_part_revision}' "
+            f"and material part '{request.material_part_number}' rev '{request.material_part_revision}'."
+        )
+        return response
     # endregion: callbacks
 
     # region: private methods
