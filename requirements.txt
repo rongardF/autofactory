@@ -15,6 +15,10 @@ pydantic_core==2.46.4
 typing-inspection==0.4.4
 typing_extensions==4.16.0
 
+# Linear programming (HiGHS) and rotations for the execution_optimizer camera
+# poses. numpy itself comes from the image's apt package.
+scipy==1.14.1
+
 # Mesh processing for MoveIt planning-scene objects.
 trimesh==4.4.3
 

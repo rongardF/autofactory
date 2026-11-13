@@ -1,0 +1,27 @@
+# Default parameters for the dispensing_optimizer node.
+#
+# Copy or override these values via a launch file or `--params-file`.
+/**:
+  ros__parameters:
+    # Frame of all pattern poses (they must all be expressed in it) and of the
+    # output image capture poses.
+    product_frame_id: "product_origin"
+    # Inclusive [low, high] feature resolution range in px/mm. The default
+    # corresponds to a 400-500 mm camera distance for the simulated camera
+    # (fx ~ 1663 px); a real camera must override it. Use decimals.
+    feature_resolution_range: [3.33, 4.16]
+    # Maximum angle in degrees between any ROI normal of a group and the mean
+    # normal of that group (0 <= value < 90).
+    max_angle_deviation: 20.0
+    # Pixel rectangle [x_min, y_min, x_max, y_max] (top-left origin, inclusive)
+    # in which all ROI points must project. Empty means the whole image.
+    operational_area: []
+    # Camera node serving the get_image action; the action name is
+    # "<camera_node_name>/get_image", resolved in the node namespace.
+    camera_node_name: "basler_camera"
+    # Maximum distance in millimetres of pattern points from the fitted plane
+    # (or line); patterns exceeding it are rejected as non-planar.
+    planarity_tolerance_mm: 0.5
+    # Timeout in seconds for the camera action server and for the get_image
+    # result when the camera intrinsics are fetched on activation.
+    camera_info_timeout_s: 5.0
