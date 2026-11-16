@@ -145,8 +145,9 @@ managers, and the launcher.
 6. If a tool is **on the mount**, do the same with `mounted:=true`, attaching to
    `tool_mount_tcp`.
 7. Create the `tool_mount/lock` service client, the movement-controller
-   `ExecuteTrajectory` action client, the two action servers
-   `~/mount_tool` and `~/unmount_tool`, and the `~/get_tool_serial` service.
+   `ExecuteTrajectory` action client and `in_session` / `close_session` service
+   clients, the two action servers `~/mount_tool` and `~/unmount_tool`, and the
+   `~/get_tool_serial` service.
 8. On `ActivationFailedException`, unwind everything created so far and return
    `FAILURE`.
 
@@ -203,7 +204,16 @@ equal (exact, case-sensitive, no wildcards). Response: `bool success`,
 `success=false` when nothing matches).
 
 ### Movement + service plumbing
-- `_call_action` — `wait_for_server`, `send_goal_async`, polls the future via
+- **Movement session** — every top-level `mount_tool` / `unmount_tool` goal runs
+  all its movements (including the unmount done by a tool swap) in one
+  movement-controller session so no other caller can move the robot in between.
+  The session (`movement_controller.services.MovementSession`) is opened by the first movement
+  with a hardcoded 60 s timeout, re-extended (60 s) before a movement when less
+  than 30 s remain, and always closed when the operation ends. If it cannot be
+  acquired (e.g. another caller holds the lock) the movement and therefore the
+  operation fails immediately, without retry.
+- `_call_action` — opens/extends the movement session and sets `session_id` on the
+  goal, then `wait_for_server`, `send_goal_async`, polls the future via
   the node clock (honours `use_sim_time`), waits indefinitely for the result,
   and only returns `True` if status is `SUCCEEDED` **and** `result.success`.
 - `_call_service` — `wait_for_service`, `call_async`, polled with a timeout.
@@ -274,6 +284,7 @@ Launches each endtool launch file as an independent child process
 | `~/mount_tool`, `~/unmount_tool` | `tools_manager/MountTool`, `UnmountTool` | clients → manager |
 | `~/get_tool_serial` | `tools_manager/GetToolSerial` | clients → manager |
 | `<movement_controller>/execute_trajectory` | `movement_controller/ExecuteTrajectory` | manager → mover |
+| `<movement_controller>/in_session`, `<movement_controller>/close_session` | `movement_controller/InSession`, `CloseSession` | manager → mover |
 | `/world/<world>/{create,remove,set_pose}` | `ros_gz_interfaces/*` | manager → Gazebo (sim) |
 | `/<link>/<model>/{attach,detach,state}` | `std_msgs/Empty` / `String` | manager ↔ Gazebo joints (sim) |
 | `/slot<i>_rfid_scanner/tag_data`, `/tool_mount_rfid_scanner/tag_data` | `ros_gz_interfaces/Dataframe` | Gazebo → rack/mount (sim) |

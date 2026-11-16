@@ -53,6 +53,8 @@ from std_srvs.srv import SetBool
 
 from movement_controller.action import ExecuteTrajectory
 from movement_controller.msg import TrajectoryPath
+from movement_controller.services.movement_session import MovementSession
+from movement_controller.srv import CloseSession, InSession
 from tools_manager.msg import Slots, ToolInfo
 from tools_manager.action import MountTool, UnmountTool
 from tools_manager.srv import GetToolSerial
@@ -146,6 +148,8 @@ class ToolsManager(LifecycleNode):
 
         # service clients
         self._tool_mount_lock: ServiceClient|None = None
+        self._in_session_client: ServiceClient|None = None
+        self._close_session_client: ServiceClient|None = None
 
         # action servers and clients
         self._mount_tool_action: ActionServer|None = None
@@ -155,6 +159,7 @@ class ToolsManager(LifecycleNode):
         self._get_tool_serial_service: Service|None = None
 
         self._movement_controller_action_client: ActionClient|None = None
+        self._movement_session: MovementSession|None = None
 
         # callback groups
         self._action_callback_group = ReentrantCallbackGroup()
@@ -424,6 +429,16 @@ class ToolsManager(LifecycleNode):
                 f'{self._config.movement_controller_node_name}/execute_trajectory',
             )
 
+            # movement session clients: reserve the movement controller for a whole mount/unmount
+            self._in_session_client = self.create_client(
+                srv_type=InSession,
+                srv_name=f'{self._config.movement_controller_node_name}/in_session',
+            )
+            self._close_session_client = self.create_client(
+                srv_type=CloseSession,
+                srv_name=f'{self._config.movement_controller_node_name}/close_session',
+            )
+
             # create tool managing action clients
             self._mount_tool_action = ActionServer(
                 node=self,
@@ -482,6 +497,13 @@ class ToolsManager(LifecycleNode):
                 self._movement_controller_action_client.destroy()
                 self._movement_controller_action_client = None
 
+            if self._in_session_client is not None:
+                self._in_session_client.destroy()
+                self._in_session_client = None
+            if self._close_session_client is not None:
+                self._close_session_client.destroy()
+                self._close_session_client = None
+
             if self._mount_tool_action is not None:
                 self._mount_tool_action.destroy()
                 self._mount_tool_action = None
@@ -522,6 +544,14 @@ class ToolsManager(LifecycleNode):
         if self._movement_controller_action_client is not None:
             self._movement_controller_action_client.destroy()
             self._movement_controller_action_client = None
+
+        if self._in_session_client is not None:
+            self._in_session_client.destroy()
+            self._in_session_client = None
+
+        if self._close_session_client is not None:
+            self._close_session_client.destroy()
+            self._close_session_client = None
 
         if self._mount_tool_action is not None:
             self._mount_tool_action.destroy()
@@ -599,6 +629,44 @@ class ToolsManager(LifecycleNode):
         return True  # TODO: implement cancel logic
 
     def _mount_tool_callback(self, goal_handle: ServerGoalHandle) -> MountTool.Result:
+        """Execute the mount goal; all its movements run in one movement session."""
+        return self._run_in_movement_session(goal_handle, MountTool.Result, self._mount_tool_impl)
+
+    def _unmount_tool_callback(self, goal_handle: ServerGoalHandle) -> UnmountTool.Result:
+        """Execute the unmount goal; all its movements run in one movement session."""
+        return self._run_in_movement_session(goal_handle, UnmountTool.Result, self._unmount_tool_impl)
+
+    def _run_in_movement_session(self, goal_handle: ServerGoalHandle, result_type, operation):
+        """Run a mount/unmount operation so that all its movements form one atomic session.
+
+        The tool action lock is taken first so a rejected concurrent request never
+        touches the session of the running operation. The session itself is opened by
+        the operation's first movement and always closed afterwards.
+        """
+        if self._tool_action_lock.acquire(blocking=False) is False:
+            response = result_type()
+            response.success = False
+            response.message = "Another mount/unmount operation is in progress. Please try again later."
+            goal_handle.abort()
+            return response
+
+        try:
+            self._movement_session = MovementSession(
+                in_session_call=lambda request: self._call_service(self._in_session_client, request) or None,
+                close_session_call=lambda request: self._call_service(self._close_session_client, request) or None,
+                now_s=lambda: self.get_clock().now().nanoseconds / 1e9,
+            )
+            try:
+                return operation(goal_handle)
+            finally:
+                close_error = self._movement_session.close()
+                if close_error:
+                    self.get_logger().error(f'Failed to release movement session: {close_error}')
+                self._movement_session = None
+        finally:
+            self._tool_action_lock.release()
+
+    def _mount_tool_impl(self, goal_handle: ServerGoalHandle) -> MountTool.Result:
         request: MountTool.Goal = goal_handle.request
         response = MountTool.Result()
 
@@ -665,7 +733,7 @@ class ToolsManager(LifecycleNode):
                 self.get_logger().info(
                     f"Tool '{tool_mounted.tool_sn}' is mounted, unmounting it before mounting '{tool_sn}'."
                 )
-                unmount_result = self._unmount_tool_callback(goal_handle, finalize=False)
+                unmount_result = self._unmount_tool_impl(goal_handle, finalize=False)
                 if not unmount_result.success:
                     response.success = False
                     response.message = f"Failed to unmount tool '{tool_mounted.tool_sn}': {unmount_result.message}"
@@ -795,7 +863,7 @@ class ToolsManager(LifecycleNode):
             goal_handle.succeed()
             return response
 
-    def _unmount_tool_callback(self, goal_handle: ServerGoalHandle, finalize: bool = True) -> UnmountTool.Result:
+    def _unmount_tool_impl(self, goal_handle: ServerGoalHandle, finalize: bool = True) -> UnmountTool.Result:
         """Return the mounted tool to its rack slot.
 
         :param goal_handle: Goal handle to abort on failure (and succeed when ``finalize``).
@@ -1056,10 +1124,13 @@ class ToolsManager(LifecycleNode):
         return True
 
     def _call_action(self, client: ActionClient, goal: ExecuteTrajectory.Goal, timeout: float=5.0) -> bool:
-        """Send an action goal and wait for a successful result.
+        """Send a movement goal within the active movement session and wait for a successful result.
+
+        The session is opened by the first movement and extended when its timeout is
+        close to expiry; its ID is set on the goal.
 
         :param client: Action client to call; ``None`` yields an instant ``False``.
-        :param goal: The goal message to send.
+        :param goal: The goal message to send; ``session_id`` is filled in here.
         :param timeout: Per-step timeout (server availability, goal acceptance,
             and result) in seconds.
         :returns: ``True`` only if the goal was accepted and the action completed
@@ -1068,6 +1139,16 @@ class ToolsManager(LifecycleNode):
         if client is None:
             self.get_logger().error('Cannot call action: action client is None.')
             return False
+
+        session = self._movement_session
+        if session is None:
+            self.get_logger().error('Cannot move: no movement session is active.')
+            return False
+        session_error = session.ensure_valid()
+        if session_error:
+            self.get_logger().error(f'Cannot move: {session_error}')
+            return False
+        goal.session_id = session.session_id
 
         if not client.wait_for_server(timeout_sec=timeout):
             self.get_logger().error('Action server not available.')

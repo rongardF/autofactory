@@ -86,6 +86,16 @@ class LocalizerConfigDTO(BaseModel):
         return f'/{self.movement_controller_node_name}/execute_trajectory'
 
     @property
+    def in_session_service(self) -> str:
+        """Name of the movement session acquire/extend service."""
+        return f'/{self.movement_controller_node_name}/in_session'
+
+    @property
+    def close_session_service(self) -> str:
+        """Name of the movement session release service."""
+        return f'/{self.movement_controller_node_name}/close_session'
+
+    @property
     def get_image_action(self) -> str:
         """Name of the camera image action."""
         return f'/{self.camera_node_name}/get_image'

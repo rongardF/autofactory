@@ -55,6 +55,8 @@ find_package(shape_msgs REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/ExecuteTrajectory.action"
   "msg/TrajectoryPath.msg"
+  "srv/InSession.srv"
+  "srv/CloseSession.srv"
   DEPENDENCIES builtin_interfaces geometry_msgs shape_msgs
   SKIP_INSTALL
 )

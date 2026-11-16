@@ -29,10 +29,14 @@ from movement_controller.services.base_planner_service import BasePlannerService
 from movement_controller.services.pilz_planner_service import PilzPlannerService
 from movement_controller.services.ompl_planner_service import OmplPlannerService
 from movement_controller.services.planning_coordinator import PlanningCoordinator
+from movement_controller.services.movement_session import MovementSession
+from movement_controller.services.session_manager import SessionManager
 
 __all__ = [
     'BasePlannerService',
     'PilzPlannerService',
     'OmplPlannerService',
     'PlanningCoordinator',
+    'MovementSession',
+    'SessionManager',
 ]

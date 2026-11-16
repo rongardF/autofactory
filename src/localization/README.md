@@ -26,6 +26,7 @@ disappears from the listeners' buffers shortly after publishing stops.
 | `~/localized` | `std_msgs/Bool` | Latched. True after a successful localization until the workplace state changes (product leaves or differs), a new goal is accepted or the node is deactivated. |
 | `/<station_workplace_node_name>/workplace` | `station_workplace/msg/WorkplaceState` | Subscribed. |
 | `/<movement_controller_node_name>/execute_trajectory` | `movement_controller/action/ExecuteTrajectory` | Client; PTP moves, target poses transformed to `base_link`. |
+| `/<movement_controller_node_name>/in_session`, `/<movement_controller_node_name>/close_session` | `movement_controller/srv/InSession`, `CloseSession` | Client; the whole image collection (steps 1-3) runs in one movement session (60 s, extended before a move when < 30 s remain, always closed). If it cannot be acquired the localization fails. |
 | `/<camera_node_name>/get_image` | `cameras/action/GetImage` | Client; undistorted image taken after the request. |
 
 Result: `localized_product_frame` (`product_origin`), `localization_time_s`, `success`,
