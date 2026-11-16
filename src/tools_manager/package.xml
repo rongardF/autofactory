@@ -20,6 +20,7 @@
   <!-- Interface field dependencies (actions require action_msgs) -->
   <depend>action_msgs</depend>
   <depend>endtools</depend>
+  <depend>movement_controller</depend>
   <depend>rfid_scanner</depend>
 
   <!-- Python runtime -->

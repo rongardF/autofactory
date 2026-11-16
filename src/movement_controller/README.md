@@ -39,6 +39,7 @@ additional robot families can be added without touching the node code.
 ```text
 src/movement_controller/
 |- action/ExecuteTrajectory.action        # action definition
+|- srv/InSession.srv, CloseSession.srv    # movement session (lock) services
 |- msg/TrajectoryPath.msg                 # per-segment path message
 |- movement_controller/
 |  |- movement_controller.py              # MovementController lifecycle node
@@ -164,19 +165,21 @@ ros2 lifecycle get /movement_controller
 
 `on_configure` reads and validates all constraint/OMPL parameters and builds the
 `PlanningCoordinator`; `on_activate` waits for the PILZ `plan_sequence_path`
-service and creates the action server plus the MoveIt `execute_trajectory`
-action client.
+service and creates the action server, the session services plus the MoveIt
+`execute_trajectory` action client.
 
 ## Action Interface
 
 ### Goal
 
-Action: `movement_controller/execute_trajectory`
+Action: `~/execute_trajectory` (`/movement_controller/execute_trajectory`)
 Type: `movement_controller/action/ExecuteTrajectory`
 
-Goal field:
+Goal fields:
 
 - `paths`: ordered list of `movement_controller/msg/TrajectoryPath`
+- `session_id` (`string`): session ID from `in_session`; see
+	[Movement Sessions](#movement-sessions). May be empty when no session is active.
 
 ### Result
 
@@ -244,6 +247,53 @@ convenience.
 - **Execution** — each planned trajectory is sent to the MoveIt
 	`execute_trajectory` action client and awaited with cancellation support.
 
+## Movement Sessions
+
+A session reserves the controller for one caller so that a sequence of
+`execute_trajectory` goals cannot be interleaved by another caller. The new goal
+rejection rule applies on top of the existing "one goal at a time" rule.
+
+Services (private names, available only while the node is active):
+
+- `~/in_session` (`movement_controller/srv/InSession`) — request
+	`session_id`, `session_timeout_s`; response `success`, `error_message`,
+	`session_id`, `session_timeout_s` (effective).
+	- Empty `session_id` acquires a new session (uuid4). Fails if another session is
+		active. Allowed while a session-less goal is executing.
+	- Non-empty `session_id` extends that session: same ID, timeout restarted from
+		the call (not accumulated). Fails for an unknown, wrong or expired ID; call
+		again with an empty ID to acquire a new one.
+	- `session_timeout_s`: `-1` = node parameter `session_timeout_s`; `> 0` =
+		custom timeout; `0`, other negatives and non-finite values are rejected.
+- `~/close_session` (`movement_controller/srv/CloseSession`) — request
+	`session_id`; response `success`, `error_message`. Succeeds when no session is
+	active; fails when a different session is active. A running goal is not
+	cancelled.
+
+Goal handling in `execute_trajectory`:
+
+- No active session: any `session_id` (including empty) is accepted.
+- Active session: only a goal with the matching `session_id` is accepted;
+	otherwise it is rejected (the reason is logged on the server).
+- Goals do not extend the session; cancelling is allowed for anyone.
+
+Expiry is lazy and measured with the node clock (honours `use_sim_time`): the
+deadline is checked on each `in_session`, `close_session` and goal request. A
+running goal is not cancelled when its session expires. Deactivating the node
+clears the session.
+
+```bash
+ros2 service call /movement_controller/in_session movement_controller/srv/InSession "{session_id: '', session_timeout_s: -1.0}"
+ros2 service call /movement_controller/close_session movement_controller/srv/CloseSession "{session_id: '<id>'}"
+```
+
+Python clients in other packages can use `movement_controller.services.MovementSession`,
+a transport-agnostic helper that acquires the session, extends it (60 s) before a
+movement when fewer than 30 s remain, and releases it. The timeout and threshold
+are keyword arguments (`timeout_s`, `extend_threshold_s`; defaults 60 s / 30 s). The caller injects its own
+`in_session` / `close_session` call functions and a node-clock `now_s`; see
+`tools_manager` and `localization` for usage.
+
 ## Quick Client Example
 
 You can use the repository sandbox scripts from workspace root, for example:
@@ -265,6 +315,8 @@ The node declares and validates these parameters:
 - `moveit_group_name` (default `ur_manipulator`) — MoveIt 2 planning group
 - `moveit_connection_timeout` (default `10.0`) — seconds to wait for the PILZ
 	`plan_sequence_path` service during `on_activate`
+- `session_timeout_s` (default `10.0`) — default movement session timeout in
+	seconds (used when a caller sends `-1`); must be `> 0`
 - Workspace bounding box (metres; `±1e9` sentinels = unconstrained):
 	- `constraints.workspace.x_min`, `x_max`
 	- `constraints.workspace.y_min`, `y_max`

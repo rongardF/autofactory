@@ -30,7 +30,7 @@ import threading
 import time
 
 from rclpy.action import ActionClient
-
+from rclpy.client import Client
 from localization.exceptions import LocalizationCancelledError, LocalizationError
 
 _POLL_S = 0.05
@@ -115,3 +115,22 @@ def execute_goal(
             raise LocalizationCancelledError('cancelled')
         raise error_cls(f'{description}: no result within {timeout_s} s')
     return result_future.result().result
+
+
+def call_service(client: Client, request, *, timeout_s: float):
+    """Call a service using a future callback, without nested spinning.
+
+    :returns: The response, or ``None`` if the service is unavailable, did not answer
+        within ``timeout_s`` or the call failed.
+    """
+    if not client.wait_for_service(timeout_sec=timeout_s):
+        return None
+    ready = threading.Event()
+    future = client.call_async(request)
+    future.add_done_callback(lambda _future: ready.set())
+    if not ready.wait(timeout_s):
+        return None
+    try:
+        return future.result()
+    except Exception:  # noqa: BLE001 - reported to the caller as "no response"
+        return None
