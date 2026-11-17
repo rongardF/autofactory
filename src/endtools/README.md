@@ -77,7 +77,12 @@ transitions; nothing is created in `__init__` except parameter declarations.
    absolute expiry instant of the currently used calibrated TCP. The expiry is
    taken from the live `station_cache` entry backing the TCP; when the tool is
    falling back to the uncalibrated TCP (no live cached entry) the **current
-   time** is published so the TCP is treated as already expired. Like
+   time** is published so the TCP is treated as already expired. An unmounted
+   tool also publishes the current time, without fetching or warning about an
+   unused calibration; TCP transforms remain unpublished until it is mounted.
+   Missing calibration still produces a warning when a mounted tool uses the
+   uncalibrated fallback. A successful `~/set_tcp` still publishes the supplied
+   calibration's expiry even while unmounted. Like
    `~/set_tcp`, this publisher is available in both the configured and active
    states (created on configure, destroyed on cleanup).
 7. Instantiates the controller — `SimulatedDispenserController` when

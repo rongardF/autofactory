@@ -651,7 +651,9 @@ class ToolsManager(LifecycleNode):
                 self.get_logger().info(
                     f"Tool '{tool_mounted.tool_sn}' is mounted, unmounting it before mounting '{tool_sn}'."
                 )
-                unmount_result = self._unmount_tool_callback(goal_handle, finalize=False)
+                unmount_result = self._unmount_tool(
+                    goal_handle, tool_mounted.tool_sn, finalize=False,
+                )
                 if not unmount_result.success:
                     response.success = False
                     response.message = f"Failed to unmount tool '{tool_mounted.tool_sn}': {unmount_result.message}"
@@ -792,14 +794,21 @@ class ToolsManager(LifecycleNode):
             goal_handle.succeed()
             return response
 
-    def _unmount_tool_callback(self, goal_handle: ServerGoalHandle, finalize: bool = True) -> UnmountTool.Result:
-        """Return the mounted tool to its rack slot.
+    def _unmount_tool_callback(self, goal_handle: ServerGoalHandle) -> UnmountTool.Result:
+        """Return the requested tool to its rack slot only if it is mounted."""
+        request: UnmountTool.Goal = goal_handle.request
+        return self._unmount_tool(goal_handle, request.tool_sn)
+
+    def _unmount_tool(
+        self, goal_handle: ServerGoalHandle, tool_sn: str, finalize: bool = True,
+    ) -> UnmountTool.Result:
+        """Return the specified mounted tool to its rack slot.
 
         :param goal_handle: Goal handle to abort on failure (and succeed when ``finalize``).
+        :param tool_sn: Serial number that must match the currently mounted tool.
         :param finalize: ``False`` when called as a step of a larger goal (tool swap) so
             the goal is not marked succeeded here.
         """
-        request: UnmountTool.Goal = goal_handle.request
         response = UnmountTool.Result()
 
         if self._tool_action_lock.acquire(blocking=False) is False:
@@ -817,8 +826,15 @@ class ToolsManager(LifecycleNode):
                 response.message = "No tool is currently mounted."
                 goal_handle.abort()
                 return response
-            else:
-                tool_sn = tool_mounted.tool_sn
+            if tool_sn != tool_mounted.tool_sn:
+                response.success = False
+                response.message = (
+                    f"Cannot unmount tool '{tool_sn}': currently mounted tool is "
+                    f"'{tool_mounted.tool_sn}'."
+                )
+                self.get_logger().error(response.message)
+                goal_handle.abort()
+                return response
 
             if slots is None:
                 response.success = False

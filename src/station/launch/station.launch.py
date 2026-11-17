@@ -59,6 +59,7 @@ def generate_launch_description() -> LaunchDescription:
     cameras_share = FindPackageShare("cameras")
     laser_sensors_share = FindPackageShare("laser_sensors")
     io_controllers_share = FindPackageShare("io_controllers")
+    world_manager_share = FindPackageShare("world_manager")
 
     model = LaunchConfiguration("model")
     simulated = LaunchConfiguration("simulated")
@@ -166,6 +167,18 @@ def generate_launch_description() -> LaunchDescription:
         }.items(),
     )
 
+    world_manager_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution(
+                [world_manager_share, "launch", "world_manager.launch.py"]
+            )
+        ),
+        launch_arguments={
+            "simulated": simulated,
+            "world_name": "default",
+        }.items(),
+    )
+
     camera_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution(
@@ -210,6 +223,7 @@ def generate_launch_description() -> LaunchDescription:
         launch_arguments={
             "simulated": simulated,
             "world_name": "default",
+            "start_world_manager": "false",
             "station_model_name": "station",
             "movement_controller_node_name": "movement_controller",
         }.items(),
@@ -251,6 +265,7 @@ def generate_launch_description() -> LaunchDescription:
             GroupAction([laser_cross_launch], scoped=True),
             GroupAction([gpio_controller_launch], scoped=True),
             GroupAction([movement_controller_launch], scoped=True),
+            GroupAction([world_manager_launch], scoped=True),
             GroupAction([tools_manager], scoped=True),
             GroupAction([station_cache_node], scoped=True),
             GroupAction([dispensing_pattern_executor], scoped=True),

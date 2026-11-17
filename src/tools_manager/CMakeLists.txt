@@ -179,6 +179,9 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_world_client_adapter
     tests/unit/test_world_client_adapter.py
   )
+  ament_add_pytest_test(test_tool_actions
+    tests/unit/test_tool_actions.py
+  )
 endif()
 
 # --------------------------------------------------------------------------

@@ -185,8 +185,14 @@ motion. Then:
 Any failed step aborts the goal with an explanatory `message`.
 
 #### `~/unmount_tool` (put the tool back)
-Mirror image, also serialized. Pre-checks: a tool is mounted and its home slot
-is empty. Sequence: PTP → `lifted`, allow collisions, LIN → `attached`, **re-mate
+Mirror image, also serialized. Pre-checks: a tool is mounted, the requested
+`tool_sn` exactly matches its serial (case-sensitive), and its home slot is
+empty. An incorrect or empty serial aborts with `success=false` and a message
+identifying the requested and mounted serials, before any motion, collision
+changes, lock operation, or endtool reconfiguration. During an automatic swap,
+the internal unmount step explicitly targets the currently mounted serial,
+not the replacement serial in the mount goal.
+Sequence: PTP → `lifted`, allow collisions, LIN → `attached`, **re-mate
 model back to the rack slot link**, `lock` unlock, wait up to 10 s for the rack
 to re-detect the tool, LIN → `slide_in`, re-disable collisions,
 `_endtool_mounted(tool_sn, False)`, succeed.
