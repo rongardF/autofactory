@@ -32,15 +32,18 @@ from collections.abc import Sequence
 
 from rclpy.action import ActionClient
 from rclpy.callback_groups import CallbackGroup
+from rclpy.client import Client
 from rclpy.node import Node
 
 from movement_controller.action import ExecuteTrajectory
 from movement_controller.msg import TrajectoryPath
+from movement_controller.services.movement_session import MovementSession
+from movement_controller.srv import CloseSession, InSession
 
 from localization.enums.constants import MOVE_TIMEOUT_S, PLANNING_FRAME, SERVER_WAIT_TIMEOUT_S
 from localization.exceptions import MotionError
 from localization.services.tf_lookup import TfLookup
-from localization.utils.async_action import execute_goal
+from localization.utils.async_action import call_service, execute_goal
 from localization.utils.pose_conversion import pose6_to_pose_stamped
 
 
@@ -54,17 +57,61 @@ class MotionClient:
         tool_frame: str,
         tf_lookup: TfLookup,
         callback_group: CallbackGroup,
+        in_session_name: str,
+        close_session_name: str,
     ) -> None:
-        """:param tool_frame: Frame moved to the target poses (the camera TCP)."""
+        """:param tool_frame: Frame moved to the target poses (the camera TCP).
+        :param in_session_name: Name of the movement controller ``in_session`` service.
+        :param close_session_name: Name of the movement controller ``close_session`` service.
+        """
         self._node = node
         self._action_name = action_name
         self._tool_frame = tool_frame
         self._tf_lookup = tf_lookup
         self._client: ActionClient | None = ActionClient(
             node, ExecuteTrajectory, action_name, callback_group=callback_group)
+        self._in_session_client: Client | None = node.create_client(
+            InSession, in_session_name, callback_group=callback_group)
+        self._close_session_client: Client | None = node.create_client(
+            CloseSession, close_session_name, callback_group=callback_group)
+        self._session: MovementSession | None = None
+
+    def open_session(self) -> None:
+        """Reserve the movement controller for a sequence of movements.
+
+        :raises MotionError: If the session could not be acquired.
+        """
+        if self._session is not None:
+            raise MotionError('a movement session is already open')
+        session = MovementSession(
+            in_session_call=lambda request: self._call_session_service(self._in_session_client, request),
+            close_session_call=lambda request: self._call_session_service(self._close_session_client, request),
+            now_s=lambda: self._node.get_clock().now().nanoseconds / 1e9,
+        )
+        error = session.ensure_valid()
+        if error:
+            raise MotionError(f'could not open movement session: {error}')
+        self._session = session
+
+    def close_session(self) -> None:
+        """Release the movement session; a failure is logged, not raised."""
+        session, self._session = self._session, None
+        if session is None:
+            return
+        error = session.close()
+        if error:
+            self._node.get_logger().error(f'Failed to release movement session: {error}')
+
+    def _call_session_service(self, client: Client | None, request):
+        if client is None:
+            return None
+        return call_service(client, request, timeout_s=SERVER_WAIT_TIMEOUT_S)
 
     def move_to(self, pose6: Sequence[float], frame_id: str, cancel_event: threading.Event) -> None:
         """Move the tool frame to ``pose6`` given in ``frame_id`` with a PTP movement.
+
+        Requires an open session (:meth:`open_session`), which is extended when its
+        timeout is close to expiry.
 
         :raises MotionError: If the movement could not be executed.
         :raises LocalizationCancelledError: If ``cancel_event`` was set.
@@ -73,6 +120,12 @@ class MotionClient:
             raise MotionError('motion client is not initialized')
         if not self._client.wait_for_server(timeout_sec=SERVER_WAIT_TIMEOUT_S):
             raise MotionError(f"movement action server '{self._action_name}' is not available")
+        session = self._session
+        if session is None:
+            raise MotionError('no movement session is open')
+        session_error = session.ensure_valid()
+        if session_error:
+            raise MotionError(f'movement session: {session_error}')
 
         # The planner can only resolve robot links, so express the target in its planning frame.
         target = self._tf_lookup.transform_pose(
@@ -86,6 +139,7 @@ class MotionClient:
         path.tool_frame = self._tool_frame
         goal = ExecuteTrajectory.Goal()
         goal.paths = [path]
+        goal.session_id = session.session_id
 
         result = execute_goal(
             self._client, goal, timeout_s=MOVE_TIMEOUT_S, cancel_event=cancel_event,
@@ -94,7 +148,14 @@ class MotionClient:
             raise MotionError(f'movement failed: {result.error_message}')
 
     def destroy(self) -> None:
-        """Destroy the action client."""
+        """Release any open session and destroy the action and service clients."""
+        self.close_session()
+        if self._in_session_client is not None:
+            self._node.destroy_client(self._in_session_client)
+            self._in_session_client = None
+        if self._close_session_client is not None:
+            self._node.destroy_client(self._close_session_client)
+            self._close_session_client = None
         if self._client is not None:
             self._client.destroy()
             self._client = None

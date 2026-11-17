@@ -67,6 +67,7 @@ from movement_controller.action import (
 )
 from movement_controller.models.constraint_config_dto import ConstraintConfigDTO
 from movement_controller.msg import TrajectoryPath
+from movement_controller.srv import CloseSession, InSession
 from movement_controller.movement_controller import MovementController
 
 # ---------------------------------------------------------------------------
@@ -283,16 +284,6 @@ def controller(executor, mock_move_group):
     """
     node = MovementController()
     executor.add_node(node)
-
-    # Initialize STRING_ARRAY / DOUBLE_ARRAY constraint parameters to empty lists.
-    # These are declared without defaults in MovementController.__init__ (Phase 5 Plan 01)
-    # and raise ParameterUninitializedException if not set before on_configure().
-    from rclpy.parameter import Parameter
-    node.set_parameters([
-        Parameter('constraints.joint.names', Parameter.Type.STRING_ARRAY, []),
-        Parameter('constraints.joint.lower_limits', Parameter.Type.DOUBLE_ARRAY, []),
-        Parameter('constraints.joint.upper_limits', Parameter.Type.DOUBLE_ARRAY, []),
-    ])
 
     cfg_state = LifecycleState(label='unconfigured', state_id=0)
     assert node.on_configure(cfg_state) == TransitionCallbackReturn.SUCCESS
@@ -573,3 +564,62 @@ def test_workspace_constraint_planning_success_when_path_in_bounds(
         mock_move_group.reset()
 
 # endregion: workspace constraint integration tests
+
+# region: movement session integration tests
+@pytest.fixture(scope='module')
+def session_clients(executor, controller):
+    """InSession / CloseSession service clients on a helper node."""
+    helper = Node('integration_test_session_client')
+    in_session = helper.create_client(InSession, 'movement_controller/in_session')
+    close_session = helper.create_client(CloseSession, 'movement_controller/close_session')
+    executor.add_node(helper)
+    assert in_session.wait_for_service(timeout_sec=5.0), 'in_session service not available'
+    assert close_session.wait_for_service(timeout_sec=5.0), 'close_session service not available'
+    yield in_session, close_session
+    executor.remove_node(helper)
+    helper.destroy_node()
+
+
+def _call_service(client, request, timeout: float = 5.0):
+    """Call a service from the test thread; the executor thread completes the future."""
+    done = threading.Event()
+    future = client.call_async(request)
+    future.add_done_callback(lambda _: done.set())
+    assert done.wait(timeout=timeout), 'service call timed out'
+    return future.result()
+
+
+def test_session_blocks_other_callers_between_goals(action_client, mock_move_group, session_clients):
+    """Owner's goals run with the session ID; a goal without it is rejected until close_session."""
+    in_session, close_session = session_clients
+    mock_move_group.reset()
+
+    acquired = _call_service(in_session, InSession.Request(session_id='', session_timeout_s=30.0))
+    assert acquired.success is True
+    sid = acquired.session_id
+
+    try:
+        owner_goal = ExecuteTrajectory.Goal()
+        owner_goal.paths = [_make_lin_path(_PATH_ID_1)]
+        owner_goal.session_id = sid
+        assert _send_goal_and_wait(action_client, owner_goal) is not None
+
+        intruder_goal = ExecuteTrajectory.Goal()
+        intruder_goal.paths = [_make_lin_path(_PATH_ID_2)]
+        assert _send_goal_and_wait(action_client, intruder_goal) is None  # rejected
+
+        assert _call_service(in_session, InSession.Request(session_id='', session_timeout_s=-1.0)).success is False
+
+        owner_goal_2 = ExecuteTrajectory.Goal()
+        owner_goal_2.paths = [_make_lin_path(_PATH_ID_2)]
+        owner_goal_2.session_id = sid
+        assert _send_goal_and_wait(action_client, owner_goal_2) is not None
+    finally:
+        assert _call_service(close_session, CloseSession.Request(session_id=sid)).success is True
+
+    free_goal = ExecuteTrajectory.Goal()
+    free_goal.paths = [_make_lin_path(_PATH_ID_1)]
+    response = _send_goal_and_wait(action_client, free_goal)
+    assert response is not None and response.success is True
+
+# endregion: movement session integration tests

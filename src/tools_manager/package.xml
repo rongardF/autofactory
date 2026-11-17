@@ -21,6 +21,7 @@
   <depend>action_msgs</depend>
   <depend>ament_index_python</depend>
   <depend>endtools</depend>
+  <depend>movement_controller</depend>
   <depend>rfid_scanner</depend>
   <depend>world_manager</depend>
 

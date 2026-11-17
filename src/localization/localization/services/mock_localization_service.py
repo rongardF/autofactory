@@ -99,7 +99,8 @@ class MockLocalizationService(LocalizationService):
         self._tf_lookup = TfLookup(node, TF_LOOKUP_TIMEOUT_S)
         self._motion = MotionClient(
             node, self._config.execute_trajectory_action, self._config.camera_frame_id,
-            self._tf_lookup, io_group)
+            self._tf_lookup, io_group, self._config.in_session_service,
+            self._config.close_session_service)
         self._camera = CameraClient(
             node, self._config.get_image_action, self._config.image_capture_timeout_s, io_group)
 
@@ -189,18 +190,24 @@ class MockLocalizationService(LocalizationService):
         config = self._config
         images: list[Image] = []
 
-        motion.move_to(config.initial_localization_pose, config.base_frame_id, cancel_event)
-        images.append(self._settle_and_capture(cancel_event))
-
-        publisher.set_frame(
-            LOCALIZATION_ORIGIN_FRAME, config.base_frame_id,
-            pose6_to_pose(LOCALIZATION_ORIGIN_PLACEHOLDER_POSE))
-        # The movement controller needs the frame in TF before the first move relative to it.
-        tf_lookup.lookup(PLANNING_FRAME, LOCALIZATION_ORIGIN_FRAME)
-
-        for pose in self._poses.poses:
-            motion.move_to(pose, LOCALIZATION_ORIGIN_FRAME, cancel_event)
+        # One movement session for the whole sequence so no other caller can move the
+        # robot between the localization poses.
+        motion.open_session()
+        try:
+            motion.move_to(config.initial_localization_pose, config.base_frame_id, cancel_event)
             images.append(self._settle_and_capture(cancel_event))
+
+            publisher.set_frame(
+                LOCALIZATION_ORIGIN_FRAME, config.base_frame_id,
+                pose6_to_pose(LOCALIZATION_ORIGIN_PLACEHOLDER_POSE))
+            # The movement controller needs the frame in TF before the first move relative to it.
+            tf_lookup.lookup(PLANNING_FRAME, LOCALIZATION_ORIGIN_FRAME)
+
+            for pose in self._poses.poses:
+                motion.move_to(pose, LOCALIZATION_ORIGIN_FRAME, cancel_event)
+                images.append(self._settle_and_capture(cancel_event))
+        finally:
+            motion.close_session()
         return images
 
     def _settle_and_capture(self, cancel_event: threading.Event) -> Image:

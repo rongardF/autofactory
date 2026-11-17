@@ -42,6 +42,7 @@ from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle.node import LifecycleState, TransitionCallbackReturn
 from rclpy.publisher import Publisher
+from rclpy.service import Service
 
 from std_msgs.msg import String
 from moveit_msgs.msg import MoveItErrorCodes
@@ -51,12 +52,14 @@ from moveit_msgs.action import (
 )
 
 from movement_controller.action import ExecuteTrajectory
+from movement_controller.srv import CloseSession, InSession
 from movement_controller.exceptions import (
     ExecutionFailedError,
 )
 from movement_controller.enums.feedback_status_enum import FeedbackStatusEnum
 from movement_controller.models import TrajectoryGoalDTO, ConstraintConfigDTO
 from movement_controller.services.planning_coordinator import PlanningCoordinator
+from movement_controller.services.session_manager import SessionManager
 from movement_controller.utils.trajectory_grouper import TrajectoryGrouper
 
 
@@ -84,6 +87,9 @@ class MovementController(LifecycleNode):
         self._trajectory_goal: TrajectoryGoalDTO | None = None
         self._constraint_config: ConstraintConfigDTO | None = None
         self._cancellation_pub: Publisher | None = None
+        self._session_manager: SessionManager | None = None
+        self._in_session_service: Service | None = None
+        self._close_session_service: Service | None = None
 
         # region: parameters
         self.declare_parameter(
@@ -95,6 +101,12 @@ class MovementController(LifecycleNode):
             'moveit_connection_timeout',
             10.0,
             ParameterDescriptor(description='Seconds to wait for MoveItPy to connect before failing on_configure'),
+        )
+
+        self.declare_parameter(
+            'session_timeout_s',
+            10.0,
+            ParameterDescriptor(description='Default movement session timeout in seconds, used when a caller requests -1. Must be > 0.'),
         )
 
         # Workspace bounding box constraint parameters
@@ -280,6 +292,14 @@ class MovementController(LifecycleNode):
                 f'OMPL tuning applied: planning_time={ompl_planning_time}s, '
                 f'planning_attempts={ompl_planning_attempts}'
             )
+
+            session_timeout_s = self.get_parameter('session_timeout_s').get_parameter_value().double_value
+            self._session_manager = SessionManager(
+                default_timeout_s=session_timeout_s,
+                now=self._now_s,
+                on_expired=lambda sid: self.get_logger().warning(f'Movement session {sid} expired'),
+            )
+            self.get_logger().info(f'Session manager ready: default timeout {session_timeout_s}s')
         except ValidationError as e:
             self.get_logger().error(f'Constraint parameter validation failed: {e}')
             self._planner_service = None  # ensure planner service is not used if validation fails
@@ -339,13 +359,23 @@ class MovementController(LifecycleNode):
             self._action_server = ActionServer(
                 self,
                 ExecuteTrajectory,
-                "movement_controller/execute_trajectory",
+                "~/execute_trajectory",
                 execute_callback=self._execute_callback,
                 goal_callback=self._goal_callback,
                 cancel_callback=self._cancel_callback,
                 callback_group=self._server_callback_group,
             )
-            self.get_logger().info(f'Action server created at: movement_controller/execute_trajectory')
+            self.get_logger().info('Action server created at: ~/execute_trajectory')
+
+            self._in_session_service = self.create_service(
+                InSession, '~/in_session', self._in_session_callback,
+                callback_group=self._server_callback_group,
+            )
+            self._close_session_service = self.create_service(
+                CloseSession, '~/close_session', self._close_session_callback,
+                callback_group=self._server_callback_group,
+            )
+            self.get_logger().info('Session services created at: ~/in_session, ~/close_session')
 
             self._execute_trajectory_client = ActionClient(
                 node=self,
@@ -357,6 +387,7 @@ class MovementController(LifecycleNode):
             # endregion: action server and client setup
         except Exception as e:
             self.get_logger().error(f'Unknown error during activation: {e}')
+            self._destroy_session_services()
             if self._action_server is not None:
                 self._action_server.destroy()
                 self._action_server = None
@@ -411,6 +442,10 @@ class MovementController(LifecycleNode):
             self._action_server = None
             self.get_logger().info('Action server destroyed successfully')
         
+        self._destroy_session_services()
+        if self._session_manager is not None:
+            self._session_manager.clear()
+
         with self._executing_lock:
             self._is_executing = False
 
@@ -432,6 +467,7 @@ class MovementController(LifecycleNode):
         self.get_logger().info(f'Cleaning up from state: {state.label}')
         self._planner_service = None
         self._trajectory_goal = None
+        self._session_manager = None
         return TransitionCallbackReturn.SUCCESS
     
     def on_error(self, state: LifecycleState) -> TransitionCallbackReturn:
@@ -451,6 +487,19 @@ class MovementController(LifecycleNode):
     # endregion: lifecycle callbacks
 
     # region: private methods
+    def _now_s(self) -> float:
+        """Current node-clock time in seconds (honours ``use_sim_time``)."""
+        return self.get_clock().now().nanoseconds / 1e9
+
+    def _destroy_session_services(self) -> None:
+        """Destroy the session services if they exist."""
+        if self._in_session_service is not None:
+            self.destroy_service(self._in_session_service)
+            self._in_session_service = None
+        if self._close_session_service is not None:
+            self.destroy_service(self._close_session_service)
+            self._close_session_service = None
+
     def _goal_abort(self, goal_handle: ServerGoalHandle) -> None:
         """Helper method to abort the current goal and reset executing state; 
         used in multiple places in _execute_callback to avoid code duplication.
@@ -534,9 +583,46 @@ class MovementController(LifecycleNode):
     # endregion: private methods
 
     # region: callbacks
+    def _in_session_callback(self, request: InSession.Request, response: InSession.Response) -> InSession.Response:
+        if self._session_manager is None:
+            response.success = False
+            response.error_message = 'Session manager is not initialised'
+            self.get_logger().error(response.error_message)
+            return response
+        result = self._session_manager.acquire_or_extend(request.session_id, request.session_timeout_s)
+        response.success = result.success
+        response.error_message = result.error_message
+        response.session_id = result.session_id
+        response.session_timeout_s = result.session_timeout_s
+        if result.success:
+            action = 'extended' if request.session_id else 'acquired'
+            self.get_logger().info(
+                f'Session {result.session_id} {action}, timeout {result.session_timeout_s}s')
+        else:
+            self.get_logger().error(f'in_session rejected: {result.error_message}')
+        return response
+
+    def _close_session_callback(self, request: CloseSession.Request, response: CloseSession.Response) -> CloseSession.Response:
+        if self._session_manager is None:
+            response.success = False
+            response.error_message = 'Session manager is not initialised'
+            self.get_logger().error(response.error_message)
+            return response
+        result = self._session_manager.close(request.session_id)
+        response.success = result.success
+        response.error_message = result.error_message
+        if result.success:
+            self.get_logger().info(f'Session {request.session_id!r} closed')
+        else:
+            self.get_logger().error(f'close_session rejected: {result.error_message}')
+        return response
+
     def _goal_callback(self, goal: ExecuteTrajectory.Goal) -> GoalResponse:
-        # Only one goal at a time — check and set atomically to prevent TOCTOU race
+        # Session and one-goal-at-a-time checks run under the same lock so they are atomic
         with self._executing_lock:
+            if self._session_manager is not None and not self._session_manager.is_goal_allowed(goal.session_id):
+                self.get_logger().error('Goal rejected: movement controller is locked by a different session')
+                return GoalResponse.REJECT
             if self._is_executing:
                 self.get_logger().error('Goal rejected: another goal is already executing')
                 return GoalResponse.REJECT

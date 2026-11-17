@@ -27,6 +27,9 @@
 
 # Goal: ordered list of trajectory paths to execute
 TrajectoryPath[] paths
+# Session ID obtained from the in_session service. May be empty when no session is
+# active; while a session is active, goals with an empty or different ID are rejected.
+string session_id
 ---
 # Result
 bool success
