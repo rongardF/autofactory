@@ -1,26 +1,20 @@
-slots:
-  - index: 1
-    tool_sn: "abc123"
-    metadata:
-      launch_file: "volumetric_dispenser_launch.py"
-      model: "dispensing_tool"
-    parameters:
-      node_name: "dispenser_abc123"
-      flowrate: 1.0
-      tcp_frame_id: "tool0"
-  - index: 2
-    tool_sn: "def123"
-    metadata:
-      launch_file: "volumetric_dispenser_launch.py"
-      model: "dispensing_tool"
-    parameters:
-      node_name: "dispenser_def123"
-      flowrate: 1.0
-      tcp_frame_id: "tool0"
-simulation_setup:
-  tool_rack:
-    - index: 1
-      tag_data: null
-    - index: 2
-      tag_data: 64656631323300202020202020202020564f4c5f44495350454e5345520020204b5243313233002020202020202020205231410020202020202020202020202053584e3132330020202020202020202052314100202020202020202020202020
-  tool_mount: 61626331323300202020202020202020564f4c5f44495350454e5345520020204b5243313233002020202020202020205231410020202020202020202020202053584e3132330020202020202020202052314100202020202020202020202020
+# Initial simulated tool inventory, passed to the tools manager as a ROS parameter file.
+#
+# The expected tool assignments (tools.index, tools.tool_sn, tools.node_name) are
+# defined in launch/tools_manager_launch.py and are shared by the tool rack and the
+# tools manager.
+#
+# simulation.tool_rack.index / tag_data : parallel arrays; an empty tag_data string is
+#                                         an empty slot, slots not listed are empty too
+# simulation.tool_mount                 : hex-encoded RFID payload of the mounted tool;
+#                                         an empty string is an empty tool mount
+# Payloads are always quoted so that they stay strings.
+/**:
+  ros__parameters:
+    simulation:
+      tool_rack:
+        index: [1, 2]
+        tag_data:
+          - ""
+          - "64656631323300202020202020202020564f4c5f44495350454e5345520020204b5243313233002020202020202020205231410020202020202020202020202053584e3132330020202020202020202052314100202020202020202020202020"
+      tool_mount: "61626331323300202020202020202020564f4c5f44495350454e5345520020204b5243313233002020202020202020205231410020202020202020202020202053584e3132330020202020202020202052314100202020202020202020202020"

@@ -13,7 +13,7 @@ reality.
 
 | Node | File | Role |
 |------|------|------|
-| `tools_manager` | `tools_manager.py` | Orchestrator. Owns the mount/unmount actions, launches endtool nodes, manages world/planning-scene models. |
+| `tools_manager` | `tools_manager.py` | Orchestrator. Owns the mount/unmount actions, configures the endtool nodes started by launch, manages world/planning-scene models. |
 | `tool_rack` | `tool_rack.py` | Publishes which tools are in which rack slots. |
 | `tool_mount` | `tool_mount.py` | Publishes the currently-mounted tool and exposes the quick-release `lock` service. |
 
@@ -35,34 +35,57 @@ detects the tool model's RFID tag — exactly how a real reader would.
 
 ---
 
-## Configuration (`config/tools_manager_config.yaml`)
+## Configuration (ROS parameters only)
 
-Validated by `ToolsManagerConfigDTO` (Pydantic v2). Two sections:
+The nodes never read a configuration file; everything is a ROS parameter.
+Launch supplies the values (see [Launch / run](#launch--run)).
 
-### `slots` — the static rack definition
-Each entry is a `ToolSlotDTO`:
-- `index` — rack slot number.
-- `tool_sn` — serial expected in that slot (`null` ⇒ empty slot).
-- `metadata` — `{ launch_file, model }` (which endtool launch file + model dir).
-- `parameters` — arbitrary endtool node parameters (must include `node_name`);
-  values limited to str/float/int/bool/list.
+### `tools.*` — expected tools and physical rack slots
+Passed identically to `tool_rack` and `tools_manager`, validated by
+`ToolsManagerConfigDTO` (Pydantic v2). The three arrays are associated **by
+position**:
 
-Validators enforce: no duplicate serials or indices, and if `tool_sn` is `null`,
-`metadata`/`parameters` are forced to `null`.
+| Parameter | Type | Meaning |
+|-----------|------|---------|
+| `tools.index` | int array | Every physical rack slot index (the slot id, not an array position) |
+| `tools.tool_sn` | string array | Serial expected for each slot |
+| `tools.node_name` | string array | Endtool node name belonging to each serial |
 
-### `simulation_setup` — what to spawn at boot in sim
-- `tool_rack` — per slot index, a hex `tag_data` RFID payload (`null` ⇒ empty).
-- `tool_mount` — optional hex `tag_data` for a tool already on the mount.
+```yaml
+tools:
+  index: [1, 2, 3]
+  tool_sn: ["abc123", "", "def123"]
+  node_name: ["dispenser_abc123", "", "dispenser_def123"]
+```
 
-Validators enforce: simulation entries match the declared slot indices 1:1, and
-no duplicate serials (serial is decoded from bytes `0:15` of the tag payload).
+Rules: all arrays have the same length (checked before anything is built, never
+truncated); every physical slot is listed, an unassigned slot has an empty
+serial **and** an empty node name (they come together); slot indices, non-empty
+serials and non-empty node names are unique. A tool's index is its **home
+slot**, also while it sits on the tool mount. Above, tool `abc123` may be in
+slot 1 or on the mount, never in slot 2 or 3.
+
+### `simulation.*` — initial simulated inventory (`tools_manager` only)
+| Parameter | Type | Meaning |
+|-----------|------|---------|
+| `simulation.tool_rack.index` | int array | Slot indices of the initial rack inventory |
+| `simulation.tool_rack.tag_data` | string array | Hex-encoded RFID payload per slot (`""` ⇒ empty slot) |
+| `simulation.tool_mount` | string | Hex-encoded RFID payload of the mounted tool (`""` ⇒ empty mount) |
+
+The arrays must have the same length, indices must be unique and exist in
+`tools.index`, and every payload is decoded and validated through
+`ToolInfoDto.from_hex_tag_data`. They are only read when `simulated` is true.
+
+`config/tools_manager_config.yaml` is a ROS parameter file holding these
+values; the launch file passes it to `tools_manager`.
 
 ### Tool identity encoding (`ToolInfoDto`)
 A tool's identity is a **96-byte RFID payload** = six 16-byte, null/space-padded
 fields: `serial, tool_type, tool_part_number, tool_part_revision,
-material_part_number, material_part_revision`. `ToolInfoDto.from_tag_data` /
-`to_tag_data` convert between the hex payload and the structured DTO. Each tool
-also derives three frame names from its slot index:
+material_part_number, material_part_revision`. `ToolInfoDto.from_hex_tag_data` /
+`to_tag_data` convert between the hex payload and the structured DTO; invalid
+hex, a short payload, an empty serial or an unknown tool type is rejected.
+Each tool also derives three frame names from its slot index:
 - `slot<index>_slide_in_link`
 - `slot<index>_attached_link`
 - `slot<index>_lifted_link`
@@ -74,17 +97,17 @@ also derives three frame names from its slot index:
 Publishes a latched (`TRANSIENT_LOCAL`) `~/slots` topic (`tools_manager/Slots`)
 at `slots_update_rate` Hz.
 
-- **Parameters:** `simulated`, `tools_manager_config_file`, `parent_frame_id`
+- **Parameters:** `simulated`, `tools.*`, `parent_frame_id`
   (default `station`), `slots_update_rate` (Hz).
-- **`on_configure`:** reads the config file, builds `ToolRackNodeConfigDTO`,
+- **`on_configure`:** reads the `tools.*` parameters, builds `ToolRackNodeConfigDTO`,
   creates the `~/slots` publisher, and picks `SimulatedRackController` or
   `HardwareRackController`.
 - **`on_activate`:** `controller.setup()` then a timer that publishes slot data.
 - **Simulated controller:** subscribes to `/slot<index>_rfid_scanner/tag_data`
-  for each slot; each `Dataframe` is parsed into a `ToolInfoDto` (empty payload ⇒
-  slot empty). `get_slots_data()` returns a `SlotsDto` of expected vs.
-  currently-detected tools. On setup it warns if detected tools don't match the
-  configured slots.
+  for each physical slot (assigned or not); each `Dataframe` is parsed into a
+  `ToolInfoDto` (empty payload ⇒ slot empty). `get_slots_data()` returns a
+  `SlotsDto` of expected vs. currently-detected tools; validating the placement
+  is the tools manager's job.
 - **Hardware controller:** present but not the focus of the sim path.
 
 ## `tool_mount` node
@@ -109,7 +132,8 @@ Publishes a latched `tool_mounted` topic (`tools_manager/ToolInfo`) at
 
 ### Parameters
 `simulated`, `world_name`, `station_model_name`, `tool_mount_node_name`,
-`tool_rack_node_name`, `movement_controller_node_name`, `tools_manager_config_file`.
+`tool_rack_node_name`, `movement_controller_node_name`, `tools.*`, and — in
+simulation — `simulation.*`.
 
 ### Collaborators it builds
 - **`ToolsWorldClientAdapter`** — resolves tool geometry and XACRO mappings,
@@ -119,37 +143,65 @@ Publishes a latched `tool_mounted` topic (`tools_manager/ToolInfo`) at
   lifecycle transitions and parameters of other nodes **by name**, over their
   standard `change_state` / `get_state` / `set_parameters` / `get_parameters`
   services.
-- **`Ros2Launcher`** — launches and shuts down endtool launch files as child
-  processes.
+
+### Ownership
+| Owner | Responsibility |
+|-------|----------------|
+| ROS 2 launch | Endtool and pattern executor process lifetime |
+| Tools manager | Endtool configuration, mounted-state reconfiguration, tool world models |
+| Pattern executor | Activation/deactivation of its endtool during its own lifecycle |
+| External orchestrator | Startup ordering; keeping the executor inactive around tool changes and before the manager is deactivated |
+
+The manager never starts or stops processes and never drives executor
+lifecycles. Its endtools stay `inactive` after activation; an unmounted endtool
+cannot be activated for dispensing.
 
 ### `on_configure`
-Reads the config file, builds `ToolsManagerNodeConfigDTO`, and (in sim) creates
-the Gazebo client; always creates the MoveIt client, the two node-state
-managers, and the launcher. Activation checks that the required manager
-services are available before spawning tools.
+Reads and validates the parameters into `ToolsManagerNodeConfigDTO` (failing on
+any inconsistency), then creates the Gazebo client (sim only), the MoveIt client
+and the rack/mount node-state managers.
 
 ### `on_activate` — bring the cell up
-1. Sanity-check that all collaborators exist.
-2. Configure + activate the `tool_rack` and `tool_mount` nodes.
+1. Sanity-check that all collaborators exist, and clean up anything left by an
+   earlier failed attempt.
+2. Check the world-manager services, then configure + activate the `tool_rack`
+   and `tool_mount` nodes.
 3. Subscribe (latched) to `tool_rack/slots` and `tool_mount/tool_mounted`.
-4. Determine the installed/mounted tool set:
-   - **Sim:** read directly from `simulation_setup` (tag data → `ToolInfoDto`);
-     index `-1` marks a tool on the mount.
-   - **Hardware:** poll the latched topics up to 10× (1 s apart) for slot +
-     mount info.
-5. For **each tool on the rack**: look up its parameters/metadata, **launch its
-   endtool node** (`Ros2Launcher.launch(...)` with `mounted:=false`,
-   `tool_rack_link:=slot<index>_attached_link`), register a `NodeStateManager`,
-   configure that endtool node, then **spawn its model** into the MoveIt scene
-   and (in sim) the Gazebo world, attached to the slot link.
-6. If a tool is **on the mount**, do the same with `mounted:=true`, attaching to
+4. Obtain the initial inventory:
+   - **Sim:** from `simulation.*`; index `-1` marks the tool on the mount.
+   - **Hardware:** poll up to 10× (1 s apart) until a rack message **and** a
+     mount message have arrived. An empty mount message is a valid answer and is
+     distinguished from "nothing received yet".
+5. **Validate the inventory** against `tools.*` before touching any endtool.
+   Activation fails with an actionable message listing every problem when a
+   configured tool is absent from rack and mount, a detected serial is unknown
+   (including any tool in an unassigned slot), a known tool sits in a slot other
+   than its home slot, or a serial is detected more than once. A tool on the
+   mount is valid although its home slot is empty.
+6. **Associate** each detected serial with its mapped endtool node: the node
+   must be reachable and `unconfigured`, its `tool_sn` parameter must equal the
+   serial, and its read-only `model` parameter must be readable.
+7. For each endtool: set its `mounted` parameter from the observed location,
+   **configure** it (left `inactive`), then create its models in the MoveIt
+   scene and (in sim) Gazebo, attached to the home slot link or to
    `tool_mount_tcp`.
-7. Create the `tool_mount/lock` service client, the movement-controller
+8. Create the `tool_mount/lock` service client, the movement-controller
    `ExecuteTrajectory` action client and `in_session` / `close_session` service
    clients, the two action servers `~/mount_tool` and `~/unmount_tool`, and the
-   `~/get_tool_serial` service.
-8. On `ActivationFailedException`, unwind everything created so far and return
-   `FAILURE`.
+   `~/get_tool_serial` service. The manager only reports success after all of
+   this completed.
+9. On any failure, roll back **only what was done**: models that were created
+   are removed, endtools that were configured go back to `unconfigured`
+   (deactivating first if needed), rack/mount nodes that were brought up are
+   returned to `unconfigured`, and interfaces are destroyed. Rollback failures
+   are logged explicitly and are retried at the next activation. Endtool and
+   executor processes are never touched, so activation can simply be retried.
+
+### `on_deactivate`
+Destroys the interfaces, removes the tool models, returns the endtools (and
+rack/mount nodes) to `unconfigured` and releases their lifecycle clients. The
+endtool and executor processes keep running, so the manager can be activated
+again. The orchestrator must have deactivated the executors first.
 
 ### Actions
 
@@ -157,7 +209,9 @@ Both are `tools_manager` actions with goal `string tool_sn` and result
 `bool success, string message`.
 
 #### `~/mount_tool` (pick a tool off the rack)
-Serialized by a non-blocking `RLock` (concurrent mount/unmount is rejected).
+Serialized by a non-blocking `RLock` that is taken once per goal (concurrent
+mount/unmount is rejected before it can touch the running movement session) and
+held for the whole operation, including the unmount of an automatic swap.
 Pre-checks: slots known, collaborators initialized, the requested serial
 actually on the rack. If the requested tool is already mounted the goal
 succeeds immediately (`success=true`, no motion). If a **different** tool is
@@ -180,7 +234,9 @@ motion. Then:
    (sim) in Gazebo.
 9. **LIN** move → `slot<n>_lifted_link`; re-disable collisions.
 10. `_endtool_mounted(tool_sn, True)` — reconfigure the endtool node as mounted
-    (unconfigure → set `mounted=true` → configure).
+    (unconfigure → set `mounted=true` → configure). The executor/endtool must
+    be inactive. If this fails the goal is aborted with a message saying the
+    tool **was** mounted but its endtool could not be reconfigured.
 11. `goal_handle.succeed()`.
 
 Any failed step aborts the goal with an explanatory `message`.
@@ -196,7 +252,8 @@ not the replacement serial in the mount goal.
 Sequence: PTP → `lifted`, allow collisions, LIN → `attached`, **re-mate
 model back to the rack slot link**, `lock` unlock, wait up to 10 s for the rack
 to re-detect the tool, LIN → `slide_in`, re-disable collisions,
-`_endtool_mounted(tool_sn, False)`, succeed.
+`_endtool_mounted(tool_sn, False)` (a failure aborts the goal, stating that the
+tool was already returned to its slot), succeed.
 
 ### Services
 
@@ -231,7 +288,8 @@ equal (exact, case-sensitive, no wildcards). Response: `bool success`,
 ## World/scene management
 
 `ToolsWorldClientAdapter` resolves each tool's collision mesh and SDF XACRO
-from its metadata in the installed `endtools` share directory. It submits
+from the tool's `model` parameter (read from the endtool node) in the installed
+`endtools` share directory. It submits
 collision-object changes and the tool/mount/rack ACM pairs through
 `MoveIt2WorldClient`; in simulation it also submits model spawn, attachment,
 and deletion requests through `GazeboWorldClient`. The adapter preserves the
@@ -241,15 +299,17 @@ per-consumer ROS-Gazebo service or detachable-joint bridge.
 
 ---
 
-## `Ros2Launcher`
+## Endtool discovery parameters
 
-Launches each endtool launch file as an independent child process
-(`ros2 launch ...`, no shell, argument-injection safe), in its own process group.
-- A per-launch daemon thread watches the process and flips `LaunchDto.running`
-  to `False` when it exits.
-- `shutdown` escalates `SIGINT → SIGTERM → SIGKILL` to the process group, like
-  Ctrl-C in the terminal. `shutdown_all` tears every launch down on node teardown.
-- Scalar/list launch args are serialized to `key:=value` (`bool` → `true`/`false`).
+Every endtool exposes two **read-only** parameters, declared in its constructor
+and set once at startup through the standard ROS parameter override mechanism
+(its launch file forwards them via the node's `parameters`), so they can be read
+while the node is `unconfigured`:
+
+| Parameter | Used by |
+|-----------|---------|
+| `model` | The tools manager, to find the collision mesh and Gazebo model of the tool. Launch argument default for the dispenser: `dispensing_tool`. |
+| `pattern_executor` | Discovery only: the node name of the executor associated with the tool. The manager does not drive that executor's lifecycle. |
 
 ---
 
@@ -280,11 +340,29 @@ ros2 launch tools_manager tools_manager_launch.py simulated:=true
 ```
 
 `tools_manager_launch.py` starts `tool_mount`, `tool_rack`, `tools_manager`,
-the shared `world_manager` launch, and — only in sim — a `ros_gz_bridge` for
-the slot/mount RFID scanner `tag_data` topics. If a parent launch already
-starts the shared manager, pass `start_world_manager:=false` here.
+the endtools of the rack with their pattern executors, and — only in sim — a
+`ros_gz_bridge` for the RFID scanner `tag_data` topics of every rack slot and of
+the mount. If a parent launch already starts the shared world manager, keep
+`start_world_manager:=false` (the default); the endtool launches never start one.
+
+The rack is defined statically at the top of the launch file (`_RACK_SLOTS`):
+each physical slot with the endtool that lives in it. The same `tools.*` values
+are passed to `tool_rack` and `tools_manager`; an unassigned slot (`None`) gets
+neither an endtool nor an executor. For every endtool the launch includes
+`endtools/volumetric_dispenser_launch.py` and
+`pattern_executors/dispensing_pattern_executor.launch.py`, passing the same
+`simulated`, `world_name` and tool identity. The executor node name is a launch
+argument per instance (`pattern_executor_<tool_sn>`); its resolved value names
+the executor node **and** is forwarded to the endtool launch as
+`pattern_executor`. Add or change tools by editing `_RACK_SLOTS`.
+
+The pattern executor launch lives in a package that already depends on
+`endtools`, so the composition is done here (`tools_manager` depends on both)
+rather than from the endtools launch, which keeps the dependency graph acyclic.
+
 An external orchestrator must configure and activate the included world-manager
-nodes before activating `tools_manager`.
+nodes before activating `tools_manager`, and keep the executors inactive around
+tool changes.
 
 Then drive the orchestrator's lifecycle and call an action:
 ```bash

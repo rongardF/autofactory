@@ -40,7 +40,7 @@ from rclpy.callback_groups import CallbackGroup
 from rclpy.node import Node
 
 from tools_manager.model.tool_info_dto import ToolInfoDto
-from tools_manager.model.tools_manager_config import ToolsManagerConfigDTO
+from tools_manager.model.tools_manager_config import ToolSlotDTO
 
 from world_manager.client import GazeboWorldClient, MoveIt2WorldClient
 from world_manager.exceptions import WorldManagerError
@@ -66,14 +66,12 @@ class ToolsWorldClientAdapter:
         self,
         node: Node,
         callback_group: CallbackGroup,
-        config: ToolsManagerConfigDTO,
         simulated: bool,
         station_model_name: str,
         timeout_sec: float = 15.0,
     ) -> None:
-        """Create typed clients and retain tool-model configuration."""
+        """Create the typed world-manager clients."""
         self._node = node
-        self._config = config
         self._station_model_name = station_model_name
         self._moveit = MoveIt2WorldClient(
             node, callback_group, timeout_sec=timeout_sec
@@ -99,11 +97,44 @@ class ToolsWorldClientAdapter:
     def spawn_tool(
         self,
         tool: ToolInfoDto,
+        model_name: str,
+        home_slot: ToolSlotDTO,
         link_name: str,
         rotation: tuple[float, float, float, float] | None = None,
     ) -> None:
-        """Add a tool to MoveIt and, when enabled, to the Gazebo world."""
-        mesh_path = self._collision_mesh_path(tool)
+        """Add a tool to MoveIt and, when enabled, to the Gazebo world.
+
+        Nothing remains created when this raises: a failure after the MoveIt
+        object was added removes it again.
+
+        :param tool: Detected tool.
+        :param model_name: Name of the tool model in the ``endtools`` package.
+        :param home_slot: Rack slot the tool belongs to.
+        :param link_name: Link the tool is attached to.
+        :param rotation: Optional attachment orientation quaternion (x, y, z, w).
+        :raises WorldManagerError: If model resources are missing or a world request fails.
+        """
+        mesh_path = self._tool_model_path(model_name, 'meshes/collision.stl')
+        sdf = None
+        if self._gazebo is not None:
+            model_path = self._model_description_path(model_name)
+            try:
+                sdf = expand_xacro(
+                    model_path,
+                    {
+                        'model_name': tool.tool_sn,
+                        'station_model_name': self._station_model_name,
+                        'tool_mount_link': 'tool_mount_tcp',
+                        'tool_rack_link': home_slot.tool_attached_frame,
+                        'tag_data': tool.to_tag_data().decode(),
+                    },
+                )
+            except (xacro.XacroException, OSError, ValueError) as error:
+                raise WorldManagerError(
+                    f'Failed to expand model description for '
+                    f'{tool.tool_sn}: {error}'
+                ) from error
+
         scene_object = SceneObjectDTO(
             object_id=tool.tool_sn,
             mesh_path=str(mesh_path),
@@ -118,61 +149,49 @@ class ToolsWorldClientAdapter:
         if self._gazebo is None:
             return
 
-        metadata = self._config.get_tool_metadata(tool.tool_sn)
-        if metadata is None:
-            raise WorldManagerError(
-                f'No metadata defined for tool {tool.tool_sn}'
-            )
         try:
-            slot = self._config.get_tool_slot_data(tool.tool_sn)
-        except ValueError as error:
-            raise WorldManagerError(
-                f'Tool {tool.tool_sn} has no configured rack slot'
-            ) from error
-        model_path = self._model_description_path(metadata.model)
-        try:
-            sdf = expand_xacro(
-                model_path,
-                {
-                    'model_name': tool.tool_sn,
-                    'station_model_name': self._station_model_name,
-                    'tool_mount_link': 'tool_mount_tcp',
-                    'tool_rack_link': slot.tool_attached_frame,
-                    'tag_data': tool.to_tag_data().decode(),
-                },
+            self._gazebo.spawn(
+                [
+                    ModelSpecDTO(
+                        model_id=tool.tool_sn,
+                        sdf=sdf,
+                        attach_link=link_name,
+                        pose=PoseDTO(
+                            frame_id=link_name,
+                            qx=rotation[0] if rotation else 0.0,
+                            qy=rotation[1] if rotation else 0.0,
+                            qz=rotation[2] if rotation else 0.0,
+                            qw=rotation[3] if rotation else 1.0,
+                        ),
+                    )
+                ],
+                owner=_OWNER,
             )
-        except (xacro.XacroException, OSError, ValueError) as error:
-            raise WorldManagerError(
-                f'Failed to expand model description for '
-                f'{tool.tool_sn}: {error}'
-            ) from error
-        self._gazebo.spawn(
-            [
-                ModelSpecDTO(
-                    model_id=tool.tool_sn,
-                    sdf=sdf,
-                    attach_link=link_name,
-                    pose=PoseDTO(
-                        frame_id=link_name,
-                        qx=rotation[0] if rotation else 0.0,
-                        qy=rotation[1] if rotation else 0.0,
-                        qz=rotation[2] if rotation else 0.0,
-                        qw=rotation[3] if rotation else 1.0,
-                    ),
+        except WorldManagerError:
+            try:
+                self._moveit.apply(WorldChangesDTO(remove_ids=(tool.tool_sn,)))
+            except WorldManagerError as cleanup_error:
+                self._node.get_logger().error(
+                    f'Failed to remove {tool.tool_sn} from the MoveIt scene after '
+                    f'its simulation spawn failed: {cleanup_error}'
                 )
-            ],
-            owner=_OWNER,
-        )
+            raise
 
     def delete_tool(self, model_id: str) -> None:
-        """Remove a tool from MoveIt and from the owned Gazebo models."""
+        """Remove a tool from MoveIt and from the owned Gazebo models.
+
+        Both removals are attempted even when the first one fails.
+
+        :raises WorldManagerError: The first removal failure, after both were attempted.
+        """
+        first_error: WorldManagerError | None = None
         try:
             self._moveit.apply(WorldChangesDTO(remove_ids=(model_id,)))
         except WorldManagerError as error:
             self._node.get_logger().error(
                 f'Failed to remove {model_id} from the MoveIt scene: {error}'
             )
-            raise
+            first_error = error
         if self._gazebo is not None:
             try:
                 self._gazebo.delete(model_ids=(model_id,), owner=_OWNER)
@@ -180,7 +199,9 @@ class ToolsWorldClientAdapter:
                 self._node.get_logger().error(
                     f'Failed to remove {model_id} from Gazebo: {error}'
                 )
-                raise
+                first_error = first_error or error
+        if first_error is not None:
+            raise first_error
 
     def attach_to_link(
         self,
@@ -253,14 +274,6 @@ class ToolsWorldClientAdapter:
             qz=quaternion[2],
             qw=quaternion[3],
         )
-
-    def _collision_mesh_path(self, tool: ToolInfoDto) -> Path:
-        metadata = self._config.get_tool_metadata(tool.tool_sn)
-        if metadata is None:
-            raise WorldManagerError(
-                f'No metadata defined for tool {tool.tool_sn}'
-            )
-        return self._tool_model_path(metadata.model, 'meshes/collision.stl')
 
     def _model_description_path(self, model_name: str) -> Path:
         return self._tool_model_path(model_name, 'model.sdf.xacro')

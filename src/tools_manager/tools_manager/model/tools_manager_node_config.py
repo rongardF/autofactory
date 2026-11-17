@@ -24,12 +24,13 @@
 # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
-"""ToolRackNodeConfigDTO — Pydantic v2 DTO for tool rack node parameters."""
+"""ToolsManagerNodeConfigDTO — Pydantic v2 DTO for tools manager node parameters."""
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from tools_manager.model.simulation_inventory_dto import SimulationInventoryDTO
 from tools_manager.model.tools_manager_config import ToolsManagerConfigDTO
 
 
@@ -38,9 +39,12 @@ class ToolsManagerNodeConfigDTO(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     tools_manager_config: ToolsManagerConfigDTO = Field(
-        description='Tools manager configuration.',
+        description='Expected tool assignments of the rack.',
     )
-    
+    simulation: SimulationInventoryDTO | None = Field(
+        default=None,
+        description='Initial simulated tool inventory; only set when running in simulation.',
+    )
     simulated: bool = Field(
         default=True,
         description='Selects Gazebo spawn (true) vs UR payload path (false).',
@@ -63,6 +67,15 @@ class ToolsManagerNodeConfigDTO(BaseModel):
         default="movement_controller",
         description='Movement controller node name to communicate with.',
     )
-    tools_manager_config_file: str = Field(
-        description='Path to the tools manager configuration file.',
-    )
+
+    @model_validator(mode='after')
+    def _simulation_slots_exist(self) -> 'ToolsManagerNodeConfigDTO':
+        """Reject simulated tools placed in a slot that does not exist on the rack."""
+        if self.simulation is None:
+            return self
+        unknown = sorted(set(self.simulation.slot_indices) - self.tools_manager_config.slot_indices)
+        if unknown:
+            raise ValueError(
+                f'simulation.tool_rack.index contains slots that are not in tools.index: {unknown}'
+            )
+        return self

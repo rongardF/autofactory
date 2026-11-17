@@ -10,13 +10,17 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
     """Create the dispenser launch description."""
     simulated = LaunchConfiguration('simulated', default='true')
+    use_sim_time = LaunchConfiguration('use_sim_time', default=simulated)
     world_name = LaunchConfiguration('world_name', default='default')
     tool_sn = LaunchConfiguration('tool_sn', default='unknown')
+    model_id = LaunchConfiguration('model_id', default='dispensing_tool')
+    pattern_executor = LaunchConfiguration('pattern_executor', default='')
     tcp_frame_id = LaunchConfiguration('tcp_frame_id', default='tool0')
     tcp_uncalibrated = LaunchConfiguration(
         'tcp_uncalibrated',
@@ -47,6 +51,11 @@ def generate_launch_description():
             description='Whether the tool is simulated.',
         ),
         DeclareLaunchArgument(
+            'use_sim_time',
+            default_value=simulated,
+            description='Whether the tool node uses simulation time.',
+        ),
+        DeclareLaunchArgument(
             'world_name',
             default_value='default',
             description='Name of the simulation world.',
@@ -55,6 +64,19 @@ def generate_launch_description():
             'tool_sn',
             default_value='unknown',
             description='Tool serial number.',
+        ),
+        DeclareLaunchArgument(
+            'model_id',
+            default_value='dispensing_tool',
+            description='Model (resource directory name) of the tool, exposed as the read-only "model" parameter.',
+        ),
+        DeclareLaunchArgument(
+            'pattern_executor',
+            default_value='',
+            description=(
+                'Node name of the pattern executor associated with the tool, '
+                'exposed as the read-only "pattern_executor" parameter.'
+            ),
         ),
         DeclareLaunchArgument(
             'tcp_frame_id',
@@ -124,12 +146,19 @@ def generate_launch_description():
         executable='volumetric_dispensing_tool',
         name=node_name,
         output='screen',
+        arguments=[
+            '--ros-args',
+            '-p',
+            ["model:='", model_id, "'"],
+            '-p',
+            ["pattern_executor:='", pattern_executor, "'"],
+        ],
         parameters=[
             {
                 'simulated': simulated,
                 'world_name': world_name,
-                'use_sim_time': simulated,
-                'tool_sn': tool_sn,
+                'use_sim_time': use_sim_time,
+                'tool_sn': ParameterValue(tool_sn, value_type=str),
                 'tcp_frame_id': tcp_frame_id,
                 'tcp_uncalibrated': tcp_uncalibrated,
                 'station_cache_name': station_cache_name,

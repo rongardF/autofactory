@@ -25,6 +25,12 @@
   <depend>rfid_scanner</depend>
   <depend>world_manager</depend>
 
+  <!-- Launch composition of the endtools and their pattern executors -->
+  <exec_depend>pattern_executors</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>ros_gz_bridge</exec_depend>
+
   <!-- Python runtime -->
   <exec_depend>rclpy</exec_depend>
   <exec_depend>python3-pydantic</exec_depend>

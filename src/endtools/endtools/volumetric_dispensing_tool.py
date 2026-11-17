@@ -92,6 +92,24 @@ class VolumetricDispensingTool(LifecycleNode):
             "VOL_DISPENSER",
             ParameterDescriptor(description='Tool type', read_only=True),
         )
+        # ROS CLI parameter overrides from the launch action are applied here;
+        # these values are fallbacks when no corresponding ROS argument exists.
+        self.declare_parameter(
+            'model',
+            'dispensing_tool',
+            ParameterDescriptor(
+                description='Model (resource directory name) of this tool; set once at startup',
+                read_only=True,
+            ),
+        )
+        self.declare_parameter(
+            'pattern_executor',
+            '',
+            ParameterDescriptor(
+                description='Node name of the pattern executor associated with this tool; set once at startup',
+                read_only=True,
+            ),
+        )
         self.declare_parameter(
             'simulated',
             True,

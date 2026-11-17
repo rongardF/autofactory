@@ -26,7 +26,6 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 from rclpy import init, ok, shutdown
-from pydantic import ValidationError
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.qos import QoSProfile, DurabilityPolicy
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
@@ -46,7 +45,7 @@ from tools_manager.interface.rack_controller import RackController
 from tools_manager.services.hardware_rack_controller import HardwareRackController
 from tools_manager.services.simulated_rack_controller import SimulatedRackController
 
-from tools_manager.utils.config_reader import read_config_file
+from tools_manager.utils.node_parameters import declare_tools_parameters, read_tools_config
 
 
 class ToolRack(LifecycleNode):
@@ -72,11 +71,7 @@ class ToolRack(LifecycleNode):
             True,
             ParameterDescriptor(description='Whether the node is running in simulation mode'),
         )
-        self.declare_parameter(
-            'tools_manager_config_file',
-            "tools_manager_config.yaml",
-            ParameterDescriptor(description='Path to the tool rack configuration file'),
-        )
+        declare_tools_parameters(self)
         self.declare_parameter(
             'parent_frame_id',
             "station",
@@ -101,9 +96,9 @@ class ToolRack(LifecycleNode):
 
         # Read and validate constraint parameters
         try:
-            config = read_config_file(self.get_parameter('tools_manager_config_file').get_parameter_value().string_value)
+            config = read_tools_config(self)
             self._config = ToolRackNodeConfigDTO(
-                slots=config.slots,
+                slots=list(config.slots),
                 simulated=self.get_parameter('simulated').get_parameter_value().bool_value,
                 parent_frame_id=self.get_parameter('parent_frame_id').get_parameter_value().string_value,
                 slots_update_rate=self.get_parameter('slots_update_rate').get_parameter_value().double_value,
@@ -119,8 +114,8 @@ class ToolRack(LifecycleNode):
                 self._rack_controller = SimulatedRackController(self, self._config)
             else:
                 self._rack_controller = HardwareRackController(self, self._config)
-        except ValidationError as e:
-            self.get_logger().error(f'Failed to process/generate config: {e}')
+        except ValueError as e:
+            self.get_logger().error(f'Invalid tool rack parameters: {e}')
             return TransitionCallbackReturn.FAILURE
         except Exception as e:
             self.get_logger().error(f'Unknown error while configuring: {e}')

@@ -38,7 +38,7 @@ class ToolRackNodeConfigDTO(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     slots: list[ToolSlotDTO] = Field(
-        description='Tool rack configuration.',
+        description='All physical rack slots with their expected (home) tool.',
         default_factory=list,
     )
     parent_frame_id: str = Field(

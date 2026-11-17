@@ -1,7 +1,6 @@
 from pydantic import BaseModel, Field
 
 from tools_manager.msg import ToolInfo
-from tools_manager.utils.hex_to_string import hex_to_string
 
 from endtools.enumerator.tool_type_enum import ToolTypeEnum
 
@@ -59,23 +58,53 @@ class ToolInfoDto(BaseModel):
     def from_tag_data(index: int, tag_data: bytes) -> 'ToolInfoDto':
         """Build a ToolInfoDto from a hex-encoded RFID tag payload.
 
-        The payload is a hex string whose decoded form is six fixed-width
-        16-byte fields (null/space padded), in order: serial number, tool
-        type, tool part number, tool part revision, material part number and
-        material part revision.
-
         :param index: Slot index the tag was read from.
-        :param tag_data: Raw hex-encoded tag payload bytes.
+        :param tag_data: Hex-encoded tag payload as ASCII bytes.
         :returns: The parsed tool information.
-        :rtype: ToolInfoDto
+        :raises ValueError: If the payload is not valid hex or not a valid tool tag.
+        """
+        try:
+            hex_text = bytes(tag_data).decode('ascii')
+        except UnicodeDecodeError as error:
+            raise ValueError(f'RFID tag payload is not hex-encoded text: {error}') from error
+        return ToolInfoDto.from_hex_tag_data(index, hex_text)
+
+    @staticmethod
+    def from_hex_tag_data(index: int, hex_text: str) -> 'ToolInfoDto':
+        """Build a ToolInfoDto from a hex-encoded RFID tag payload string.
+
+        This is the single decoding and validation path for RFID payloads. The
+        decoded payload holds six fixed-width 16-byte fields (null/space padded),
+        in order: serial number, tool type, tool part number, tool part revision,
+        material part number and material part revision.
+
+        :param index: Slot index the tag was read from (``-1`` for the tool mount).
+        :param hex_text: Hex-encoded tag payload.
+        :returns: The parsed tool information.
+        :raises ValueError: If the payload is not valid hex, is shorter than the six
+            fields, is not text, has an empty serial number or has an unknown tool type.
         """
         field_size = 16
-        decoded = hex_to_string(bytes(tag_data).decode())
-        fields = [
-            decoded[start:start + field_size].replace('\x00', '').strip()
-            for start in range(0, field_size * 6, field_size)
-        ]
+        field_count = 6
+        try:
+            raw = bytes.fromhex(hex_text)
+        except ValueError as error:
+            raise ValueError(f'RFID tag payload is not valid hex: {error}') from error
+        if len(raw) < field_size * field_count:
+            raise ValueError(
+                f'RFID tag payload has {len(raw)} bytes, expected at least {field_size * field_count}'
+            )
+
+        try:
+            fields = [
+                raw[start:start + field_size].decode('utf-8').replace('\x00', '').strip()
+                for start in range(0, field_size * field_count, field_size)
+            ]
+        except UnicodeDecodeError as error:
+            raise ValueError(f'RFID tag payload fields are not valid text: {error}') from error
         serial, tool_type, tool_pn, tool_rev, material_pn, material_rev = fields
+        if not serial:
+            raise ValueError('RFID tag payload has an empty serial number')
         return ToolInfoDto(
             index=index,
             tool_sn=serial,
