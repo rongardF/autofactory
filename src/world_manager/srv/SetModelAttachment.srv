@@ -1,0 +1,5 @@
+string model_id
+string link_name   # "" => detach all joints (explicit release)
+---
+bool   success
+string error_message

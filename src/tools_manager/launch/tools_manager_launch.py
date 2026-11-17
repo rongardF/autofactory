@@ -1,41 +1,40 @@
-# launch ros_gz_bridge with bridged Gazebo services and then launch 'gazebo_client.py' node to handle mating/detaching of parts in Gazebo
-
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, OpaqueFunction
-from launch_ros.substitutions import FindPackageShare
-from launch_ros.actions import Node
+from launch.actions import (
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
+    OpaqueFunction,
+)
+from launch.conditions import IfCondition
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+
+from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
 
 from tools_manager.utils.config_reader import read_config_file
 
 
 def _bridge_setup(context, *args, **kwargs):
-    """Bridge each slot's Gazebo RFID scanner tag data 
-    topic into ROS when simulating.
-    """
+    """Bridge the Gazebo RFID scanner tag topics into ROS when simulating."""
     if LaunchConfiguration("simulated").perform(context).lower() != 'true':
         return []
 
-    config_file = LaunchConfiguration("tools_manager_config_file").perform(context)
+    config_file = LaunchConfiguration(
+        "tools_manager_config_file"
+    ).perform(context)
     config = read_config_file(config_file)
 
     # bridge tool rack slots RFID scanner tag data topics into ROS
     bridge_arguments = [
-        f'/slot{slot.index}_rfid_scanner/tag_data@ros_gz_interfaces/msg/Dataframe[gz.msgs.Dataframe'
+        f'/slot{slot.index}_rfid_scanner/tag_data@ros_gz_interfaces/msg/'
+        'Dataframe[gz.msgs.Dataframe'
         for slot in config.slots
     ]
 
     # bridge tool mount RFID scanner tag data topic into ROS
     bridge_arguments += [
-        f"tool_mount_rfid_scanner/tag_data@ros_gz_interfaces/msg/Dataframe[gz.msgs.Dataframe"
-    ]
-
-    # bridge Gazebo services for spawning, setting pose, and deleting entities
-    world_name = LaunchConfiguration("world_name").perform(context)
-    bridge_arguments += [
-        f'/world/{world_name}/create@ros_gz_interfaces/srv/SpawnEntity',
-        f'/world/{world_name}/set_pose@ros_gz_interfaces/srv/SetEntityPose',
-        f'/world/{world_name}/remove@ros_gz_interfaces/srv/DeleteEntity',
+        'tool_mount_rfid_scanner/tag_data@ros_gz_interfaces/msg/'
+        'Dataframe[gz.msgs.Dataframe'
     ]
 
     if not bridge_arguments:
@@ -76,6 +75,12 @@ def generate_launch_description():
             description='Name of the Gazebo world.',
         ),
         DeclareLaunchArgument(
+            'start_world_manager',
+            default_value='false',
+            choices=['true', 'false'],
+            description='Start the shared world manager for this launch.',
+        ),
+        DeclareLaunchArgument(
             'tools_manager_config_file',
             default_value=PathJoinSubstitution([
                 FindPackageShare("tools_manager"),
@@ -110,7 +115,24 @@ def generate_launch_description():
 
     actions = []
 
-    # if simulated, bridge each slot's Gazebo RFID scanner detection topic into ROS
+    actions.append(
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                PathJoinSubstitution([
+                    FindPackageShare('world_manager'),
+                    'launch',
+                    'world_manager.launch.py',
+                ])
+            ),
+            launch_arguments={
+                'simulated': simulated,
+                'world_name': LaunchConfiguration('world_name'),
+            }.items(),
+            condition=IfCondition(LaunchConfiguration('start_world_manager')),
+        )
+    )
+
+    # Bridge each simulated RFID scanner topic into ROS.
     actions.append(OpaqueFunction(function=_bridge_setup))
 
     actions.append(
@@ -123,8 +145,12 @@ def generate_launch_description():
                 {
                     "simulated": simulated,
                     "use_sim_time": simulated,
-                    "parent_frame_id": LaunchConfiguration("tool_mount_parent_frame_id"),
-                    "mounted_publish_rate": LaunchConfiguration("tool_mounted_update_rate"),
+                    "parent_frame_id": LaunchConfiguration(
+                        "tool_mount_parent_frame_id"
+                    ),
+                    "mounted_publish_rate": LaunchConfiguration(
+                        "tool_mounted_update_rate"
+                    ),
                 },
             ],
         )
@@ -139,9 +165,15 @@ def generate_launch_description():
                 {
                     "simulated": simulated,
                     "use_sim_time": simulated,
-                    "tools_manager_config_file": LaunchConfiguration("tools_manager_config_file"),
-                    "parent_frame_id": LaunchConfiguration("tool_rack_parent_frame_id"),
-                    "slots_update_rate": LaunchConfiguration("tool_rack_slots_update_rate"),
+                    "tools_manager_config_file": LaunchConfiguration(
+                        "tools_manager_config_file"
+                    ),
+                    "parent_frame_id": LaunchConfiguration(
+                        "tool_rack_parent_frame_id"
+                    ),
+                    "slots_update_rate": LaunchConfiguration(
+                        "tool_rack_slots_update_rate"
+                    ),
                 },
             ],
         )
@@ -157,11 +189,17 @@ def generate_launch_description():
                     "simulated": simulated,
                     "use_sim_time": simulated,
                     "world_name": LaunchConfiguration("world_name"),
-                    "station_model_name": LaunchConfiguration("station_model_name"),
+                    "station_model_name": LaunchConfiguration(
+                        "station_model_name"
+                    ),
                     "tool_mount_node_name": "/tool_mount",
                     "tool_rack_node_name": "/tool_rack",
-                    "movement_controller_node_name": LaunchConfiguration("movement_controller_node_name"),
-                    "tools_manager_config_file": LaunchConfiguration("tools_manager_config_file"),
+                    "movement_controller_node_name": LaunchConfiguration(
+                        "movement_controller_node_name"
+                    ),
+                    "tools_manager_config_file": LaunchConfiguration(
+                        "tools_manager_config_file"
+                    ),
                 },
             ],
         )

@@ -41,12 +41,12 @@ from repositories.srv import ObjectModelStorageGetModel, ObjectModelStorageGetMo
 from station_workplace.enums.constants import CARRIER_OBJECT_ID, PRODUCT_OBJECT_ID, SAFETY_OBJECT_ID
 from station_workplace.exceptions.injection_error import InjectionError
 from station_workplace.exceptions.process_cancelled_error import ProcessCancelledError
-from station_workplace.interface.planning_scene_manager import PlanningSceneManager
 from station_workplace.interface.product_data_reader import ProductDataReader
-from station_workplace.models.model_metadata_dto import ModelMetadataDTO
 from station_workplace.models.common_node_config_dto import CommonNodeConfigDTO
+from station_workplace.models.model_metadata_dto import ModelMetadataDTO
 from station_workplace.models.product_data_dto import ProductDataDTO
 from station_workplace.models.workplace_state_dto import WorkplaceStateDTO
+from station_workplace.services.planning_scene_adapter import PlanningSceneAdapter
 from station_workplace.services.process_runner import ProcessRunner
 from station_workplace.services.product_origin_tf_publisher import ProductOriginTfPublisher
 from station_workplace.services.workplace_state_publisher import WorkplaceStatePublisher
@@ -66,7 +66,7 @@ class WorkplaceProcessService:
         self,
         node: Node,
         config: CommonNodeConfigDTO,
-        scene: PlanningSceneManager,
+        scene: PlanningSceneAdapter,
         state_publisher: WorkplaceStatePublisher,
         tf_publisher: ProductOriginTfPublisher,
         reader: ProductDataReader,

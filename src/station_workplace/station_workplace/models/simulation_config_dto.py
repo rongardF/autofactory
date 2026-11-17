@@ -38,8 +38,7 @@ class SimulationConfigDTO(BaseModel):
 
     world_name: str = Field(
         default='default', pattern=ROS_NAME_PATTERN,
-        description='Gazebo world name used in /world/<world_name>/create/blocking and '
-        '/remove/blocking.',
+        description='Gazebo world name passed to the shared Gazebo world manager.',
     )
     station_model_name: str = Field(
         default='station', pattern=ROS_NAME_PATTERN,
@@ -68,30 +67,3 @@ class SimulationConfigDTO(BaseModel):
         default=0.001, ge=0, allow_inf_nan=False,
         description='Product/carrier penetration depth [m] still treated as touching.',
     )
-
-    @property
-    def create_service(self) -> str:
-        """Return the Gazebo world ``create/blocking`` service.
-
-        The non-blocking ``create`` reports success once the request is queued,
-        even if the entity is never created (e.g. name collision).
-        """
-        return f'/world/{self.world_name}/create/blocking'
-
-    @property
-    def remove_service(self) -> str:
-        """Return the Gazebo world ``remove/blocking`` service."""
-        return f'/world/{self.world_name}/remove/blocking'
-
-    @property
-    def detachable_joint_topics(self) -> dict[str, str]:
-        """Return the DetachableJoint topic prefix of each spawned model, by model name.
-
-        The models weld themselves with a ``DetachableJoint`` whose
-        ``<prefix>/detach`` (``gz.msgs.Empty``) and ``<prefix>/state``
-        (``gz.msgs.StringMsg``) topics follow this contract.
-        """
-        return {
-            self.carrier_model_name: f'/{self.station_link}/{self.carrier_model_name}',
-            self.product_model_name: f'/{self.carrier_link}/{self.product_model_name}',
-        }

@@ -1,0 +1,7 @@
+string[] model_ids
+string   owner
+---
+bool     success
+string   error_message
+string[] deleted_ids
+string[] unknown_ids

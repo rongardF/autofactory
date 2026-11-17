@@ -29,9 +29,12 @@
 import os
 import threading
 
-import xacro
 from pydantic import ValidationError
-from rclpy.callback_groups import CallbackGroup, MutuallyExclusiveCallbackGroup
+from rclpy.callback_groups import (
+    CallbackGroup,
+    MutuallyExclusiveCallbackGroup,
+    ReentrantCallbackGroup,
+)
 from rclpy.client import Client
 from rclpy.duration import Duration
 from rclpy.node import Node
@@ -43,7 +46,6 @@ from tf2_ros import TransformException  # type: ignore[attr-defined]
 from repositories.enums.object_model_storage.model_type_enum import ModelTypeEnum
 from repositories.srv import ObjectModelStorageGetModel, ObjectModelStorageGetModelsInfo
 from station_workplace.exceptions.spawn_error import SpawnError
-from station_workplace.exceptions.world_manager_error import WorldManagerError
 from station_workplace.interface.simulation_hooks import SimulationHooks
 from station_workplace.models.common_node_config_dto import CommonNodeConfigDTO
 from station_workplace.models.product_data_dto import ProductDataDTO
@@ -51,7 +53,6 @@ from station_workplace.models.sdf_model_dto import SdfModelDTO
 from station_workplace.models.sim_model_metadata_dto import SimModelMetadataDTO
 from station_workplace.models.simulated_product_dto import SimulatedProductDTO
 from station_workplace.services.collision_checker import CollisionChecker
-from station_workplace.services.gazebo_world_manager import GazeboWorldManager
 from station_workplace.srv import RemoveProduct, SpawnProduct
 from station_workplace.utils.async_service_caller import call_service
 from station_workplace.utils.sdf_parser import find_link_pose, parse_sdf_model
@@ -60,6 +61,10 @@ from station_workplace.utils.transformations import (
     pose6_to_matrix,
     transform_to_matrix,
 )
+
+from world_manager.client import GazeboWorldClient
+from world_manager.models import ModelSpecDTO, PoseDTO
+from world_manager.utils import expand_xacro
 
 _WORLD_FRAME = 'world'
 _MODEL_FILE = 'model.sdf.xacro'
@@ -81,7 +86,6 @@ class SimulatedProductSpawner:
         self,
         node: Node,
         config: CommonNodeConfigDTO,
-        world: GazeboWorldManager,
         hooks: SimulationHooks,
         io_group: CallbackGroup,
     ) -> None:
@@ -90,13 +94,15 @@ class SimulatedProductSpawner:
         self._logger = node.get_logger()
         self._config = config
         self._sim = config.simulation
-        self._world = world
         self._hooks = hooks
         self._io_group = io_group
+        self._owner = f'station_workplace:{node.get_name()}'
         self._service_group = MutuallyExclusiveCallbackGroup()
         self._checker = CollisionChecker(self._sim.penetration_tolerance)
         self._lock = threading.Lock()
         self._never_cancelled = threading.Event()
+        self._world_client: GazeboWorldClient | None = None
+        self._world_callback_group = ReentrantCallbackGroup()
         self._models_info_client: Client | None = None
         self._model_client: Client | None = None
         self._spawn_service: Service | None = None
@@ -108,7 +114,17 @@ class SimulatedProductSpawner:
     def activate(self) -> None:
         """Create the clients, the TF listener, the hook interfaces and the services."""
         timeout = self._config.service_call_timeout_sec
-        self._world.activate(self._sim, timeout, self._io_group)
+        self._world_client = GazeboWorldClient(
+            self._node,
+            self._world_callback_group,
+            timeout_sec=timeout,
+        )
+        try:
+            self._world_client.list_models(owner=self._owner)
+        except Exception:
+            self._world_client.destroy()
+            self._world_client = None
+            raise
         self._hooks.activate(self._node)
         self._models_info_client = self._node.create_client(
             ObjectModelStorageGetModelsInfo, self._config.get_models_info_service,
@@ -142,7 +158,9 @@ class SimulatedProductSpawner:
         self._tf_listener = None
         self._tf_buffer = None
         self._hooks.deactivate()
-        self._world.deactivate()
+        if self._world_client is not None:
+            self._world_client.destroy()
+            self._world_client = None
     # endregion lifecycle
 
     # region service callbacks
@@ -179,9 +197,10 @@ class SimulatedProductSpawner:
 
     # region spawn
     def _spawn(self, request: SpawnProduct.Request) -> None:
-        if self._world.spawned_models:
+        existing = self._require_world_client().list_models(owner=self._owner)
+        if existing:
             raise SpawnError(
-                f'product already spawned ({", ".join(self._world.spawned_models)}); '
+                f'product already spawned ({", ".join(item.model_id for item in existing)}); '
                 'call remove_product first')
         product = self._validate(request)
         carrier_extra = self._hooks.carrier_mappings(product.product)
@@ -221,11 +240,26 @@ class SimulatedProductSpawner:
 
         carrier_in_world = self._lookup_station_link()
         try:
-            self._world.spawn_model(
-                self._sim.carrier_model_name, carrier_sdf, matrix_to_pose(carrier_in_world))
-            self._world.spawn_model(
-                self._sim.product_model_name, product_sdf,
-                matrix_to_pose(carrier_in_world @ product_in_carrier))
+            carrier_pose = matrix_to_pose(carrier_in_world)
+            product_pose = matrix_to_pose(carrier_in_world @ product_in_carrier)
+            self._require_world_client().spawn(
+                [
+                    ModelSpecDTO(
+                        model_id=self._sim.carrier_model_name,
+                        sdf=carrier_sdf,
+                        pose=self._pose_to_dto(carrier_pose),
+                        attach_link=self._sim.station_link,
+                    ),
+                    ModelSpecDTO(
+                        model_id=self._sim.product_model_name,
+                        sdf=product_sdf,
+                        pose=self._pose_to_dto(product_pose),
+                        attach_link=self._sim.carrier_link,
+                    ),
+                ],
+                owner=self._owner,
+                cancel=self._never_cancelled,
+            )
             self._hooks.after_spawn(product.product)
         except Exception as exc:
             rollback_error = self._rollback()
@@ -288,7 +322,7 @@ class SimulatedProductSpawner:
         if not os.path.isfile(path):
             raise SpawnError(f"{description} model file '{path}' does not exist")
         try:
-            return xacro.process_file(path, mappings=mappings).toxml()  # type: ignore
+            return expand_xacro(path, mappings)
         except Exception as exc:  # noqa: BLE001 - xacro raises various exception types
             raise SpawnError(f"failed to expand {description} model '{path}': {exc}") from exc
 
@@ -312,9 +346,9 @@ class SimulatedProductSpawner:
         return transform_to_matrix(transform.transform)
 
     def _rollback(self) -> str:
-        """Remove the models spawned so far; return the error message or ``''``."""
+        """Remove models owned by this node; return an error message if cleanup fails."""
         try:
-            self._remove_all()
+            self._delete_owned_models()
         except Exception as exc:  # noqa: BLE001 - reported together with the original error
             self._logger.error(f'Rollback failed: {exc}')
             return str(exc)
@@ -323,16 +357,34 @@ class SimulatedProductSpawner:
 
     # region remove
     def _remove_all(self) -> None:
-        """Remove the spawned models in reverse spawn order (product before carrier).
+        """Delete this workplace's registered models in dependency order."""
+        self._delete_owned_models()
 
-        Stops at the first failure; models not removed stay in the record.
-        """
-        for name in reversed(self._world.spawned_models):
-            try:
-                self._world.remove_model(name)
-            except WorldManagerError as exc:
-                raise WorldManagerError(f"failed to remove model '{name}': {exc}") from exc
+    def _delete_owned_models(self) -> None:
+        """Delete all registered models owned by this workplace."""
+        client = self._require_world_client()
+        if client.list_models(owner=self._owner):
+            client.delete(owner=self._owner, cancel=self._never_cancelled)
+
+    @staticmethod
+    def _pose_to_dto(pose) -> PoseDTO:
+        """Convert a world pose message into a typed world-frame pose."""
+        return PoseDTO(
+            frame_id=_WORLD_FRAME,
+            x=pose.position.x,
+            y=pose.position.y,
+            z=pose.position.z,
+            qx=pose.orientation.x,
+            qy=pose.orientation.y,
+            qz=pose.orientation.z,
+            qw=pose.orientation.w,
+        )
     # endregion remove
+
+    def _require_world_client(self) -> GazeboWorldClient:
+        if self._world_client is None:
+            raise SpawnError('simulated product spawner is not active')
+        return self._world_client
 
     @staticmethod
     def _require(client: Client | None) -> Client:

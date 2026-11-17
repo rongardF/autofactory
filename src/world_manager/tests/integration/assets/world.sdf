@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<sdf version="1.9">
+  <world name="spike_world">
+    <physics name="p" type="dart"><max_step_size>0.004</max_step_size></physics>
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+
+    <model name="station">
+      <pose>0 0 1 0 0 0</pose>
+      <link name="base">
+        <inertial><mass>100</mass><inertia><ixx>1</ixx><iyy>1</iyy><izz>1</izz></inertia></inertial>
+      </link>
+      <link name="tool_mount_tcp">
+        <pose>0.5 0 0 0 0 0</pose>
+        <inertial><mass>1</mass><inertia><ixx>0.01</ixx><iyy>0.01</iyy><izz>0.01</izz></inertia></inertial>
+      </link>
+      <link name="rack_link">
+        <pose>0 0.5 0 0 0 0</pose>
+        <inertial><mass>1</mass><inertia><ixx>0.01</ixx><iyy>0.01</iyy><izz>0.01</izz></inertia></inertial>
+      </link>
+      <joint name="w" type="fixed"><parent>world</parent><child>base</child></joint>
+      <joint name="j1" type="fixed"><parent>base</parent><child>tool_mount_tcp</child></joint>
+      <joint name="j2" type="fixed"><parent>base</parent><child>rack_link</child></joint>
+    </model>
+  </world>
+</sdf>

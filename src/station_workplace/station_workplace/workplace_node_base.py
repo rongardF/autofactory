@@ -45,8 +45,7 @@ from station_workplace.interface.product_data_reader import ProductDataReader
 from station_workplace.interface.simulation_hooks import SimulationHooks
 from station_workplace.models.common_node_config_dto import CommonNodeConfigDTO, SafetyObjectConfigDTO
 from station_workplace.models.simulation_config_dto import SimulationConfigDTO
-from station_workplace.services.gazebo_world_manager import GazeboWorldManager
-from station_workplace.services.moveit2_planning_scene_manager import Moveit2PlanningSceneManager
+from station_workplace.services.planning_scene_adapter import PlanningSceneAdapter
 from station_workplace.services.process_runner import ProcessRunner
 from station_workplace.services.product_origin_tf_publisher import ProductOriginTfPublisher
 from station_workplace.services.simulated_product_spawner import SimulatedProductSpawner
@@ -107,14 +106,12 @@ class WorkplaceNodeBase(LifecycleNode):
         self._action_group = ReentrantCallbackGroup()
 
         self._config: CommonNodeConfigDTO | None = None
-        self._scene: Moveit2PlanningSceneManager | None = None
+        self._scene: PlanningSceneAdapter | None = None
         self._reader: ProductDataReader | None = None
         self._process: WorkplaceProcessService | None = None
         self._runner: ProcessRunner | None = None
         self._routing: WaitRoutingActionServer | None = None
         self._spawner: SimulatedProductSpawner | None = None
-        # Created once so the record of spawned models survives activation cycles.
-        self._world = GazeboWorldManager(self)
         # The publishers and the tracker keep their state (last published value,
         # TF published flag, settled state) across activations and are therefore created once.
         self._state_tracker = WorkplaceStateTracker()
@@ -192,7 +189,7 @@ class WorkplaceNodeBase(LifecycleNode):
 
         try:
             runner = ProcessRunner(self.get_logger())
-            scene = Moveit2PlanningSceneManager(
+            scene = PlanningSceneAdapter(
                 self,
                 attach_link=ATTACH_LINK,
                 collision_allowed_link=config.collision_allowed_link,
@@ -210,7 +207,7 @@ class WorkplaceNodeBase(LifecycleNode):
             spawner = None
             if config.simulated:
                 spawner = SimulatedProductSpawner(
-                    self, config, self._world, self._create_simulation_hooks(config),
+                    self, config, self._create_simulation_hooks(config),
                     self._io_group)
         except Exception as exc:  # noqa: BLE001 - convert to transition failure
             self.get_logger().error(f'Failed to construct the internal services: {exc}')

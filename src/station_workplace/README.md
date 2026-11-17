@@ -50,7 +50,6 @@ An unidentified product is reported as `ProductData` with all fields `UNKNOWN`.
 | `~/spawn_product` | `station_workplace/srv/SpawnProduct` | Only if `simulated`; see [Simulation](#simulation) |
 | `~/remove_product` | `station_workplace/srv/RemoveProduct` | Only if `simulated`; see [Simulation](#simulation) |
 | `/<barcode_scanner_node_name>/simulated_label_data` | `station_workplace/msg/LabelData` | barcode, only if `simulated`; latched (reliable, transient local, depth 1) |
-| `/<simulation.station_link>/<simulation.carrier_model_name>/detach`, `/<simulation.carrier_link>/<simulation.product_model_name>/detach` | `std_msgs/msg/Empty` | Only if `simulated`; see [`remove_product`](#remove_product) |
 
 ### Consumed
 
@@ -64,9 +63,8 @@ An unidentified product is reported as `ProductData` with all fields `UNKNOWN`.
 | `/<production_manager_node_name>/get_production_data` | `production_manager/srv/GetProductionData` | both |
 | `/<object_model_repository_node_name>/get_models_info` | `repositories/srv/ObjectModelStorageGetModelsInfo` | both |
 | `/<object_model_repository_node_name>/get_model` | `repositories/srv/ObjectModelStorageGetModel` | both |
-| `/get_planning_scene`, `/apply_planning_scene` | `moveit_msgs/srv/GetPlanningScene`, `ApplyPlanningScene` | both |
-| `/world/<simulation.world_name>/create/blocking`, `/remove/blocking` | `ros_gz_interfaces/srv/SpawnEntity`, `DeleteEntity` | both, only if `simulated` |
-| `/<simulation.station_link>/<simulation.carrier_model_name>/state`, `/<simulation.carrier_link>/<simulation.product_model_name>/state` | `std_msgs/String` | both, only if `simulated` |
+| `/moveit2_world_manager/{apply_world_changes,list_objects}` | `world_manager` services | both |
+| `/gazebo_world_manager/{spawn_models,delete_models,list_models}` | `world_manager` services | both, only if `simulated` |
 | TF `world` → `<simulation.station_link>` | `/tf`, `/tf_static` | both, only if `simulated` |
 
 ## Parameters
@@ -81,7 +79,7 @@ An unidentified product is reported as `ProductData` with all fields `UNKNOWN`.
 | `collision_allowed_link` | string | `conveyor_origin` | Link the carrier model and the safety object may collide with |
 | `safety_object.x` / `.y` / `.z` | double | `0.25` / `0.4` / `0.3` | Safety box size [m] (> 0) |
 | `service_call_timeout_sec` | double | `5.0` | Timeout for service availability and for the response [s]; also the TF lookup timeout of `spawn_product` |
-| `simulated` | bool | `false` | Provide `spawn_product` / `remove_product` (and, in the launch files, start the Gazebo bridge) |
+| `simulated` | bool | `false` | Provide `spawn_product` / `remove_product`; the launch files start the shared Gazebo manager when enabled |
 | `simulation.world_name` | string | `default` | Gazebo world name |
 | `simulation.station_model_name` | string | `station` | Carrier xacro argument `station_model_name` |
 | `simulation.station_link` | string | `carrier` | Carrier xacro argument `station_link`; TF frame the carrier is spawned at |
@@ -209,25 +207,25 @@ the workplace state or `product_in_place`. Both run serialized.
    `carrier_link ⊕ pose` against the carrier; penetration deeper than
    `simulation.penetration_tolerance` fails the call before anything is spawned.
 7. Spawns the carrier at the TF pose of `world` → `simulation.station_link`, then
-   the product at `carrier pose ⊕ carrier_link ⊕ pose`. The detachable joints in
-   the models attach on spawn.
+   the product at `carrier pose ⊕ carrier_link ⊕ pose`, in one ordered
+   `SpawnModels` request owned by this workplace. The detachable joints in the
+   models attach on spawn.
 8. Barcode: publishes the label `<GS>1P<product_number><GS>21P<product_revision><GS>S<serial_number><RS><EOT>`
    (`GS`=0x1D, `RS`=0x1E, `EOT`=0x04) once on `simulated_label_data`.
 
-If a step after the first spawn fails, the spawned models are removed (product
-first) before the failure is returned.
+If the post-spawn hook fails, the workplace deletes all of its owned models
+before returning the failure. Spawn request failures are rolled back atomically
+by `gazebo_world_manager`.
 
 ### `remove_product`
 
-Removes the recorded models, product first. Each model's `DetachableJoint` is
-detached first (`<prefix>/detach`, repeated until `<prefix>/state` reports
-`detached`, bounded by `service_call_timeout_sec`; an unconfirmed detach is only
-logged): gz-sim keeps the fixed joint of a removed model, which would leave the
-station link welded in place. Returns success immediately when
-nothing is recorded. A failed removal returns `success=false`; models not
-removed stay recorded so a later call retries them. The record survives
-deactivate/activate (the models stay in the world when the node deactivates),
-but not a process restart.
+Deletes every registered model owned by this workplace in one request. The
+world manager detaches joints and deletes dependent models before their parents,
+so the product is removed before the carrier. Returns success immediately when
+no owned models are registered. A failed deletion returns `success=false`.
+Ownership is held by the manager registry and survives workplace
+deactivate/activate cycles; after a world-manager restart, existing Gazebo
+models are unmanaged and are not adopted.
 
 ### SDF model contract
 
@@ -289,12 +287,15 @@ ros2 launch station_workplace workplace_barcode_scanner.launch.py \
   'label_patterns.serial_number:=SN:(\S+)'
 ```
 
-Every parameter is a launch argument of the same name (plus `node_name` and
-`use_sim_time`), e.g. `safety_object.x:=0.3` or
-`tag_registers.serial_number.length:=16`. With `simulated:=true` the launch
-files also start a `ros_gz_bridge` (`<node_name>_gz_bridge`) for the world's
-`create/blocking` and `remove/blocking` services and the carrier/product
-`DetachableJoint` `detach` / `state` topics.
+Every parameter is a launch argument of the same name (plus `node_name`,
+`use_sim_time` and `start_world_manager`), e.g. `safety_object.x:=0.3` or
+`tag_registers.serial_number.length:=16`. The launch files include the shared
+`world_manager` launch by default, with the same `simulated` and
+`simulation.world_name` values. Set `start_world_manager:=false` when a parent
+launch already starts it. Gazebo is accessed directly by `world_manager`; no
+per-workplace ROS/Gazebo bridge is started.
+An external orchestrator must configure and activate the included world-manager
+nodes before activating the workplace.
 
 ## Testbench
 

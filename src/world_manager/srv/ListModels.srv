@@ -1,0 +1,5 @@
+string owner   # filter; empty => all
+---
+bool        success
+string      error_message
+ModelInfo[] models
