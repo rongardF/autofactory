@@ -1,0 +1,6 @@
+ModelSpec[] models
+string      owner
+---
+bool     success
+string   error_message
+string[] spawned_ids      # empty unless success

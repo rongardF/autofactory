@@ -63,17 +63,17 @@ from tools_manager.utils.config_reader import read_config_file
 from tools_manager.exception.activation_failed_exception import ActivationFailedException
 from tools_manager.exception.deactivation_failed_exception import DeactivationFailedException
 from tools_manager.exception.cleanup_failed_exception import CleanupFailedException
-from tools_manager.exception.world_manager_exception import ModelAttachError
 from tools_manager.model.slots_dto import SlotsDto
 from tools_manager.model.slot_frames_dto import SlotFramesDto
 from tools_manager.model.tool_info_dto import ToolInfoDto
 from tools_manager.model.endtool_launch_dto import EndtoolLaunchDto
 from tools_manager.model.tools_manager_node_config import ToolsManagerNodeConfigDTO
 from tools_manager.model.tools_manager_config import ToolSlotDTO
-from tools_manager.services.gazebo_world_manager import GazeboWorldManager
-from tools_manager.services.moveit2_world_manager import Moveit2WorldManager
 from tools_manager.services.node_state_manager import NodeStateManager
 from tools_manager.services.ros2_launcher import Ros2Launcher
+from tools_manager.services.world_client_adapter import ToolsWorldClientAdapter
+
+from world_manager.exceptions import WorldManagerError
 
 class ToolsManager(LifecycleNode):
 
@@ -89,8 +89,7 @@ class ToolsManager(LifecycleNode):
         """
         super().__init__(node_name)
 
-        self._gazebo_service: GazeboWorldManager|None = None
-        self._planner_service: Moveit2WorldManager|None = None
+        self._world_client_adapter: ToolsWorldClientAdapter | None = None
         self._tool_mount_manager: NodeStateManager|None = None
         self._tool_rack_manager: NodeStateManager|None = None
         self._ros2_launcher: Ros2Launcher|None = None
@@ -209,18 +208,13 @@ class ToolsManager(LifecycleNode):
             )
             self.get_logger().info(f'Tools manager config file read successfully: {self._config}')
 
-            self.get_logger().info('Creating world manager services')
-            if self._config.simulated:
-                self._gazebo_service = GazeboWorldManager(
-                    node=self,
-                    world_name=self._config.world_name,
-                    station_model_name=self._config.station_model_name,
-                    tools_manager_config=self._config.tools_manager_config,
-                    tool_mount_link="tool_mount_tcp",
-                )
-            self._planner_service = Moveit2WorldManager(
+            self.get_logger().info('Creating world manager clients')
+            self._world_client_adapter = ToolsWorldClientAdapter(
                 node=self,
-                tools_manager_config=self._config.tools_manager_config,
+                callback_group=self._action_callback_group,
+                config=self._config.tools_manager_config,
+                simulated=self._config.simulated,
+                station_model_name=self._config.station_model_name,
             )
 
             self.get_logger().info('Creating node state managers and ROS2 launcher')
@@ -232,8 +226,9 @@ class ToolsManager(LifecycleNode):
             return TransitionCallbackReturn.FAILURE
         except Exception as e:
             self.get_logger().error(f'Unknown error while configuring: {e}')
-            self._gazebo_service = None
-            self._planner_service = None
+            if self._world_client_adapter is not None:
+                self._world_client_adapter.destroy()
+                self._world_client_adapter = None
             self._tool_mount_manager = None
             self._ros2_launcher = None
             return TransitionCallbackReturn.FAILURE
@@ -249,7 +244,7 @@ class ToolsManager(LifecycleNode):
         # sanity checks before activating the node
         if (
             self._ros2_launcher is None or
-            self._planner_service is None or
+            self._world_client_adapter is None or
             self._config is None or
             self._tool_rack_manager is None or
             self._tool_mount_manager is None
@@ -257,14 +252,9 @@ class ToolsManager(LifecycleNode):
             self.get_logger().error('Sanity check failed, something is un-initialized. Cannot activate node.')
             return TransitionCallbackReturn.FAILURE
 
-        if (
-            self._config.simulated and
-            self._gazebo_service is None
-        ):
-            self.get_logger().error('Gazebo world manager is not initialized.')
-            return TransitionCallbackReturn.FAILURE
-        
         try:
+            self._world_client_adapter.activate()
+
             # configure and activate tool rack and tool mount
             for manager in (self._tool_rack_manager, self._tool_mount_manager):
                 if manager.configure_node() != TransitionCallbackReturn.SUCCESS:
@@ -364,10 +354,10 @@ class ToolsManager(LifecycleNode):
                         f'for tool {tool.tool_sn}.'
                     )
                 
-                self._planner_service.spawn_model(tool, link_name=f'slot{index}_attached_link')
-    
-                if self._config.simulated and self._gazebo_service is not None:
-                    self._gazebo_service.spawn_model(tool, link_name=f'slot{index}_attached_link')
+                self._world_client_adapter.spawn_tool(
+                    tool,
+                    link_name=f'slot{index}_attached_link',
+                )
 
             # launch endtool on tool_mount (if any mounted)
             if tool_mounted is not None:
@@ -410,10 +400,11 @@ class ToolsManager(LifecycleNode):
                         f'for tool {tool_mounted.tool_sn}.'
                     )
                 
-                self._planner_service.spawn_model(tool_mounted, link_name="tool_mount_tcp", rotation=(0.0, 0.0, 1.0, 0.0))
-    
-                if self._config.simulated and self._gazebo_service is not None:
-                    self._gazebo_service.spawn_model(tool_mounted, link_name="tool_mount_tcp", rotation=(0.0, 0.0, 1.0, 0.0))
+                self._world_client_adapter.spawn_tool(
+                    tool_mounted,
+                    link_name='tool_mount_tcp',
+                    rotation=(0.0, 0.0, 1.0, 0.0),
+                )
 
             self.get_logger().info('Creating interfaces for tools manager')
             # creating tool mount lock service client
@@ -464,7 +455,7 @@ class ToolsManager(LifecycleNode):
                 callback_group=self._action_callback_group,
             )
             
-        except ActivationFailedException as e:
+        except (ActivationFailedException, WorldManagerError) as e:
             self.get_logger().error(f'Activation failed: {e}')
             if self._tool_mounted_subscription is not None:
                 self.destroy_subscription(self._tool_mounted_subscription)
@@ -483,9 +474,7 @@ class ToolsManager(LifecycleNode):
             if self._endtools:
                 for tool_sn, endtool_launch in self._endtools.items():
                     endtool_launch.endtool_node_manager.deactivate_node()
-                    self._planner_service.delete_model(tool_sn)
-                    if self._config.simulated and self._gazebo_service is not None:
-                        self._gazebo_service.delete_model(tool_sn)
+                    self._world_client_adapter.delete_tool(tool_sn)
                     self._ros2_launcher.shutdown_all()
                 self._endtools = {}
 
@@ -579,11 +568,8 @@ class ToolsManager(LifecycleNode):
                 self.get_logger().error(f'Failed to unconfigure endtool node: {endtool_launch.endtool_node_manager.node_name}')
                 raise DeactivationFailedException(f'Failed to unconfigure endtool node: {endtool_launch.endtool_node_manager.node_name}')
 
-            if self._planner_service is not None:
-                self._planner_service.delete_model(tool_sn)
-
-            if self._config and self._config.simulated and self._gazebo_service is not None:
-                self._gazebo_service.delete_model(tool_sn)
+            if self._world_client_adapter is not None:
+                self._world_client_adapter.delete_tool(tool_sn)
         
         if self._ros2_launcher is not None:
             self._ros2_launcher.shutdown_all()
@@ -598,8 +584,9 @@ class ToolsManager(LifecycleNode):
             self.get_logger().error('Failed to cleanup node: super().on_cleanup() returned FAILURE')
             raise CleanupFailedException('Failed to cleanup node: super().on_cleanup() returned FAILURE')
 
-        self._planner_service = None
-        self._gazebo_service = None
+        if self._world_client_adapter is not None:
+            self._world_client_adapter.destroy()
+            self._world_client_adapter = None
         self._ros2_launcher = None
         self._tool_mount_manager = None
         self._tool_rack_manager = None
@@ -695,8 +682,7 @@ class ToolsManager(LifecycleNode):
 
             # sanity check
             if (
-                self._planner_service is None or
-                self._gazebo_service is None or
+                self._world_client_adapter is None or
                 self._movement_controller_action_client is None or
                 self._config is None or 
                 self._tool_mount_lock is None
@@ -733,7 +719,9 @@ class ToolsManager(LifecycleNode):
                 self.get_logger().info(
                     f"Tool '{tool_mounted.tool_sn}' is mounted, unmounting it before mounting '{tool_sn}'."
                 )
-                unmount_result = self._unmount_tool_impl(goal_handle, finalize=False)
+                unmount_result = self._unmount_tool(
+                    goal_handle, tool_mounted.tool_sn, finalize=False,
+                )
                 if not unmount_result.success:
                     response.success = False
                     response.message = f"Failed to unmount tool '{tool_mounted.tool_sn}': {unmount_result.message}"
@@ -756,7 +744,12 @@ class ToolsManager(LifecycleNode):
                 return response
 
             # allow collisions between tool-mount, endtool and tool-rack for the duration of the mount operation
-            if not self._planner_service.allow_collisions(model_id=tool_sn, allowed=True, tool_mount_link='tool_mount_tcp', slot_link='tool_rack_link'):   
+            if not self._world_client_adapter.allow_collisions(
+                model_id=tool_sn,
+                allowed=True,
+                tool_mount_link='tool_mount_tcp',
+                slot_link='tool_rack_link',
+            ):
                 response.success = False
                 response.message = "Failed to allow collisions between tool-mount, endtool and tool-rack."
                 goal_handle.abort()
@@ -825,12 +818,13 @@ class ToolsManager(LifecycleNode):
 
             try:
                 # detach tool from rack in planning scene and attach to tool-mount
-                self._planner_service.attach_to_link(model_id=tool_sn, link_name='tool_mount_tcp')
-
-                # if simulating then transfer model also in Gazebo
-                if self._config.simulated:
-                    self._gazebo_service.attach_to_link(model_id=tool_sn, link_name='tool_mount_tcp')
-            except ModelAttachError as e:
+                self._world_client_adapter.attach_to_link(
+                    model_id=tool_sn,
+                    link_name='tool_mount_tcp',
+                    rotation=(0.0, 0.0, 1.0, 0.0),
+                )
+            except WorldManagerError as e:
+                self.get_logger().error(f'Failed to attach tool to tool-mount: {e}')
                 response.success = False
                 response.message = f"Failed to attach tool to tool-mount in planning scene: {e}"
                 goal_handle.abort()
@@ -854,7 +848,12 @@ class ToolsManager(LifecycleNode):
                 return response
 
             # re-enable collisions between tool-mount and tool-rack after the mount operation
-            self._planner_service.allow_collisions(model_id=tool_sn, allowed=False, tool_mount_link='tool_mount_tcp', slot_link='tool_rack_link')
+            self._world_client_adapter.allow_collisions(
+                model_id=tool_sn,
+                allowed=False,
+                tool_mount_link='tool_mount_tcp',
+                slot_link='tool_rack_link',
+            )
 
             # reconfigure endtool as mounted
             self._endtool_mounted(tool_sn, True)
@@ -863,14 +862,21 @@ class ToolsManager(LifecycleNode):
             goal_handle.succeed()
             return response
 
-    def _unmount_tool_impl(self, goal_handle: ServerGoalHandle, finalize: bool = True) -> UnmountTool.Result:
-        """Return the mounted tool to its rack slot.
+    def _unmount_tool_impl(self, goal_handle: ServerGoalHandle) -> UnmountTool.Result:
+        """Return the requested tool to its rack slot only if it is mounted."""
+        request: UnmountTool.Goal = goal_handle.request
+        return self._unmount_tool(goal_handle, request.tool_sn)
+
+    def _unmount_tool(
+        self, goal_handle: ServerGoalHandle, tool_sn: str, finalize: bool = True,
+    ) -> UnmountTool.Result:
+        """Return the specified mounted tool to its rack slot.
 
         :param goal_handle: Goal handle to abort on failure (and succeed when ``finalize``).
+        :param tool_sn: Serial number that must match the currently mounted tool.
         :param finalize: ``False`` when called as a step of a larger goal (tool swap) so
             the goal is not marked succeeded here.
         """
-        request: UnmountTool.Goal = goal_handle.request
         response = UnmountTool.Result()
 
         if self._tool_action_lock.acquire(blocking=False) is False:
@@ -888,8 +894,15 @@ class ToolsManager(LifecycleNode):
                 response.message = "No tool is currently mounted."
                 goal_handle.abort()
                 return response
-            else:
-                tool_sn = tool_mounted.tool_sn
+            if tool_sn != tool_mounted.tool_sn:
+                response.success = False
+                response.message = (
+                    f"Cannot unmount tool '{tool_sn}': currently mounted tool is "
+                    f"'{tool_mounted.tool_sn}'."
+                )
+                self.get_logger().error(response.message)
+                goal_handle.abort()
+                return response
 
             if slots is None:
                 response.success = False
@@ -911,8 +924,7 @@ class ToolsManager(LifecycleNode):
                 
             # sanity check
             if (
-                self._planner_service is None or
-                self._gazebo_service is None or
+                self._world_client_adapter is None or
                 self._movement_controller_action_client is None or
                 self._config is None or 
                 self._tool_mount_lock is None
@@ -952,7 +964,12 @@ class ToolsManager(LifecycleNode):
                 return response
 
             # allow collisions between tool-mount, endtool and tool-rack for the duration of the mount operation
-            if not self._planner_service.allow_collisions(model_id=tool_sn, allowed=True, tool_mount_link='tool_mount_tcp', slot_link='tool_rack_link'):   
+            if not self._world_client_adapter.allow_collisions(
+                model_id=tool_sn,
+                allowed=True,
+                tool_mount_link='tool_mount_tcp',
+                slot_link='tool_rack_link',
+            ):
                 response.success = False
                 response.message = "Failed to allow collisions between tool-mount, endtool and tool-rack."
                 goal_handle.abort()
@@ -981,12 +998,12 @@ class ToolsManager(LifecycleNode):
 
             try:
                 # detach tool from mount in planning scene and attach to tool-rack slot
-                self._planner_service.attach_to_link(model_id=tool_sn, link_name=result[0].tool_attached_frame)
-
-                # if simulating then also transfer in Gazebo
-                if self._config.simulated:
-                    self._gazebo_service.attach_to_link(tool_sn, link_name=result[0].tool_attached_frame)
-            except ModelAttachError as e:
+                self._world_client_adapter.attach_to_link(
+                    model_id=tool_sn,
+                    link_name=result[0].tool_attached_frame,
+                )
+            except WorldManagerError as e:
+                self.get_logger().error(f'Failed to attach tool to tool-rack: {e}')
                 response.success = False
                 response.message = f"Failed to attach tool to tool-rack in planning scene: {e}"
                 goal_handle.abort()
@@ -1038,7 +1055,12 @@ class ToolsManager(LifecycleNode):
                 return response
 
             # re-enable collisions between tool-mount and tool-rack after the mount operation
-            self._planner_service.allow_collisions(model_id=tool_sn, allowed=False, tool_mount_link='tool_mount_tcp', slot_link='tool_rack_link')
+            self._world_client_adapter.allow_collisions(
+                model_id=tool_sn,
+                allowed=False,
+                tool_mount_link='tool_mount_tcp',
+                slot_link='tool_rack_link',
+            )
 
             # reconfigure endtool as mounted
             self._endtool_mounted(tool_sn, False)

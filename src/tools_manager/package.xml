@@ -19,9 +19,11 @@
 
   <!-- Interface field dependencies (actions require action_msgs) -->
   <depend>action_msgs</depend>
+  <depend>ament_index_python</depend>
   <depend>endtools</depend>
   <depend>movement_controller</depend>
   <depend>rfid_scanner</depend>
+  <depend>world_manager</depend>
 
   <!-- Python runtime -->
   <exec_depend>rclpy</exec_depend>
@@ -34,16 +36,18 @@
   <exec_depend>std_srvs</exec_depend>
   <exec_depend>builtin_interfaces</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
-  <exec_depend>tf2_ros</exec_depend>
   <exec_depend>xacro</exec_depend>
   <exec_depend>ros_gz_interfaces</exec_depend>
-
-  <!-- Marks this package as containing ROS2 interface definitions -->
-  <member_of_group>rosidl_interface_packages</member_of_group>
 
   <!-- Test dependencies -->
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>ament_pytest</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <!-- Marks this package as containing ROS2 interface definitions -->
+  <member_of_group>rosidl_interface_packages</member_of_group>
 
   <export>
     <build_type>ament_cmake</build_type>

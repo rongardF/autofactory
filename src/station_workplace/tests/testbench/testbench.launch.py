@@ -35,6 +35,8 @@ Brings up, in one launch:
 - ``conveyor`` (``product_carrier``, simulated), ``simatic_rf240r_ascii``
   (``rfid_scanner``, simulated), ``production_manager`` (local assembly file),
   ``object_model_storage`` (``repositories``, local storage);
+- ``gazebo_world_manager`` and ``moveit2_world_manager`` (``world_manager``), the
+  shared owners of the Gazebo world and the planning scene used by the workplace node;
 - ``workplace_rfid_scanner`` (``station_workplace``, simulated).
 
 All lifecycle nodes start Unconfigured; drive them (and the scenario) from
@@ -239,6 +241,12 @@ def generate_launch_description() -> LaunchDescription:
         }],
     )
 
+    # The workplace node talks to Gazebo and the planning scene only through these managers
+    world_manager = _include('world_manager', 'world_manager.launch.py', {
+        'simulated': 'true',
+        'world_name': WORLD_NAME,
+    })
+
     workplace = _include('station_workplace', 'workplace_rfid_scanner.launch.py', {
         'node_name': 'workplace_rfid_scanner',
         'use_sim_time': 'true',
@@ -247,6 +255,7 @@ def generate_launch_description() -> LaunchDescription:
         'production_manager_node_name': 'production_manager',
         'object_model_repository_node_name': 'object_model_storage',
         'rfid_scanner_node_name': 'simatic_rf240r_ascii',
+        'start_world_manager': 'false',
         'collision_allowed_link': 'conveyor_origin',
         'simulation.world_name': WORLD_NAME,
         'simulation.station_model_name': STATION_MODEL_NAME,
@@ -267,6 +276,7 @@ def generate_launch_description() -> LaunchDescription:
             rfid_scanner,
             production_manager,
             object_model_storage,
+            world_manager,
             workplace,
         ]
     )

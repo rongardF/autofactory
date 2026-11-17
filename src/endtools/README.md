@@ -17,7 +17,7 @@ be used to verify that the package does what is intended.
 | `volumetric_dispensing_tool` | Lifecycle node (executable) | Controls one dispensing tool, exposes dispense start/stop and set_tcp services, broadcasts the calibrated TCP frame, and publishes the calibrated TCP's expiry time. |
 | `srv/StopDispensing.srv` | Service | Stop request/response carrying dispensed volume + duration. |
 | `srv/SetTcp.srv` | Service | Set the calibrated TCP at runtime; persists it to `station_cache`. |
-| `launch/volumetric_dispenser_launch.py` | Launch file | Starts the node and (in sim) the Gazebo↔ROS bridge for its detachable joints. |
+| `launch/volumetric_dispenser_launch.py` | Launch file | Starts the node and optionally the shared world manager. |
 | `model/dispensing_tool/` | Gazebo model | XACRO→SDF model with two detachable joints and an RFID tag plugin. |
 
 ### Python layout (`endtools/endtools/`)
@@ -77,7 +77,12 @@ transitions; nothing is created in `__init__` except parameter declarations.
    absolute expiry instant of the currently used calibrated TCP. The expiry is
    taken from the live `station_cache` entry backing the TCP; when the tool is
    falling back to the uncalibrated TCP (no live cached entry) the **current
-   time** is published so the TCP is treated as already expired. Like
+   time** is published so the TCP is treated as already expired. An unmounted
+   tool also publishes the current time, without fetching or warning about an
+   unused calibration; TCP transforms remain unpublished until it is mounted.
+   Missing calibration still produces a warning when a mounted tool uses the
+   uncalibrated fallback. A successful `~/set_tcp` still publishes the supplied
+   calibration's expiry even while unmounted. Like
    `~/set_tcp`, this publisher is available in both the configured and active
    states (created on configure, destroyed on cleanup).
 7. Instantiates the controller — `SimulatedDispenserController` when
@@ -92,7 +97,8 @@ transitions; nothing is created in `__init__` except parameter declarations.
    - `~/dispense_stop` — `endtools/StopDispensing`
 
 **`on_deactivate`** destroys the two dispense services and calls
-`controller.teardown()`.
+`controller.teardown()`. The simulated controller deletes its owned dispensed
+material models before releasing its Gazebo clients.
 
 **`on_cleanup`** clears config, destroys the `~/set_tcp` service, the `~/mounted`
 publisher, the latched `/tf_static` publisher (and clears the cached transform
@@ -190,9 +196,8 @@ package). Key points:
 - **Two `gz-sim-detachable-joint-system` plugins** — one welding the tool to the
   **tool-mount** link, one to the **tool-rack slot** link. Each exposes
   `/<link>/<model>/{attach,detach,state}` Gazebo topics.
-- Per the inline comment, in gz-sim 8.11.0 these joints **start attached**; the
-  consumer must detach the redundant one after spawn (this is exactly what
-  `tools_manager`'s Gazebo world manager does).
+- In gz-sim 8.11.0 these joints **start attached**; the consumer keeps the
+  intended joint attached and detaches the redundant one after spawn.
 
 The macro parameters (`model_name`, `station_model_name`, `tool_mount_link`,
 `tool_rack_link`, `tag_data`, …) are supplied by the spawner.
@@ -201,16 +206,19 @@ The macro parameters (`model_name`, `station_model_name`, `tool_mount_link`,
 
 ## Launch (`volumetric_dispenser_launch.py`)
 
-Launch arguments: `simulated`, `tool_sn`, `tcp_frame_id`, `tcp_uncalibrated`,
+Launch arguments: `simulated`, `world_name`, `tool_sn`, `tcp_frame_id`, `tcp_uncalibrated`,
 `station_cache_name`, `tcp_valid_period`, `mounted`, `flowrate`,
-`tool_rack_link` (required), `tool_mount_link` (default `tool_mount_tcp`).
+`start_world_manager` (default `true`; set false when a parent launch already
+starts the shared manager).
 
-It starts:
-1. The `volumetric_dispensing_tool` node with the parameters above
-   (`use_sim_time` is tied to `simulated`).
-2. **Only when `simulated:=true`** — a `ros_gz_bridge parameter_bridge` that
-   bridges the attach/detach/state topics for both the tool-mount link and the
-   tool-rack link into ROS, so the detachable joints can be driven from ROS.
+It starts the `volumetric_dispensing_tool` node and, unless disabled, includes
+`world_manager` with the same `simulated` and `world_name` values. Simulated
+dispensed stripes and dots are expanded from Xacro and spawned through the
+typed `GazeboWorldClient`; their poses are expressed in the product frame and
+the controller removes its owned models on deactivation. Gazebo communication
+is handled by `world_manager` directly, without per-tool ROS/Gazebo bridges.
+An external orchestrator must configure and activate the included world-manager
+nodes before the tool uses their services.
 
 ---
 
@@ -222,7 +230,7 @@ source install/setup.bash
 
 # Standalone (simulation), as a mounted tool:
 ros2 launch endtools volumetric_dispenser_launch.py \
-  tool_sn:=abc123 mounted:=true tool_rack_link:=slot1_attached_link
+  tool_sn:=abc123 mounted:=true
 
 # Drive the lifecycle, then dispense:
 ros2 lifecycle set /volumetric_dispensing_tool configure

@@ -1,0 +1,7 @@
+string                    object_id
+string                    link_name     # "" => back to the world
+geometry_msgs/PoseStamped pose          # new pose; frame_id empty or link_name (attach) / planning frame (world)
+string[]                  touch_links
+---
+bool   success
+string error_message

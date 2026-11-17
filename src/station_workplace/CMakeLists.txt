@@ -169,11 +169,15 @@ install(DIRECTORY launch
 # --------------------------------------------------------------------------
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
+  find_package(ament_cmake_pytest REQUIRED)
   # the following line skips the linter which checks for copyrights
   set(ament_cmake_copyright_FOUND TRUE)
   # the following line skips cpplint
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
+  ament_add_pytest_test(test_planning_scene_adapter
+    tests/unit/test_planning_scene_adapter.py
+  )
 endif()
 
 # --------------------------------------------------------------------------

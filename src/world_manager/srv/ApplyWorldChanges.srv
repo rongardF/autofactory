@@ -1,0 +1,6 @@
+SceneObject[]          add_or_replace
+string[]               remove_ids
+AllowedCollisionPair[] acm_changes
+---
+bool   success
+string error_message

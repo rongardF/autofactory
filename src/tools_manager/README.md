@@ -112,10 +112,9 @@ Publishes a latched `tool_mounted` topic (`tools_manager/ToolInfo`) at
 `tool_rack_node_name`, `movement_controller_node_name`, `tools_manager_config_file`.
 
 ### Collaborators it builds
-- **`GazeboWorldManager`** (sim only) — spawns/removes/re-mates tool **models**
-  in the live Gazebo world over `ros_gz_bridge`.
-- **`Moveit2WorldManager`** — manages tool **collision objects** in the MoveIt 2
-  planning scene.
+- **`ToolsWorldClientAdapter`** — resolves tool geometry and XACRO mappings,
+  then uses the shared `world_manager` clients for Gazebo (simulation only)
+  and MoveIt planning-scene operations.
 - **`NodeStateManager`** × tool_rack / tool_mount / each endtool — drives the
   lifecycle transitions and parameters of other nodes **by name**, over their
   standard `change_state` / `get_state` / `set_parameters` / `get_parameters`
@@ -125,8 +124,9 @@ Publishes a latched `tool_mounted` topic (`tools_manager/ToolInfo`) at
 
 ### `on_configure`
 Reads the config file, builds `ToolsManagerNodeConfigDTO`, and (in sim) creates
-the Gazebo manager; always creates the MoveIt manager, the two node-state
-managers, and the launcher.
+the Gazebo client; always creates the MoveIt client, the two node-state
+managers, and the launcher. Activation checks that the required manager
+services are available before spawning tools.
 
 ### `on_activate` — bring the cell up
 1. Sanity-check that all collaborators exist.
@@ -186,8 +186,14 @@ motion. Then:
 Any failed step aborts the goal with an explanatory `message`.
 
 #### `~/unmount_tool` (put the tool back)
-Mirror image, also serialized. Pre-checks: a tool is mounted and its home slot
-is empty. Sequence: PTP → `lifted`, allow collisions, LIN → `attached`, **re-mate
+Mirror image, also serialized. Pre-checks: a tool is mounted, the requested
+`tool_sn` exactly matches its serial (case-sensitive), and its home slot is
+empty. An incorrect or empty serial aborts with `success=false` and a message
+identifying the requested and mounted serials, before any motion, collision
+changes, lock operation, or endtool reconfiguration. During an automatic swap,
+the internal unmount step explicitly targets the currently mounted serial,
+not the replacement serial in the mount goal.
+Sequence: PTP → `lifted`, allow collisions, LIN → `attached`, **re-mate
 model back to the rack slot link**, `lock` unlock, wait up to 10 s for the rack
 to re-detect the tool, LIN → `slide_in`, re-disable collisions,
 `_endtool_mounted(tool_sn, False)`, succeed.
@@ -224,41 +230,14 @@ equal (exact, case-sensitive, no wildcards). Response: `bool success`,
 
 ## World/scene management
 
-### `Moveit2WorldManager` (planning scene)
-Represents each tool as an **attached collision object** on exactly one link.
-- `spawn_model` — loads the tool STL via `trimesh` into a `shape_msgs/Mesh`,
-  attaches it to the given link (`touch_links` = attach link + configured extras).
-- `attach_to_link` — detach-then-attach transfer between links (reuses geometry).
-- `delete_model` — detach then remove the world object.
-- `allow_collisions(model, allowed, tool_mount_link, slot_link)` — reads the
-  Allowed Collision Matrix, pairwise toggles the three entities (tool,
-  tool-mount link, slot link), and re-applies the scene. Called `True` before a
-  slide-in/out maneuver and `False` afterwards.
-- A 1 mm `+x` offset is added to attached objects to avoid self-collision with
-  the link origin.
-
-### `GazeboWorldManager` (live Gazebo world, sim only)
-Talks to Gazebo purely through `ros_gz_bridge` (never imports `gz.*`).
-- `spawn_model` — expands the tool XACRO to SDF (passing `model_name`,
-  `station_model_name`, `tool_mount_link`, `tool_rack_link`, `tag_data`), looks
-  up the target link's world pose via TF, and spawns via the world `create`
-  service. Because both detachable joints **start attached**, it then detaches
-  the redundant joint so the tool is welded to the requested link only.
-- `attach_to_link` — a **transfer** that attaches the destination joint first,
-  then detaches the source, so the tool is never held by zero joints.
-- `delete_model` — best-effort detach, then the world `remove` service.
-- Attach/detach are confirmed by subscribing to the joint's `.../state` topic
-  before publishing the `.../attach|detach` request, then waiting for the
-  expected `attached`/`detached` state (with timeout). It also waits for the
-  bridge subscriber to match before publishing so requests aren't dropped.
-- An internal `_attached_link_lookup` tracks which link each model is on, so
-  `attach_to_link` only needs the destination.
-
-> `GazeboWorldManager._generate_model_path` (and the MoveIt one) resolve the
-> model file from the tool's metadata (`ToolMetadataDto.model`) against the
-> installed `endtools` package share directory
-> (`<endtools_share>/model/<model>/...`). Both managers receive the
-> `tools_manager_config` so they can look up the metadata by tool serial number.
+`ToolsWorldClientAdapter` resolves each tool's collision mesh and SDF XACRO
+from its metadata in the installed `endtools` share directory. It submits
+collision-object changes and the tool/mount/rack ACM pairs through
+`MoveIt2WorldClient`; in simulation it also submits model spawn, attachment,
+and deletion requests through `GazeboWorldClient`. The adapter preserves the
+tool-mount rotation, a 1 mm `+x` MoveIt offset, and the RFID `tag_data` XACRO
+mapping. Gazebo world manipulation is owned by `world_manager`, not by a
+per-consumer ROS-Gazebo service or detachable-joint bridge.
 
 ---
 
@@ -285,8 +264,8 @@ Launches each endtool launch file as an independent child process
 | `~/get_tool_serial` | `tools_manager/GetToolSerial` | clients → manager |
 | `<movement_controller>/execute_trajectory` | `movement_controller/ExecuteTrajectory` | manager → mover |
 | `<movement_controller>/in_session`, `<movement_controller>/close_session` | `movement_controller/InSession`, `CloseSession` | manager → mover |
-| `/world/<world>/{create,remove,set_pose}` | `ros_gz_interfaces/*` | manager → Gazebo (sim) |
-| `/<link>/<model>/{attach,detach,state}` | `std_msgs/Empty` / `String` | manager ↔ Gazebo joints (sim) |
+| `/gazebo_world_manager/{spawn_models,delete_models,set_model_attachment,list_models}` | `world_manager` services | manager ↔ Gazebo (sim) |
+| `/moveit2_world_manager/{apply_world_changes,attach_object,list_objects}` | `world_manager` services | manager ↔ MoveIt |
 | `/slot<i>_rfid_scanner/tag_data`, `/tool_mount_rfid_scanner/tag_data` | `ros_gz_interfaces/Dataframe` | Gazebo → rack/mount (sim) |
 
 ---
@@ -294,15 +273,18 @@ Launches each endtool launch file as an independent child process
 ## Launch / run
 
 ```bash
-colcon build --symlink-install --packages-select rfid_scanner endtools tools_manager
+colcon build --symlink-install --packages-up-to tools_manager
 source install/setup.bash
 
 ros2 launch tools_manager tools_manager_launch.py simulated:=true
 ```
 
-`tools_manager_launch.py` starts `tool_mount`, `tool_rack`, and `tools_manager`,
-and — only in sim — a `ros_gz_bridge` that bridges every slot/mount RFID scanner
-`tag_data` topic and the Gazebo `create`/`set_pose`/`remove` world services.
+`tools_manager_launch.py` starts `tool_mount`, `tool_rack`, `tools_manager`,
+the shared `world_manager` launch, and — only in sim — a `ros_gz_bridge` for
+the slot/mount RFID scanner `tag_data` topics. If a parent launch already
+starts the shared manager, pass `start_world_manager:=false` here.
+An external orchestrator must configure and activate the included world-manager
+nodes before activating `tools_manager`.
 
 Then drive the orchestrator's lifecycle and call an action:
 ```bash

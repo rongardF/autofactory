@@ -24,24 +24,20 @@
 # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
-"""Launch the ``workplace_barcode_scanner`` lifecycle node.
-
-The node is started *unconfigured*; an external lifecycle manager drives the
-transitions. With ``simulated:=true`` a ``ros_gz_bridge`` for the Gazebo world
-``create/blocking``/``remove/blocking`` services and the carrier/product ``DetachableJoint``
-``detach``/``state`` topics is started as well. Every node parameter is
-exposed as a launch argument of the same name
-(e.g. ``label_patterns.serial_number:='SN:(\\w+)'``). The ``label_patterns.*``
-arguments must be set, otherwise configure fails.
-"""
+"""Launch the workplace node and optionally the shared world managers."""
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, OpaqueFunction
+from launch.actions import (
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
+    OpaqueFunction,
+)
+from launch.conditions import IfCondition
 from launch.launch_context import LaunchContext
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import LifecycleNode, Node
-
-from station_workplace.models.simulation_config_dto import SimulationConfigDTO
+from launch_ros.actions import LifecycleNode
+from launch_ros.substitutions import FindPackageShare
 
 _FIELDS = ('product_number', 'product_revision', 'serial_number')
 
@@ -69,7 +65,7 @@ _PARAMETERS = [
     ('service_call_timeout_sec', '5.0', 'Timeout for service availability and response [s].',
      float),
     ('simulated', 'true',
-     'Provide spawn_product/remove_product and bridge the Gazebo world services.', _to_bool),
+     'Provide spawn_product/remove_product and use the shared Gazebo world manager.', _to_bool),
     ('simulation.world_name', 'default', 'Gazebo world name.', str),
     ('simulation.station_model_name', 'station', 'Station model name in Gazebo.', str),
     ('simulation.station_link', 'carrier',
@@ -95,30 +91,7 @@ def _launch_node(context: LaunchContext) -> list:
 
     parameters = {name: cast(arg(name)) for name, _, _, cast in _PARAMETERS}
     parameters['use_sim_time'] = arg('use_sim_time').lower() == 'true'
-    actions = []
-    if parameters['simulated']:
-        simulation = SimulationConfigDTO(**{
-            name.removeprefix('simulation.'): value for name, value in parameters.items()
-            if name.startswith('simulation.')})
-        detachable_joints = []
-        for prefix in simulation.detachable_joint_topics.values():
-            detachable_joints += [
-                f'{prefix}/detach@std_msgs/msg/Empty]gz.msgs.Empty',
-                f'{prefix}/state@std_msgs/msg/String[gz.msgs.StringMsg',
-            ]
-        actions.append(Node(
-            package='ros_gz_bridge',
-            executable='parameter_bridge',
-            name=f"{arg('node_name')}_gz_bridge",
-            arguments=[
-                f'{simulation.create_service}@ros_gz_interfaces/srv/SpawnEntity',
-                f'{simulation.remove_service}@ros_gz_interfaces/srv/DeleteEntity',
-                *detachable_joints,
-            ],
-            parameters=[{'use_sim_time': parameters['use_sim_time']}],
-            output='screen',
-        ))
-    return actions + [
+    return [
         LifecycleNode(
             package='station_workplace',
             executable='workplace_barcode_scanner',
@@ -138,7 +111,19 @@ def generate_launch_description() -> LaunchDescription:
         description='Name of the lifecycle node.'))
     ld.add_action(DeclareLaunchArgument(
         'use_sim_time', default_value='false', description='Use the simulation clock.'))
+    ld.add_action(DeclareLaunchArgument(
+        'start_world_manager', default_value='false',
+        description='Start shared world managers; disable if a parent launch does so.'))
     for name, default, description, _ in _PARAMETERS:
         ld.add_action(DeclareLaunchArgument(name, default_value=default, description=description))
+    ld.add_action(IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            [FindPackageShare('world_manager'), '/launch/world_manager.launch.py']),
+        launch_arguments={
+            'simulated': LaunchConfiguration('simulated'),
+            'world_name': LaunchConfiguration('simulation.world_name'),
+        }.items(),
+        condition=IfCondition(LaunchConfiguration('start_world_manager')),
+    ))
     ld.add_action(OpaqueFunction(function=_launch_node))
     return ld

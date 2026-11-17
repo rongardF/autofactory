@@ -302,15 +302,15 @@ class VolumetricDispensingTool(LifecycleNode):
         """Publish the absolute expiry instant of the currently used TCP.
 
         The expiry is taken from the live ``station_cache`` entry backing the
-        current calibrated TCP. When no live calibrated TCP is in use (the tool
-        has fallen back to the uncalibrated TCP), the current time is published
+        current calibrated TCP. Cache resolution is skipped while unmounted.
+        When no calibrated TCP expiry is known, the current time is published
         so consumers treat the TCP as already expired.
         """
         if self._tcp_expiration_publisher is None:
             return
-        # Resolve the current TCP so its expiration (``_tcp_expiration``) is
-        # populated from the cache; the fallback path leaves it unset.
-        _ = self.tool_tcp
+        if self._config is not None and self._config.mounted:
+            # Only resolve the cache for a TCP that is actually in use.
+            _ = self.tool_tcp
         expiration = self._tcp_expiration or self.get_clock().now().to_msg()
         self._tcp_expiration_publisher.publish(expiration)
     # endregion: tcp helpers

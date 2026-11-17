@@ -1,10 +1,16 @@
 import math
 import os
-import xacro
 from threading import RLock
 from uuid import uuid4
 
 from ament_index_python.packages import get_package_share_directory
+
+from endtools.interface.dispenser_controller import DispenserController
+from endtools.model.dispensing_metrics_dto import DispensingMetricsDTO
+from endtools.model.dispensing_tool_config_dto import DispensingToolConfigDTO
+from endtools.utils.transformations import rpy_to_quaternion
+
+from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.duration import Duration
 from rclpy.lifecycle import LifecycleNode
 from rclpy.time import Time
@@ -15,15 +21,15 @@ from rclpy.time import Time
 from tf2_ros import Buffer, TransformListener
 from tf2_ros import TransformException  # type: ignore[attr-defined]
 
-from endtools.exception.world_manager_exception import WorldManagerError
-from endtools.interface.dispenser_controller import DispenserController
-from endtools.model.dispensing_metrics_dto import DispensingMetricsDTO
-from endtools.model.dispensing_tool_config_dto import DispensingToolConfigDTO
-from endtools.service.gazebo_world_manager import GazeboWorldManager
+from world_manager.client import GazeboWorldClient
+from world_manager.exceptions import WorldManagerError
+from world_manager.models import ModelSpecDTO, PoseDTO
+from world_manager.utils import expand_xacro
 
 
 class SimulatedDispenserController(DispenserController):
     """Simulated controller for the volumetric dispensing tool."""
+
     # Travel (mm) above which a dispensed blob is modelled as a stripe rather
     # than a dot. Kept above zero so the sub-millimetre residual of a nominally
     # stationary dwell (planner goal tolerance, controller settling) does not
@@ -59,9 +65,11 @@ class SimulatedDispenserController(DispenserController):
         self._product_link: str = "product_origin"
         self._product_frame_id: str = "product_origin"
 
-        self._gazebo_world_manager: GazeboWorldManager | None = None
+        self._world_client: GazeboWorldClient | None = None
+        self._world_client_callback_group: ReentrantCallbackGroup | None = None
         self._tf_buffer: Buffer | None = None
         self._tf_listener: TransformListener | None = None
+        self._owner: str | None = None
 
     @property
     def is_dispensing(self) -> bool:
@@ -96,9 +104,9 @@ class SimulatedDispenserController(DispenserController):
             "sdf",
             "stripe.sdf.xacro"
         )
-        document = xacro.process_file(
+        return expand_xacro(
             model_path,
-            mappings={
+            {
                 'model_name': model_name,
                 'product_model_name': product_model_name,
                 'product_link': product_link,
@@ -107,7 +115,6 @@ class SimulatedDispenserController(DispenserController):
                 'length_m': str(length_mm / 1000.0),
             },
         )
-        return document.toxml()  # type: ignore
 
     def _get_dot_sdf(
         self,
@@ -121,9 +128,9 @@ class SimulatedDispenserController(DispenserController):
             "sdf",
             "dot.sdf.xacro"
         )
-        document = xacro.process_file(
+        return expand_xacro(
             model_path,
-            mappings={
+            {
                 'model_name': model_name,
                 'product_model_name': product_model_name,
                 'product_link': product_link,
@@ -131,7 +138,6 @@ class SimulatedDispenserController(DispenserController):
                 'radius_m': str(radius_mm / 1000),
             },
         )
-        return document.toxml()  # type: ignore
 
     @staticmethod
     def _calculate_capsule_radius(length_mm: float, volume_mm3: float) -> float:
@@ -288,9 +294,9 @@ class SimulatedDispenserController(DispenserController):
         Returns:
             The spawned model name, or ``None`` if the model could not be spawned.
         """
-        if self._gazebo_world_manager is None:
+        if self._world_client is None or self._owner is None:
             self._node.get_logger().error(
-                'Controller is not set up with a world manager; skipping material spawn.'
+                'Controller is not set up with the Gazebo world client; skipping material spawn.'
             )
             return None
 
@@ -341,23 +347,28 @@ class SimulatedDispenserController(DispenserController):
             )
             return None
 
-        pose = (
-            start_position[0],
-            start_position[1],
-            start_position[2],
-            roll,
-            pitch,
-            yaw,
-        )
         try:
-            # The model name is reused as the entity name so it matches the
-            # DetachableJoint topic namespace baked into the SDF.
-            return self._gazebo_world_manager.spawn_model(
-                sdf_content=sdf_content,
-                pose=pose,
-                link_name=self._product_frame_id,
-                model_id=model_name,
+            qx, qy, qz, qw = rpy_to_quaternion(roll, pitch, yaw)
+            self._world_client.spawn(
+                [
+                    ModelSpecDTO(
+                        model_id=model_name,
+                        sdf=sdf_content,
+                        pose=PoseDTO(
+                            frame_id=self._product_frame_id,
+                            x=start_position[0],
+                            y=start_position[1],
+                            z=start_position[2],
+                            qx=qx,
+                            qy=qy,
+                            qz=qz,
+                            qw=qw,
+                        ),
+                    )
+                ],
+                owner=self._owner,
             )
+            return model_name
         except WorldManagerError as exc:
             self._node.get_logger().error(
                 f'Failed to spawn dispensed material {model_name}: {exc}'
@@ -423,19 +434,35 @@ class SimulatedDispenserController(DispenserController):
     def setup(self, config: DispensingToolConfigDTO) -> None:
         """Set up the hardware controller with the given configuration."""
         self._config = config
+        self._owner = f'endtools:{config.tool_sn}'
 
         self._tf_buffer = Buffer(
             cache_time=Duration(seconds=self._TF_CACHE_PERIOD_S)
         )
         self._tf_listener = TransformListener(self._tf_buffer, self._node)
 
-        self._gazebo_world_manager = GazeboWorldManager(
+        self._world_client_callback_group = ReentrantCallbackGroup()
+        self._world_client = GazeboWorldClient(
             node=self._node,
-            world_name=self._config.world_name,
+            callback_group=self._world_client_callback_group,
         )
 
     def teardown(self) -> None:
         """Tear down the hardware controller."""
+        if self._world_client is not None:
+            try:
+                if self._owner is not None:
+                    self._world_client.delete(owner=self._owner)
+            except WorldManagerError as exc:
+                self._node.get_logger().error(
+                    f'Failed to delete dispensed material owned by {self._owner}: {exc}'
+                )
+            finally:
+                self._world_client.destroy()
+        self._world_client = None
+        self._world_client_callback_group = None
+        self._owner = None
+
         self._config = None
         self._dispensing_start_time = None
         self._dispensing_start_pose_stamp = None
@@ -444,5 +471,3 @@ class SimulatedDispenserController(DispenserController):
             self._tf_listener.unregister()
         self._tf_listener = None
         self._tf_buffer = None
-
-        self._gazebo_world_manager = None
