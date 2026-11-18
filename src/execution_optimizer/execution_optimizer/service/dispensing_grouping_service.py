@@ -60,6 +60,7 @@ from execution_optimizer.util.camera_pose import (
     pose_quaternion,
     verify_group,
 )
+from execution_optimizer.util.frames import common_frame_id
 from execution_optimizer.util.geometry import build_pattern_roi
 
 _MAX_LISTED_IDS = 20
@@ -175,15 +176,7 @@ class DispensingGroupingService:
         if duplicates:
             raise OptimizationError(f'Duplicate pattern ids: {_format_ids(duplicates)}')
 
-        frame = self._config.product_frame_id
-        wrong_frame = [
-            pattern.id for pattern in patterns
-            if any(frame_id != frame for frame_id in pattern.frame_ids)
-        ]
-        if wrong_frame:
-            raise OptimizationError(
-                f"Pattern poses not in product frame '{frame}': {_format_ids(wrong_frame)}"
-            )
+        common_frame_id(patterns)
 
         empty = [pattern.id for pattern in patterns if not pattern.points]
         if empty:

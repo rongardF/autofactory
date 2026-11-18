@@ -44,7 +44,7 @@ class PatternExecutorConfigDTO(BaseModel):
         description='Node name of the lifecycle-managed end tool.',
     )
     movement_controller_node_name: str = Field(
-        default='movement_controller/execute_trajectory',
+        default='/movement_controller',
         min_length=1,
         description='Node name of the movement controller.',
     )
@@ -62,6 +62,18 @@ class PatternExecutorConfigDTO(BaseModel):
         default=True,
         description='Simulation mode flag reserved for future simulation-specific behavior.',
     )
+
+    @computed_field(return_type=str)
+    @property
+    def movement_action_name(self) -> str:
+        """Name of the movement controller ``execute_trajectory`` action."""
+        return f'{self.movement_controller_node_name.rstrip("/")}/execute_trajectory'
+
+    @computed_field(return_type=str)
+    @property
+    def in_session_service_name(self) -> str:
+        """Name of the movement controller ``in_session`` service."""
+        return f'{self.movement_controller_node_name.rstrip("/")}/in_session'
 
     @computed_field(return_type=str)
     @property

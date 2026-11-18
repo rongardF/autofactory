@@ -28,6 +28,7 @@
 string operation_id
 string serial_number
 string station_id
+int32 index    # position of the operation in the product's operation sequence; the first operation is 0
 ---
 bool success
 string error_message

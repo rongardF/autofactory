@@ -36,9 +36,12 @@ from typing import Any, Callable
 from builtin_interfaces.msg import Time
 from movement_controller.action import ExecuteTrajectory
 from movement_controller.msg import TrajectoryPath
+from movement_controller.services.movement_session import MovementSession
+from movement_controller.srv import InSession
 from pydantic import BaseModel, ConfigDict, Field
 from rclpy.action import ActionClient
 from rclpy.action.client import ClientGoalHandle
+from rclpy.client import Client
 from rclpy.lifecycle import LifecycleNode
 from rclpy.task import Future
 from repositories.msg import (
@@ -75,13 +78,41 @@ class MovementDispatcher:
         node: LifecycleNode,
         movement_action_client: ActionClient,
         movement_server_timeout_s: float,
+        in_session_client: Client | None = None,
     ) -> None:
         """Create dispatcher bound to a movement action client."""
         self._node = node
         self._movement_action_client = movement_action_client
         self._movement_server_timeout_s = movement_server_timeout_s
+        self._in_session_client = in_session_client
+        self._session: MovementSession | None = None
         self._state_lock = Lock()
         self._active_goal_handle: ClientGoalHandle | None = None
+
+    def use_session(self, session_id: str) -> None:
+        """Run all following movements in an existing session owned by the caller."""
+        self._session = MovementSession(
+            self._call_in_session,
+            lambda _request: None,
+            lambda: self._node.get_clock().now().nanoseconds / 1e9,
+            session_id=session_id,
+        )
+
+    def clear_session(self) -> None:
+        """Stop using the session; it is never closed here because the caller owns it."""
+        self._session = None
+
+    def _call_in_session(self, request: InSession.Request) -> InSession.Response | None:
+        """Call ``in_session`` with wall-clock timeouts; ``None`` if it is unavailable."""
+        if self._in_session_client is None or not self._in_session_client.wait_for_service(
+            timeout_sec=self._movement_server_timeout_s
+        ):
+            return None
+        return self._wait_future(
+            self._in_session_client.call_async(request),
+            self._movement_server_timeout_s,
+            'call in_session',
+        )
 
     def split_into_batches(
         self,
@@ -159,6 +190,18 @@ class MovementDispatcher:
         action_executor: ActionExecutorType,
     ) -> ExecuteTrajectory.Result:
         """Send one ExecuteTrajectory goal for a movement batch and process feedback."""
+        session = self._session
+        session_id = ''
+        if session is not None:
+            session_error = session.ensure_valid()
+            if session_error:
+                result = ExecuteTrajectory.Result()
+                result.success = False
+                result.error_message = f'Movement session: {session_error}'
+                result.trajectory_paths_completed = []
+                return result
+            session_id = session.session_id
+
         movement_by_path_id = {
             movement.id: movement
             for movement in batch
@@ -169,6 +212,7 @@ class MovementDispatcher:
         }
 
         goal = ExecuteTrajectory.Goal()
+        goal.session_id = session_id
         goal.paths = []
         for movement in batch:
             trajectory_path = TrajectoryPath()

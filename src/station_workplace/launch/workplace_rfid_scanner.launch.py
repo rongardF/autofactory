@@ -24,11 +24,12 @@
 # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
-"""Launch the workplace node and optionally the shared world managers."""
+"""Launch the workplace node, the RFID scanner it reads from and optionally the shared world managers."""
 
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
+    GroupAction,
     IncludeLaunchDescription,
     OpaqueFunction,
 )
@@ -119,6 +120,11 @@ def generate_launch_description() -> LaunchDescription:
     ld.add_action(DeclareLaunchArgument(
         'start_world_manager', default_value='false',
         description='Start shared world managers; disable if a parent launch does so.'))
+    ld.add_action(DeclareLaunchArgument(
+        'start_rfid_scanner', default_value='true', choices=['true', 'false'],
+        description='Start the RFID scanner node (rfid_scanner_node_name); disable if it is '
+        'started elsewhere. Its device_name (simatic_rf240r) must equal the xacro device name '
+        'of the Gazebo model.'))
     for name, default, description, _ in _PARAMETERS:
         ld.add_action(DeclareLaunchArgument(name, default_value=default, description=description))
     ld.add_action(IncludeLaunchDescription(
@@ -129,6 +135,19 @@ def generate_launch_description() -> LaunchDescription:
             'world_name': LaunchConfiguration('simulation.world_name'),
         }.items(),
         condition=IfCondition(LaunchConfiguration('start_world_manager')),
+    ))
+    # Scoped so the scanner's own 'simulated' / 'node_name' arguments do not collide with ours.
+    ld.add_action(GroupAction(
+        [IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                [FindPackageShare('rfid_scanner'), '/launch/simatic_rf240r_ascii.launch.py']),
+            launch_arguments={
+                'simulated': LaunchConfiguration('simulated'),
+                'node_name': LaunchConfiguration('rfid_scanner_node_name'),
+            }.items(),
+        )],
+        scoped=True,
+        condition=IfCondition(LaunchConfiguration('start_rfid_scanner')),
     ))
     ld.add_action(OpaqueFunction(function=_launch_node))
     return ld

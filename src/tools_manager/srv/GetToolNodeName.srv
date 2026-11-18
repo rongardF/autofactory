@@ -1,0 +1,5 @@
+string tool_sn
+---
+bool success
+string error_message  # empty on success
+string node_name      # endtool node name; empty on failure

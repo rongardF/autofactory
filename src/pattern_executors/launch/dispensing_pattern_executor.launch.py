@@ -41,6 +41,7 @@ def generate_launch_description() -> LaunchDescription:
     tool_sn = LaunchConfiguration('tool_sn')
     endtool_node_name = LaunchConfiguration('endtool_node_name')
     movement_controller_node_name = LaunchConfiguration('movement_controller_node_name')
+    execution_optimizer = LaunchConfiguration('execution_optimizer')
     config_file = LaunchConfiguration('config_file')
 
     declared_arguments = [
@@ -66,8 +67,14 @@ def generate_launch_description() -> LaunchDescription:
         ),
         DeclareLaunchArgument(
             'movement_controller_node_name',
-            default_value='/movement_controller/execute_trajectory',
+            default_value='/movement_controller',
             description='Movement controller node name.',
+        ),
+        DeclareLaunchArgument(
+            'execution_optimizer',
+            default_value='dispensing_optimizer',
+            description='Node name of the execution optimizer for this executor; exposed as '
+            'the read-only "execution_optimizer" parameter.',
         ),
         DeclareLaunchArgument(
             'config_file',
@@ -86,6 +93,11 @@ def generate_launch_description() -> LaunchDescription:
         name=node_name,
         namespace='',
         output='screen',
+        arguments=[
+            '--ros-args',
+            '-p',
+            ["execution_optimizer:='", execution_optimizer, "'"],
+        ],
         parameters=[
             config_file,
             {

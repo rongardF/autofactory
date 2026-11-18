@@ -29,7 +29,7 @@ from typing import Protocol
 
 from production_manager.interface.production_backend import ProductionBackend
 from production_manager.model.production_data_dto import ProductionDataDTO
-from production_manager.model.result_dto import ResultDTO
+from production_manager.model.report_result_dto import ReportResultDTO
 from repositories.enums.operation_repository import SCHEMA_VERSION
 
 
@@ -61,6 +61,7 @@ class BackendManager(ProductionBackend):
         operation_id: str,
         success: bool,
         station_id: str,
-    ) -> ResultDTO:
+        reason: str = '',
+    ) -> ReportResultDTO:
         self._logger.warning('Cloud production backend is not implemented.')
-        return ResultDTO.failure('not implemented')
+        return ReportResultDTO.failure('not implemented')

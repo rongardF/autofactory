@@ -217,6 +217,8 @@ class DispensingPatternExecutor(PatternExecutor):
         failed = False
 
         try:
+            if goal.session_id and self._dispatcher is not None:
+                self._dispatcher.use_session(goal.session_id)
             for pattern in goal.patterns:
                 if goal_handle.is_cancel_requested:
                     failed = True
@@ -237,6 +239,9 @@ class DispensingPatternExecutor(PatternExecutor):
         except Exception as error:  # noqa: BLE001
             failed = True
             error_message = str(error)
+        finally:
+            if self._dispatcher is not None:
+                self._dispatcher.clear_session()
 
         if failed:
             self.get_logger().error(

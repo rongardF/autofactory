@@ -46,6 +46,15 @@ class ProductDataDTO(BaseModel):
         """Return the product data of an unidentified product."""
         return cls(product_number=UNKNOWN, product_revision=UNKNOWN, serial_number=UNKNOWN)
 
+    @classmethod
+    def from_msg(cls, message: ProductData) -> 'ProductDataDTO':
+        """Convert a ``ProductData`` message."""
+        return cls(
+            product_number=message.product_number,
+            product_revision=message.product_revision,
+            serial_number=message.serial_number,
+        )
+
     def to_msg(self) -> ProductData:
         """Convert to a ``ProductData`` message."""
         return ProductData(

@@ -43,6 +43,16 @@ class WorkplaceStateDTO(BaseModel):
         description='Data of the product in place; None if no product is in place.',
     )
 
+    @classmethod
+    def from_msg(cls, message: WorkplaceState) -> 'WorkplaceStateDTO':
+        """Convert a ``WorkplaceState`` message."""
+        return cls(
+            in_place=bool(message.in_place),
+            product_data=(
+                ProductDataDTO.from_msg(message.product_data[0]) if message.product_data else None
+            ),
+        )
+
     def to_msg(self) -> WorkplaceState:
         """Convert to a ``WorkplaceState`` message."""
         msg = WorkplaceState()

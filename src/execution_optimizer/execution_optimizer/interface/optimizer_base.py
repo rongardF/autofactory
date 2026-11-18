@@ -57,6 +57,7 @@ from execution_optimizer.model.pattern_group_dto import PatternGroupDTO
 from execution_optimizer.model.pattern_points_dto import PatternPointsDTO
 from execution_optimizer.msg import PatternGroup
 from execution_optimizer.service.camera_info_provider import CameraInfoProvider
+from execution_optimizer.util.frames import common_frame_id
 
 
 class GroupingService(Protocol):
@@ -72,7 +73,7 @@ class GroupingService(Protocol):
 class OptimizerBase(LifecycleNode, ABC):
     """Shared lifecycle node base for all optimizer variants."""
 
-    _COMMON_PARAMETERS = ('product_frame_id', 'camera_node_name', 'camera_info_timeout_s')
+    _COMMON_PARAMETERS = ('camera_node_name', 'camera_info_timeout_s')
 
     def __init__(self, node_name: str = 'optimizer_base') -> None:
         """Initialise the node and declare the shared parameters.
@@ -92,13 +93,6 @@ class OptimizerBase(LifecycleNode, ABC):
         self._camera_callback_group = ReentrantCallbackGroup()
         self._service_callback_group = MutuallyExclusiveCallbackGroup()
 
-        self.declare_parameter(
-            'product_frame_id',
-            'product_origin',
-            ParameterDescriptor(
-                description='Frame of all pattern poses and of the output capture poses.'
-            ),
-        )
         self.declare_parameter(
             'camera_node_name',
             'basler_camera',
@@ -269,7 +263,8 @@ class OptimizerBase(LifecycleNode, ABC):
                 raise OptimizationError('Optimizer is not active')
             patterns = self._to_pattern_points(request.patterns)
             groups = optimizer.group(patterns, intrinsics)
-            response.groups = [self._to_group_msg(group, config) for group in groups]
+            frame_id = common_frame_id(patterns)
+            response.groups = [self._to_group_msg(group, frame_id) for group in groups]
             response.success = True
             response.error_message = ''
         except OptimizationError as error:
@@ -289,10 +284,10 @@ class OptimizerBase(LifecycleNode, ABC):
         response.error_message = message
 
     @staticmethod
-    def _to_group_msg(group: PatternGroupDTO, config: OptimizerConfigDTO) -> PatternGroup:
+    def _to_group_msg(group: PatternGroupDTO, frame_id: str) -> PatternGroup:
         """Convert a grouping result into the interface message."""
         pose = PoseStamped()
-        pose.header.frame_id = config.product_frame_id
+        pose.header.frame_id = frame_id
         pose.pose.position.x, pose.pose.position.y, pose.pose.position.z = group.position
         (
             pose.pose.orientation.x,

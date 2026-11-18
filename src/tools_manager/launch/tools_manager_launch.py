@@ -48,6 +48,9 @@ from launch_ros.substitutions import FindPackageShare
 
 from tools_manager.model.tools_manager_config import ToolsManagerConfigDTO
 
+# Internal knowledge: the optimizer shared by all dispensing pattern executors started here.
+_DISPENSING_OPTIMIZER_NODE_NAME = 'dispensing_optimizer'
+
 
 class _Endtool(NamedTuple):
     """An endtool instance together with the pattern executor that drives it."""
@@ -133,10 +136,10 @@ def _endtool_actions(endtool: _Endtool):
             'node_name': pattern_executor,
             'tool_sn': endtool.tool_sn,
             'endtool_node_name': endtool.node_name,
+            'execution_optimizer': _DISPENSING_OPTIMIZER_NODE_NAME,
             'movement_controller_node_name': [
                 '/',
                 LaunchConfiguration('movement_controller_node_name'),
-                '/execute_trajectory',
             ],
         }.items(),
     )
@@ -330,6 +333,21 @@ def generate_launch_description():
             ],
         )
     )
+
+    optimizer_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution([
+                FindPackageShare('execution_optimizer'),
+                'launch',
+                'dispensing_optimizer.launch.py',
+            ])
+        ),
+        launch_arguments={
+            'simulated': simulated,
+            'node_name': _DISPENSING_OPTIMIZER_NODE_NAME,
+        }.items(),
+    )
+    actions.append(GroupAction([optimizer_launch], scoped=True))
 
     for _, endtool in _RACK_SLOTS:
         if endtool is not None:

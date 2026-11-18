@@ -55,12 +55,15 @@ class MovementSession:
         *,
         timeout_s: float = DEFAULT_SESSION_TIMEOUT_S,
         extend_threshold_s: float = DEFAULT_SESSION_EXTEND_THRESHOLD_S,
+        session_id: str = '',
     ) -> None:
         """:param in_session_call: Calls ``in_session``; returns ``None`` if the service is unavailable.
         :param close_session_call: Calls ``close_session``; returns ``None`` if the service is unavailable.
         :param now_s: Current time in seconds, from the node clock (matches the server's clock).
         :param timeout_s: Session timeout requested on acquire and on every extension; must be finite and > 0.
         :param extend_threshold_s: Extend before a movement when less than this many seconds remain; must be >= 0.
+        :param session_id: Existing session to adopt (owned by someone else); the first :meth:`ensure_valid`
+            extends it instead of acquiring a new one. Empty means acquire a new session.
         :raises ValueError: If ``timeout_s`` or ``extend_threshold_s`` is out of range.
         """
         if not math.isfinite(timeout_s) or timeout_s <= 0.0:
@@ -72,7 +75,7 @@ class MovementSession:
         self._now_s = now_s
         self._timeout_s = timeout_s
         self._extend_threshold_s = extend_threshold_s
-        self._session_id = ''
+        self._session_id = session_id
         self._deadline_s = 0.0
 
     @property

@@ -40,10 +40,18 @@ from repositories.msg import (
     OperationRepositoryDispensingPattern,
     OperationRepositoryPatternAction,
 )
-from repositories.utils.pose_converter import point3_to_point, pose6_to_pose_stamped
+from repositories.utils.pose_converter import (
+    point3_to_point,
+    pose6_to_pose_stamped,
+    pose_stamped_to_pose6,
+)
 
 Pose6 = tuple[StrictFloat, StrictFloat, StrictFloat, StrictFloat, StrictFloat, StrictFloat]
 Point3 = tuple[StrictFloat, StrictFloat, StrictFloat]
+
+
+def _none_if_unset(value: float) -> float | None:
+    return None if value == -1.0 else float(value)
 
 
 class PatternActionDTO(BaseModel, frozen=True):
@@ -70,6 +78,10 @@ class PatternActionDTO(BaseModel, frozen=True):
                 ArgumentDTO.from_named_value(name, value)
                 for name, value in arguments.items()
             ]
+        elif isinstance(arguments, list) and all(
+            isinstance(argument, ArgumentDTO) for argument in arguments
+        ):
+            copied['action_args'] = arguments
         else:
             raise ValueError('action_args must be an object or null')
         return copied
@@ -103,6 +115,17 @@ class PatternActionDTO(BaseModel, frozen=True):
             argument.to_msg() for argument in self.action_args or []
         ]
         return message
+
+    @classmethod
+    def from_msg(cls, message: OperationRepositoryPatternAction) -> 'PatternActionDTO':
+        """Validate a ROS pattern action message."""
+        return cls.model_validate(
+            {
+                'type': message.type,
+                'timing': message.timing,
+                'action_args': [ArgumentDTO.from_msg(arg) for arg in message.action_args],
+            }
+        )
 
 
 class DispensingMovementDTO(BaseModel, frozen=True):
@@ -151,6 +174,31 @@ class DispensingMovementDTO(BaseModel, frozen=True):
         message.actions = [action.to_msg() for action in self.actions]
         return message
 
+    @classmethod
+    def from_msg(cls, message: OperationRepositoryDispensingMovement) -> 'DispensingMovementDTO':
+        """Validate a ROS movement message; the frame id of its pose is dropped."""
+        return cls.model_validate(
+            {
+                'id': message.id,
+                'motion_type': message.motion_type,
+                'target_pose_m': pose_stamped_to_pose6(message.target_pose),
+                'blend_radius_m': _none_if_unset(message.blend_radius_m),
+                'cartesian_speed_m_s': _none_if_unset(message.cartesian_speed_m_s),
+                'joint_speed_rad_s': _none_if_unset(message.joint_speed_rad_s),
+                'circ_type': message.circ_type or None,
+                'circ_point_m': (
+                    (
+                        float(message.circ_point[0].x),
+                        float(message.circ_point[0].y),
+                        float(message.circ_point[0].z),
+                    )
+                    if message.circ_point
+                    else None
+                ),
+                'actions': [PatternActionDTO.from_msg(action) for action in message.actions],
+            }
+        )
+
 
 class DispensingPatternDTO(BaseModel, frozen=True):
     """Validated dispensing pattern and its associated movements."""
@@ -186,6 +234,10 @@ class DispensingPatternDTO(BaseModel, frozen=True):
                 ArgumentDTO.from_named_value(name, value)
                 for name, value in pattern_args.items()
             ]
+        elif isinstance(pattern_args, list) and all(
+            isinstance(argument, ArgumentDTO) for argument in pattern_args
+        ):
+            copied['pattern_args'] = pattern_args
         else:
             raise ValueError('pattern_args must be an object or null')
         return copied
@@ -218,3 +270,17 @@ class DispensingPatternDTO(BaseModel, frozen=True):
         ]
         message.movements = [movement.to_msg(frame_id) for movement in self.movements]
         return message
+
+    @classmethod
+    def from_msg(cls, message: OperationRepositoryDispensingPattern) -> 'DispensingPatternDTO':
+        """Validate a ROS pattern message; the frame id of its poses is dropped."""
+        return cls.model_validate(
+            {
+                'id': message.id,
+                'start_pose_m': pose_stamped_to_pose6(message.start_pose),
+                'pattern_args': [ArgumentDTO.from_msg(arg) for arg in message.pattern_args],
+                'movements': [
+                    DispensingMovementDTO.from_msg(movement) for movement in message.movements
+                ],
+            }
+        )

@@ -54,7 +54,7 @@ from movement_controller.services.movement_session import MovementSession
 from movement_controller.srv import CloseSession, InSession
 from tools_manager.msg import Slots, ToolInfo
 from tools_manager.action import MountTool, UnmountTool
-from tools_manager.srv import GetToolSerial
+from tools_manager.srv import GetToolNodeName
 
 from tools_manager.exception.activation_failed_exception import ActivationFailedException
 from tools_manager.exception.deactivation_failed_exception import DeactivationFailedException
@@ -159,7 +159,7 @@ class ToolsManager(LifecycleNode):
         self._unmount_tool_action: ActionServer|None = None
 
         # service servers
-        self._get_tool_serial_service: Service|None = None
+        self._get_tool_node_name_service: Service|None = None
 
         self._movement_controller_action_client: ActionClient|None = None
         self._movement_session: MovementSession|None = None
@@ -776,31 +776,31 @@ class ToolsManager(LifecycleNode):
             goal_handle.succeed()
         return response
 
-    def _get_tool_serial_callback(
-        self, request: GetToolSerial.Request, response: GetToolSerial.Response
-    ) -> GetToolSerial.Response:
-        candidates: list[ToolInfoDto] = []
-        slots = self.tool_rack_slots
-        if slots is not None:
-            candidates.extend(slots.tools_mounted)
-        tool_mounted = self.tool_mounted
-        if tool_mounted is not None:
-            candidates.append(tool_mounted)
-
-        response.tool_sn = [
-            tool.tool_sn for tool in candidates
-            if (
-                tool.tool_part_number == request.tool_part_number
-                and tool.tool_part_revision == request.tool_part_revision
-                and tool.material_part_number == request.material_part_number
-                and tool.material_part_revision == request.material_part_revision
-            )
-        ]
-        response.success = len(response.tool_sn) > 0
-        response.message = '' if response.success else (
-            f"No tool found with tool part '{request.tool_part_number}' rev '{request.tool_part_revision}' "
-            f"and material part '{request.material_part_number}' rev '{request.material_part_revision}'."
-        )
+    def _get_tool_node_name_callback(
+        self, request: GetToolNodeName.Request, response: GetToolNodeName.Response
+    ) -> GetToolNodeName.Response:
+        response.success = False
+        response.node_name = ''
+        response.error_message = ''
+        try:
+            if self._config is None:
+                raise ValueError('tools manager is not configured')
+            slots = self.tool_rack_slots
+            tool_mounted = self.tool_mounted
+            on_rack = slots is not None and slots.get_tool_info(request.tool_sn) is not None
+            is_mounted = tool_mounted is not None and tool_mounted.tool_sn == request.tool_sn
+            if not (on_rack or is_mounted):
+                raise ValueError(
+                    f"tool '{request.tool_sn}' is neither on the rack nor mounted"
+                )
+            slot = self._config.tools_manager_config.get_tool_slot_data(request.tool_sn)
+            if not slot.node_name:
+                raise ValueError(f"tool serial number '{request.tool_sn}' has no endtool node name")
+            response.node_name = slot.node_name
+            response.success = True
+        except ValueError as error:
+            self.get_logger().error(f'get_tool_node_name failed: {error}')
+            response.error_message = str(error)
         return response
     # endregion: callbacks
 
@@ -1025,10 +1025,10 @@ class ToolsManager(LifecycleNode):
             callback_group=self._action_callback_group,
         )
 
-        self._get_tool_serial_service = self.create_service(
-            srv_type=GetToolSerial,
-            srv_name='~/get_tool_serial',
-            callback=self._get_tool_serial_callback,
+        self._get_tool_node_name_service = self.create_service(
+            srv_type=GetToolNodeName,
+            srv_name='~/get_tool_node_name',
+            callback=self._get_tool_node_name_callback,
             callback_group=self._action_callback_group,
         )
 
@@ -1104,9 +1104,9 @@ class ToolsManager(LifecycleNode):
             self._unmount_tool_action.destroy()
             self._unmount_tool_action = None
 
-        if self._get_tool_serial_service is not None:
-            self.destroy_service(self._get_tool_serial_service)
-            self._get_tool_serial_service = None
+        if self._get_tool_node_name_service is not None:
+            self.destroy_service(self._get_tool_node_name_service)
+            self._get_tool_node_name_service = None
 
         if self._movement_controller_action_client is not None:
             self._movement_controller_action_client.destroy()

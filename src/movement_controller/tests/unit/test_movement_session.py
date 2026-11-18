@@ -160,6 +160,17 @@ def test_invalid_timeout_or_threshold_raises(controller, kwargs):
         MovementSession(controller.in_session, controller.close, lambda: 0.0, **kwargs)
 
 
+def test_adopted_session_is_extended_not_reacquired(controller, clock):
+    session = MovementSession(
+        controller.in_session, controller.close, lambda: clock[0], session_id='owned-elsewhere')
+    assert session.session_id == 'owned-elsewhere'
+    assert session.ensure_valid() == ''
+    assert controller.in_session_requests[0].session_id == 'owned-elsewhere'
+    assert session.session_id == 'owned-elsewhere'
+    assert session.ensure_valid() == ''
+    assert len(controller.in_session_requests) == 1
+
+
 def test_close_without_session_does_not_call_service(session, controller):
     assert session.close() == ''
     assert controller.close_requests == []

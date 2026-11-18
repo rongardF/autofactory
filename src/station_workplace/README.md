@@ -288,12 +288,19 @@ ros2 launch station_workplace workplace_barcode_scanner.launch.py \
 ```
 
 Every parameter is a launch argument of the same name (plus `node_name`,
-`use_sim_time` and `start_world_manager`), e.g. `safety_object.x:=0.3` or
+`use_sim_time`, `start_world_manager` and, for the RFID variant, `start_rfid_scanner`), e.g. `safety_object.x:=0.3` or
 `tag_registers.serial_number.length:=16`. The launch files include the shared
 `world_manager` launch by default, with the same `simulated` and
 `simulation.world_name` values. Set `start_world_manager:=false` when a parent
 launch already starts it. Gazebo is accessed directly by `world_manager`; no
 per-workplace ROS/Gazebo bridge is started.
+`workplace_rfid_scanner.launch.py` also starts the RFID scanner node it reads from
+(`rfid_scanner/launch/simatic_rf240r_ascii.launch.py`, with the same `simulated`
+value and `rfid_scanner_node_name` as its node name, so the subscribed and the
+launched node are identical). Set `start_rfid_scanner:=false` when the scanner is
+started elsewhere (e.g. real hardware or a parent launch). The scanner's
+`device_name` (`simatic_rf240r`) must equal the xacro device name of the Gazebo
+model; it is not forwarded by this launch file.
 An external orchestrator must configure and activate the included world-manager
 nodes before activating the workplace.
 

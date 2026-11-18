@@ -28,7 +28,7 @@
 from abc import ABC, abstractmethod
 
 from production_manager.model.production_data_dto import ProductionDataDTO
-from production_manager.model.result_dto import ResultDTO
+from production_manager.model.report_result_dto import ReportResultDTO
 from repositories.enums.operation_repository import SCHEMA_VERSION
 
 
@@ -51,5 +51,6 @@ class ProductionBackend(ABC):
         operation_id: str,
         success: bool,
         station_id: str,
-    ) -> ResultDTO:
+        reason: str = '',
+    ) -> ReportResultDTO:
         raise NotImplementedError

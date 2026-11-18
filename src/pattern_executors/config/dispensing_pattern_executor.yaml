@@ -11,8 +11,8 @@
     tool_sn: ""
     # Node name of the volumetric dispenser whose lifecycle this executor drives.
     endtool_node_name: ""
-    # Movement controller execute-trajectory action name.
-    movement_action_name: "movement_controller/execute_trajectory"
+    # Movement controller node name; execute_trajectory and in_session are appended.
+    movement_controller_node_name: "/movement_controller"
     # Timeout (seconds) for movement action server availability checks.
     movement_server_timeout_s: 5.0
     # Timeout (seconds) for end-tool lifecycle and parameter service calls.

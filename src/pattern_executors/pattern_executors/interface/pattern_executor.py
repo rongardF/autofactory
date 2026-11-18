@@ -52,6 +52,8 @@ from rclpy.publisher import Publisher
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 
 from movement_controller.action import ExecuteTrajectory
+from movement_controller.srv import InSession
+from rclpy.client import Client
 from std_msgs.msg import Bool
 
 from pattern_executors.model.pattern_executor_config_dto import PatternExecutorConfigDTO
@@ -76,6 +78,7 @@ class PatternExecutor(LifecycleNode, ABC):
         self._config: PatternExecutorConfigDTO | None = None
         self._movement_action_client: ActionClient | None = None
         self._endtool_manager: EndtoolLifecycleManager | None = None
+        self._in_session_client: Client | None = None
         self._dispatcher: MovementDispatcher | None = None
         self._action_server: ActionServer | None = None
         self._executing_patterns_publisher: Publisher | None = None
@@ -106,9 +109,18 @@ class PatternExecutor(LifecycleNode, ABC):
         )
         self.declare_parameter(
             'movement_controller_node_name',
-            '/movement_controller/execute_trajectory',
+            '/movement_controller',
             ParameterDescriptor(
                 description='Node name of the movement controller.'
+            ),
+        )
+        self.declare_parameter(
+            'execution_optimizer',
+            '',
+            ParameterDescriptor(
+                description='Node name of the execution optimizer for this executor; '
+                'set once at startup',
+                read_only=True,
             ),
         )
         self.declare_parameter(
@@ -185,7 +197,7 @@ class PatternExecutor(LifecycleNode, ABC):
         self._movement_action_client = ActionClient(
             self,
             ExecuteTrajectory,
-            self._config.movement_controller_node_name,
+            self._config.movement_action_name,
             callback_group=self._movement_callback_group,
         )
         self._endtool_manager = EndtoolLifecycleManager(
@@ -193,10 +205,16 @@ class PatternExecutor(LifecycleNode, ABC):
             self._config.endtool_node_name,
             self._config.endtool_service_timeout_s,
         )
+        self._in_session_client = self.create_client(
+            InSession,
+            self._config.in_session_service_name,
+            callback_group=self._movement_callback_group,
+        )
         self._dispatcher = MovementDispatcher(
             self,
             self._movement_action_client,
             self._config.movement_server_timeout_s,
+            self._in_session_client,
         )
 
         return TransitionCallbackReturn.SUCCESS
@@ -306,6 +324,10 @@ class PatternExecutor(LifecycleNode, ABC):
         if self._endtool_manager is not None:
             self._endtool_manager.destroy()
             self._endtool_manager = None
+
+        if self._in_session_client is not None:
+            self.destroy_client(self._in_session_client)
+            self._in_session_client = None
 
         self._dispatcher = None
         self._config = None

@@ -199,6 +199,18 @@ non-empty and homogeneous so their element type can be inferred. The shared
 `flowrate_m3_s` float argument, and wait actions require their `wait_time_s`
 float argument.
 
+### Message-to-DTO conversion
+
+`OperationDTO.from_msg(OperationRepositoryOperation)` is the inverse of `to_msg`
+(also available on the nested pattern, movement, action, material and end-tool
+DTOs). Message values of `-1.0` become `null`, an empty `circ_type` becomes
+`null`, and quaternions are converted back to roll/pitch/yaw with
+`repositories.utils.pose_converter.pose_stamped_to_pose6`. At a pitch of
++/- pi/2 the roll is reported as `0` and the rotation is carried by the yaw,
+so compare round trips by orientation, not by RPY values. The frame id of the
+poses is dropped; `to_msg(frame_id)` restamps them. `dispensing_patterns` is
+filled only for `dispensing` operations.
+
 ## `image_repository` node
 
 Lets other nodes **upload** images to and **fetch** images from a storage. Every

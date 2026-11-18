@@ -1,0 +1,5 @@
+---
+float64 total_manufacturing_time_s
+bool success
+string error_message
+---
