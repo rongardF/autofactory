@@ -56,22 +56,11 @@ class SimulatedRackController(RackController):
 
     def setup(self) -> None:
         self._setup_sim_subscribers()
-        if not self.tools_in_correct_slots():
-            self._node.get_logger().warn(
-                "Rack is not correctly configured. Some tools are not in their expected slots."
-            )
 
     def teardown(self) -> None:
         self._teardown_sim_subscribers()
-
-    def tools_in_correct_slots(self) -> bool:
         with self._slot_info_lock:
-            for slot in self._config.slots:
-                mounted = self._slot_info.get(slot.index)
-                mounted_sn = mounted.tool_sn if mounted is not None else None
-                if mounted_sn != slot.tool_sn:
-                    return False
-        return True
+            self._slot_info.clear()
 
     def get_slot_index(self, tool_sn: str) -> int|None:
         for slot in self._config.slots:

@@ -42,6 +42,8 @@ transitions; nothing is created in `__init__` except parameter declarations.
 | Name | Default | Meaning |
 |------|---------|---------|
 | `tool_type` | `"dispensing"` | Read-only tool type tag. Parsed into `ToolTypeEnum`. |
+| `model` | `""` | Read-only. Model (resource directory name under `model/`) of this tool; the tools manager reads it while the node is `unconfigured`. Set at startup through the launch `model` argument. |
+| `pattern_executor` | `""` | Read-only. Node name of the pattern executor associated with this tool (discovery information only). Set at startup through the launch `pattern_executor` argument. |
 | `simulated` | `True` | Selects `SimulatedDispenserController` vs `HardwareDispenserController`. |
 | `tool_sn` | `"dispensing_ABC123"` | Tool serial number; also the base of the calibrated TCP frame name and the TCP cache key. |
 | `tcp_frame_id` | `"tool0"` | Parent frame the TCP offset is applied to (the flange). |
@@ -206,10 +208,19 @@ The macro parameters (`model_name`, `station_model_name`, `tool_mount_link`,
 
 ## Launch (`volumetric_dispenser_launch.py`)
 
-Launch arguments: `simulated`, `world_name`, `tool_sn`, `tcp_frame_id`, `tcp_uncalibrated`,
-`station_cache_name`, `tcp_valid_period`, `mounted`, `flowrate`,
-`start_world_manager` (default `true`; set false when a parent launch already
-starts the shared manager).
+Launch arguments: `simulated`, `use_sim_time` (defaults to `simulated`), `world_name`,
+`tool_sn`, `model` (default `dispensing_tool`), `pattern_executor` (default empty),
+`tcp_frame_id`, `tcp_uncalibrated`, `station_cache_name`, `tcp_valid_period`,
+`mounted`, `flowrate`, `node_name`,
+`start_world_manager` (default `false`; set true when no parent launch starts
+the shared manager).
+
+`model` and `pattern_executor` are forwarded as quoted ROS parameter arguments
+(`--ros-args -p name:='value'`), not through the launch node's `parameters`.
+Quoting preserves string values, including the default empty executor name.
+The node constructor declares both parameters read-only, and their ROS argument
+overrides provide the startup values. The tools manager launch composes this
+launch for every rack tool (together with its pattern executor).
 
 It starts the `volumetric_dispensing_tool` node and, unless disabled, includes
 `world_manager` with the same `simulated` and `world_name` values. Simulated

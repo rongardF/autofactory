@@ -102,6 +102,16 @@ class NodeStateManager:
             callback_group=self._callback_group,
         )
 
+    def destroy(self) -> None:
+        """Destroy the service clients; the manager must not be used afterwards."""
+        for client in (
+            self._change_state_client,
+            self._get_state_client,
+            self._set_parameters_client,
+            self._get_parameters_client,
+        ):
+            self._node.destroy_client(client)
+
     def configure_node(self) -> TransitionCallbackReturn:
         """Transition the target node from ``unconfigured`` to ``inactive``.
 

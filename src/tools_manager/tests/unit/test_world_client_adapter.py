@@ -27,12 +27,12 @@
 """Tests for the tools-manager adapter to shared world clients."""
 
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import Mock
 
 from tools_manager.model.tool_info_dto import ToolInfoDto
-from tools_manager.model.tool_metadata_dto import ToolMetadataDto
+from tools_manager.model.tools_manager_config import ToolSlotDTO
 from tools_manager.services import world_client_adapter as adapter_module
+from tools_manager.services.world_client_adapter import ToolsWorldClientAdapter
 from tools_manager.services.world_client_adapter import ToolsWorldClientAdapter
 
 
@@ -82,14 +82,6 @@ class _FakeGazeboClient:
 
 
 def _adapter(monkeypatch, model_share: Path):
-    config = Mock()
-    config.get_tool_metadata.return_value = ToolMetadataDto(
-        launch_file='tool.launch.py',
-        model='tool_model',
-    )
-    config.get_tool_slot_data.return_value = SimpleNamespace(
-        tool_attached_frame='slot2_attached_link',
-    )
     monkeypatch.setattr(
         adapter_module,
         'MoveIt2WorldClient',
@@ -106,7 +98,6 @@ def _adapter(monkeypatch, model_share: Path):
     return ToolsWorldClientAdapter(
         node=Mock(),
         callback_group=Mock(),
-        config=config,
         simulated=True,
         station_model_name='cell_station',
     )
@@ -128,6 +119,8 @@ def test_spawn_builds_moveit_and_gazebo_requests(
     adapter.activate()
     adapter.spawn_tool(
         tool,
+        model_name='tool_model',
+        home_slot=ToolSlotDTO(index=2, tool_sn='SN-01', node_name='node'),
         link_name='tool_mount_tcp',
         rotation=rotation,
     )
