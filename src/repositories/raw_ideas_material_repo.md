@@ -1,0 +1,68 @@
+- new repository node called 'material_repository'
+- this repository is meant to hold data about various materials that endtools use
+- the materials are referenced by product_number (aka part_number) and product_revision (aka part_revision)
+- each material data can contain arbitrary fields that are relevant for that material type, but following fields are mandatory and shared for all materials:
+    - 'product_number' and 'product_revision'
+    - 'material_type' of string type (for now it is "fluid" and "screw" only allowed) - this defines the material type and what is the schema for rest of the (arbitrary) data fields
+    - 'is_serialized' of boolean type that specifies if the material is bulk material or serialized material (with a serial number)
+- the endtools will use the 'material_repository' to fetch material related data that they can use for manufacturing purposes; for example, the dispenser can retrieve data that defines what is the dispensed materials (putty; is 'fluid' type material) density, color, viscosity etc.
+- interface:
+    - there will be a service called 'get_material_data' that will:
+        - take input parameters 'product_number' and 'product_revision' that define the material
+        - in the repository there will be only 1 matching entry for that product number and revision combination
+        - the service will respond with
+            - 'material_data' field of 'MaterialData.msg'  type
+            - 'success' of boolean type
+            - 'error_message' of string type
+        - the 'MaterialData.msg' message will have following fields:
+            - 'product_number'
+            - 'product_revision'
+            - 'material_type'
+            - 'is_serialized'
+            - 'payload_json' which is a raw JSON string that carries the actual arbitrary material data; the schema will be different for each material type and an endtool using that specific material type will know how to parse it:
+                - if the endtool (which calls this service) fails to sucessfully parse this field then it will fail configuration
+                - the pydnatic model that will correspond to this material types JSON schema must allow extra fields for future compatibility purposes (new fields might be added to support newer type endtools in the future)
+                - the pydantic model for this JSON payload must not have default values! all values must be coming from the repository
+                - the pydantic model for each material type payload must be defined in the repositories package and imported by endtools from this package; the model must not be named as '...DTO' but rather like 'FluidMaterial' and 'ScrewMaterial'
+                - the model must contain utility methods 'to_msg' and 'from_msg'
+        - currently we will only implement the 'FluidMaterial' material type as we only have dispensing process (screw material type is named, but nothing more is implemented for it)
+            - the 'FluidMaterial' will have following fields:
+                - 'density_kg_m3' that speicfies the material density in SI
+                - 'color_rgba' that defines the material color in RGB code with alpha channel for trasparency
+                - 'viscosity_pa_s' that defines the materials viscoity in SI
+- the material repository can work in two modes - 'local' and 'cloud':
+    - in 'cloud' mode the data will be fetched from a remote REST API service using the product number and revision; currently there is not cloud service implemented so this will be stubbed and we will not make any HTTP calls
+    - in 'local' mode there is a JSON type file in the local filesystem (pointed to with 'materials_file_path' parameter) that will hold a list of materials (see the 'example_material_file.json'); this file will be parsed when the material repository becomes configured and we will create an internal cached mapping of materials (product number/revision) to material data
+- the material repository provides read-only access to the data and no material data can be modified (written) via this node
+- the endtools (specifically dispensing endtool):
+    - will have a new parameter called 'material_repository_node_name' that points to the material repository
+    - will have two new read-only parameters called 'material.product_number' and 'material.product_revision':
+        - these specify the material being used by this endtool
+        - the value for those read-only parameters will come from ROS node arguments injected when node is created (in launch file) - NOT AS NODE PARAMETERS!
+        - in constructor we set the parameters with empty default values that will be overwritten by ROS arguments (as '--ros-args -p')
+    - the reference to material product number and revision in the tools manager 'ToolInfoDto', 'ToolInfo.msg' etc files will be removed
+    - the endtool RFID tag will NOT contain the material info anymore and that must be changed - this makes the tag data constant and it will not have to change ever (even when the endtool material being used is changed)
+    - upon configuration will use the read-only parameters (or internal instance variables, does not matter) to fetch the material data from the material repository; if it fails to retrieve this data then the configuration will fail!
+- the material repository must be launched in station launch file
+- parameters:
+    - 'local_storage' of boolean type that specifies the oeprating mode, default true
+    - 'station_id' - always required to be provided; must be valid UUID4
+    - 'material_service_url' - only required if non-local mode, default empty
+    - 'request_timeout_sec' in float type, default 5.0
+    - 'materials_file_path' of string type with default being '/tmp/station/materials.json'
+- repository node will be lifecycle node; state transistions:
+    - on configure:
+        - create frozen node configuration model using parameters
+        - create whatever internal services needed; do not initialize them here!
+    - on activate:
+        - create the nodes interfaces (service)
+        - initialize the internal services if any
+    - on deactivate:
+        - de-initialize internal services if any
+        - destroy the node interface
+    - cleanup:
+        - remove the config
+        - remove the internal services if any
+    - shutdown must be implemented
+- no automated tests at this phase
+- all node interfaces are with node private naming
