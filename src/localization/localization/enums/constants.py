@@ -27,8 +27,6 @@
 """Constants of the localization package."""
 
 LOCALIZATION_ORIGIN_FRAME = 'localization_origin'
-PRODUCT_ORIGIN_FRAME = 'product_origin'
-ESTIMATED_PRODUCT_ORIGIN_FRAME = 'estimated_product_origin'
 
 # Frame the movement controller plans in; target poses are transformed to it.
 PLANNING_FRAME = 'base_link'

@@ -40,6 +40,47 @@ def rpy_to_quaternion(
     )
 
 
+def quaternion_to_rpy(
+    x: float, y: float, z: float, w: float
+) -> tuple[float, float, float]:
+    """Convert a quaternion to fixed-axis XYZ roll, pitch and yaw (R = Rz Ry Rx)."""
+    norm = math.sqrt(x * x + y * y + z * z + w * w)
+    if norm == 0.0:
+        raise ValueError('quaternion must not be zero')
+    x, y, z, w = x / norm, y / norm, z / norm, w / norm
+    r00 = 1.0 - 2.0 * (y * y + z * z)
+    r01 = 2.0 * (x * y - z * w)
+    r10 = 2.0 * (x * y + z * w)
+    r11 = 1.0 - 2.0 * (x * x + z * z)
+    r20 = 2.0 * (x * z - y * w)
+    r21 = 2.0 * (y * z + x * w)
+    r22 = 1.0 - 2.0 * (x * x + y * y)
+    pitch = math.asin(max(-1.0, min(1.0, -r20)))
+    if abs(r20) < 1.0 - 1e-9:
+        return math.atan2(r21, r22), pitch, math.atan2(r10, r00)
+    # Gimbal lock: roll and yaw are coupled, attribute the rotation to yaw.
+    return 0.0, pitch, math.atan2(-r01, r11)
+
+
+def pose_stamped_to_pose6(
+    pose: PoseStamped,
+) -> tuple[float, float, float, float, float, float]:
+    """Convert a stamped ROS pose into XYZ and fixed-axis RPY values."""
+    position = pose.pose.position
+    orientation = pose.pose.orientation
+    roll, pitch, yaw = quaternion_to_rpy(
+        orientation.x, orientation.y, orientation.z, orientation.w
+    )
+    return (
+        float(position.x),
+        float(position.y),
+        float(position.z),
+        roll,
+        pitch,
+        yaw,
+    )
+
+
 def pose6_to_pose_stamped(
     pose: Sequence[float], frame_id: str
 ) -> PoseStamped:

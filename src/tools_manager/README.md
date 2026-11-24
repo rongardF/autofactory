@@ -123,8 +123,11 @@ Publishes a latched `tool_mounted` topic (`tools_manager/ToolInfo`) at
   delegates to `controller.lock_closed(...)`.
 - **Simulated controller:** subscribes to `/tool_mount_rfid_scanner/tag_data`;
   parses the `Dataframe` into the mounted `ToolInfoDto` (empty ⇒ nothing
-  mounted). `lock_closed()` is a no-op returning `True` (there is no physical
-  lock to drive in sim).
+  mounted). There is no physical lock to drive in sim, so `lock_closed()` only
+  records the requested state (initially closed) and always returns `True`. A
+  tool is reported as mounted only while the lock is closed, because the RFID
+  reader also sees a tool held within range while approaching or leaving the
+  rack.
 
 ---
 
@@ -188,7 +191,7 @@ and the rack/mount node-state managers.
 8. Create the `tool_mount/lock` service client, the movement-controller
    `ExecuteTrajectory` action client and `in_session` / `close_session` service
    clients, the two action servers `~/mount_tool` and `~/unmount_tool`, and the
-   `~/get_tool_serial` service. The manager only reports success after all of
+   `~/get_tool_node_name` service. The manager only reports success after all of
    this completed.
 9. On any failure, roll back **only what was done**: models that were created
    are removed, endtools that were configured go back to `unconfigured`
@@ -257,14 +260,13 @@ tool was already returned to its slot), succeed.
 
 ### Services
 
-#### `~/get_tool_serial` (`tools_manager/srv/GetToolSerial`)
-Only available while the node is **active**. Request (all mandatory):
-`tool_part_number`, `tool_part_revision`, `material_part_number`,
-`material_part_revision`. It searches the tools on the rack (`tool_rack/slots`)
-and the currently mounted tool; a tool matches only if all four fields are
-equal (exact, case-sensitive, no wildcards). Response: `bool success`,
-`string message`, `string[] tool_sn` (serials of all matches; empty and
-`success=false` when nothing matches).
+#### `~/get_tool_node_name` (`tools_manager/srv/GetToolNodeName`)
+Only available while the node is **active**. Request: `string tool_sn`. The
+tool must be on the rack (`tool_rack/slots`) or be the mounted tool
+(`tool_mount/tool_mounted`); the node name comes from the configured slots
+(`tools.tool_sn` / `tools.node_name`).
+Response: `bool success`, `string error_message` (only set when
+`success=false`), `string node_name` (the endtool node name; empty on failure).
 
 ### Movement + service plumbing
 - **Movement session** — every top-level `mount_tool` / `unmount_tool` goal runs
@@ -321,7 +323,7 @@ while the node is `unconfigured`:
 | `tool_mount/tool_mounted` | `tools_manager/ToolInfo` (latched) | mount → manager |
 | `tool_mount/lock` | `std_srvs/SetBool` | manager → mount |
 | `~/mount_tool`, `~/unmount_tool` | `tools_manager/MountTool`, `UnmountTool` | clients → manager |
-| `~/get_tool_serial` | `tools_manager/GetToolSerial` | clients → manager |
+| `~/get_tool_node_name` | `tools_manager/GetToolNodeName` | clients → manager |
 | `<movement_controller>/execute_trajectory` | `movement_controller/ExecuteTrajectory` | manager → mover |
 | `<movement_controller>/in_session`, `<movement_controller>/close_session` | `movement_controller/InSession`, `CloseSession` | manager → mover |
 | `/gazebo_world_manager/{spawn_models,delete_models,set_model_attachment,list_models}` | `world_manager` services | manager ↔ Gazebo (sim) |
@@ -339,7 +341,8 @@ source install/setup.bash
 ros2 launch tools_manager tools_manager_launch.py simulated:=true
 ```
 
-`tools_manager_launch.py` starts `tool_mount`, `tool_rack`, `tools_manager`,
+`tools_manager_launch.py` starts `tool_mount`, `tool_rack`, `tools_manager`, the
+`dispensing_optimizer` shared by the dispensing executors,
 the endtools of the rack with their pattern executors, and — only in sim — a
 `ros_gz_bridge` for the RFID scanner `tag_data` topics of every rack slot and of
 the mount. If a parent launch already starts the shared world manager, keep
@@ -354,7 +357,10 @@ neither an endtool nor an executor. For every endtool the launch includes
 `simulated`, `world_name` and tool identity. The executor node name is a launch
 argument per instance (`pattern_executor_<tool_sn>`); its resolved value names
 the executor node **and** is forwarded to the endtool launch as
-`pattern_executor`. Add or change tools by editing `_RACK_SLOTS`.
+`pattern_executor`. The `station_workplace_node_name` launch argument (default
+`workplace_rfid_scanner`) is forwarded to every endtool launch so simulated
+endtools weld their models to the product spawned by that workplace. Add or
+change tools by editing `_RACK_SLOTS`.
 
 The pattern executor launch lives in a package that already depends on
 `endtools`, so the composition is done here (`tools_manager` depends on both)

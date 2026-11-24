@@ -54,7 +54,9 @@ FEASIBILITY_MARGIN_M = 1e-6
 _MARGIN_CAP_M = 1.0
 _ANGLE_SLACK_RAD = 1e-12
 _MIN_ROLL_NORM = 1e-3
-_PRODUCT_X = np.array([1.0, 0.0, 0.0])
+# Image-right reference: with the camera looking down, this puts the TCP +Z (flange
+# axis) along product +X, a wrist orientation reachable within the joint limits.
+_IMAGE_RIGHT_REF = np.array([0.0, -1.0, 0.0])
 _NEWTON_MAX_ITERATIONS = 50
 _NEWTON_DECREMENT_TOL = 1e-14
 _NEWTON_MIN_STEP = 1e-12
@@ -74,14 +76,14 @@ def mean_normal(normals: np.ndarray) -> np.ndarray:
 def camera_axes(mean_unit_normal: np.ndarray) -> Axes | None:
     """Forward, image-right and image-down axes for a mean surface normal.
 
-    The optical axis is anti-parallel to the normal; image-right is the product X
+    The optical axis is anti-parallel to the normal; image-right is the product -Y
     axis projected onto the image plane.
 
     :returns: ``(forward, right, down)`` unit vectors with ``right x down = forward``,
-        or ``None`` if the roll is undefined (normal almost along product X).
+        or ``None`` if the roll is undefined (normal almost along product Y).
     """
     forward = -mean_unit_normal
-    right = _PRODUCT_X - (_PRODUCT_X @ forward) * forward
+    right = _IMAGE_RIGHT_REF - (_IMAGE_RIGHT_REF @ forward) * forward
     norm = np.linalg.norm(right)
     if norm < _MIN_ROLL_NORM:
         return None

@@ -24,7 +24,11 @@
 # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
-"""gz-transport implementation of the adapter, using only the ``/blocking`` service variants."""
+"""gz-transport implementation of the adapter, using only the ``/blocking`` service variants.
+
+Service requests run in a helper process (see ``GzRequestProcess``); subscriptions and publishers
+stay on the in-process node.
+"""
 
 from threading import Lock
 from typing import Callable
@@ -41,6 +45,7 @@ from gz.msgs10.stringmsg_pb2 import StringMsg  # type: ignore[attr-defined]
 from gz.transport13 import Node as GzNode
 
 from world_manager.models import PoseDTO
+from world_manager.services.gz_request_process import GzRequestProcess
 from world_manager.services.gz_transport_adapter import GzTransportAdapter
 
 def _to_ms(timeout_sec: float) -> int:
@@ -53,14 +58,31 @@ class RealGzTransportAdapter(GzTransportAdapter):
     def __init__(self, logger: RcutilsLogger) -> None:
         """Create the gz-transport node."""
         self._node = GzNode()
+        self._requests = GzRequestProcess(logger)
         self._logger = logger
         self._publishers: dict[str, object] = {}
         self._subscribed: set[str] = set()
         self._lock = Lock()
 
-    def _request(self, service: str, request: object, request_type: type, timeout_sec: float) -> bool:
-        ok, reply = self._node.request(service, request, request_type, Boolean, _to_ms(timeout_sec))
+    def close(self) -> None:
+        """Stop the request helper process."""
+        self._requests.close()
+
+    def _call(self, service: str, request: object, request_type: type, response_type: type,
+              timeout_sec: float) -> object | None:
+        """Send a request; returns the parsed reply, or None if the service did not answer."""
+        ok, payload = self._requests.request(
+            service, request.SerializeToString(), request_type.DESCRIPTOR.full_name,
+            response_type.DESCRIPTOR.full_name, _to_ms(timeout_sec))
         if not ok:
+            return None
+        reply = response_type()
+        reply.ParseFromString(payload)
+        return reply
+
+    def _request(self, service: str, request: object, request_type: type, timeout_sec: float) -> bool:
+        reply = self._call(service, request, request_type, Boolean, timeout_sec)
+        if reply is None:
             self._logger.warning(f'gz request {service} got no answer')
             return False
         if not reply.data:
@@ -92,8 +114,8 @@ class RealGzTransportAdapter(GzTransportAdapter):
 
     def list_models(self, world: str, timeout_sec: float) -> list[str] | None:
         """Read the model names from scene/info."""
-        ok, scene = self._node.request(f'/world/{world}/scene/info', Empty(), Empty, Scene, _to_ms(timeout_sec))
-        if not ok:
+        scene = self._call(f'/world/{world}/scene/info', Empty(), Empty, Scene, timeout_sec)
+        if scene is None:
             return None
         return [model.name for model in scene.model]
 

@@ -28,6 +28,7 @@
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from station_workplace.enums.constants import ROS_NAME_PATTERN
 from station_workplace.utils.uuid_validator import parse_uuid4
 
 
@@ -41,6 +42,11 @@ class SimModelMetadataDTO(BaseModel):
 
     carrier_model_id: str = Field(
         description='UUID4 of the SDF object model of the carrier holding the product.',
+    )
+    product_link: str = Field(
+        pattern=ROS_NAME_PATTERN,
+        description='Link of the product SDF model that attached models (e.g. simulated '
+        'dispensed material) weld to; must exist in the product model.',
     )
 
     @field_validator('carrier_model_id')

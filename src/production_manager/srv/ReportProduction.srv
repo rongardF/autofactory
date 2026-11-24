@@ -28,6 +28,8 @@
 string assembly_id
 string operation_id
 bool success
+string reason     # failure reason; empty on success
 ---
 bool success
 string error_message
+bool finished_in_station  # true when the product has no further operation at this station

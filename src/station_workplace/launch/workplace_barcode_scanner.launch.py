@@ -59,6 +59,11 @@ _PARAMETERS = [
      'Object model storage node name.', str),
     ('collision_allowed_link', 'conveyor_origin',
      'Robot link the carrier model and the safety object may collide with.', str),
+    ('attach_link', 'carrier',
+     'Robot link all planning-scene objects are attached to; TF parent of the estimated '
+     'product frame.', str),
+    ('estimated_product_frame_id', 'estimated_product_origin',
+     'TF frame (child of the carrier) of the estimated product origin.', str),
     ('safety_object.x', '0.25', 'Safety box size along X [m].', float),
     ('safety_object.y', '0.4', 'Safety box size along Y [m].', float),
     ('safety_object.z', '0.3', 'Safety box size along Z [m].', float),
@@ -76,6 +81,8 @@ _PARAMETERS = [
     ('simulation.product_model_name', 'product_model', 'Name of the spawned product model.', str),
     ('simulation.penetration_tolerance', '0.001',
      'Product/carrier penetration depth still treated as touching [m].', float),
+    ('simulation.world_manager_timeout_sec', '15.0',
+     'Timeout for availability and response of the Gazebo world manager services [s].', float),
     ('barcode_scanner_node_name', 'barcode_scanner', 'Barcode scanner node name.', str),
 ]
 for _field in _FIELDS:

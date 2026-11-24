@@ -35,12 +35,11 @@ from rclpy.publisher import Publisher
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from tf2_msgs.msg import TFMessage
 
-from station_workplace.enums.constants import ATTACH_LINK, PRODUCT_ORIGIN_FRAME
 from station_workplace.utils.transformations import identity_pose, pose6_to_pose
 
 
 class ProductOriginTfPublisher:
-    """Publish ``estimated_product_origin`` relative to ``carrier`` on ``/tf_static``.
+    """Publish the estimated product origin frame relative to ``carrier`` on ``/tf_static``.
 
     The frame is not published before the first :meth:`publish_pose`; after
     that it is only ever updated (reset to identity), never removed.
@@ -60,12 +59,16 @@ class ProductOriginTfPublisher:
         self._lock = threading.Lock()
         self._node: Node | None = None
         self._publisher: Publisher | None = None
+        self._frame_id = ''
+        self._parent_frame_id = ''
         self._ever_published = False
 
-    def activate(self, node: Node) -> None:
-        """Create the latched ``/tf_static`` publisher."""
+    def activate(self, node: Node, parent_frame_id: str, frame_id: str) -> None:
+        """Create the latched ``/tf_static`` publisher for the ``frame_id`` child frame."""
         with self._lock:
             self._node = node
+            self._parent_frame_id = parent_frame_id
+            self._frame_id = frame_id
             self._publisher = node.create_publisher(TFMessage, '/tf_static', self.TF_STATIC_QOS)
 
     def deactivate(self) -> None:
@@ -92,8 +95,8 @@ class ProductOriginTfPublisher:
                 raise RuntimeError('TF publisher is not active')
             transform = TransformStamped()
             transform.header.stamp = self._node.get_clock().now().to_msg()
-            transform.header.frame_id = ATTACH_LINK
-            transform.child_frame_id = PRODUCT_ORIGIN_FRAME
+            transform.header.frame_id = self._parent_frame_id
+            transform.child_frame_id = self._frame_id
             transform.transform.translation.x = pose.position.x
             transform.transform.translation.y = pose.position.y
             transform.transform.translation.z = pose.position.z

@@ -1,5 +1,6 @@
 repositories/OperationRepositoryDispensingPattern[] patterns
 string operation_id
+string session_id  # existing movement session to run in; empty keeps one session per movement
 ---
 bool success
 string error_message

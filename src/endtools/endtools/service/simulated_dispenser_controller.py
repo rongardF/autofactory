@@ -13,7 +13,11 @@ from endtools.utils.transformations import rpy_to_quaternion
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.duration import Duration
 from rclpy.lifecycle import LifecycleNode
+from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
+from rclpy.subscription import Subscription
 from rclpy.time import Time
+
+from station_workplace.msg import SimulatedProductMetadata
 
 # NOTE: TransformException is re-exported by tf2_ros from the compiled tf2_py
 # C-extension via a wildcard import, so Pylance/Pyright cannot resolve it
@@ -44,6 +48,14 @@ class SimulatedDispenserController(DispenserController):
     # How long a single TF lookup may block waiting for the transform.
     _TF_TIMEOUT_S: float = 3.0
 
+    # Must match the latched QoS the station workplace publishes with.
+    _PRODUCT_METADATA_QOS = QoSProfile(
+        reliability=ReliabilityPolicy.RELIABLE,
+        durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        history=HistoryPolicy.KEEP_LAST,
+        depth=1,
+    )
+
     def __init__(self, node: LifecycleNode):
         self._config: DispensingToolConfigDTO | None = None
         self._node = node
@@ -58,15 +70,15 @@ class SimulatedDispenserController(DispenserController):
         # they differ by the whole dwell duration.
         self._dispensing_start_pose_stamp: Time | None = None
 
-        # TODO: these are hardcoded to match the 'mock_product' entity in the
-        # Gazebo world; in final implementation these should come
-        # from a topic (published either by product localizer or router in SIM mode)
-        self._product_model_name: str = "mock_product"
-        self._product_link: str = "product_origin"
-        self._product_frame_id: str = "product_origin"
+        # Gazebo identity of the product dispensed material is welded to; received
+        # from the station workplace's latched 'simulated_product_metadata' topic.
+        # None while no product is spawned (or nothing has been received yet).
+        self._product_model_name: str | None = None
+        self._product_link: str | None = None
 
         self._world_client: GazeboWorldClient | None = None
         self._world_client_callback_group: ReentrantCallbackGroup | None = None
+        self._product_metadata_subscription: Subscription | None = None
         self._tf_buffer: Buffer | None = None
         self._tf_listener: TransformListener | None = None
         self._owner: str | None = None
@@ -80,6 +92,22 @@ class SimulatedDispenserController(DispenserController):
     def is_dispensing(self, value: bool):
         with self._lock:
             self._is_dispensing = value
+
+    def _on_product_metadata(self, msg: SimulatedProductMetadata) -> None:
+        """Cache the Gazebo identity of the product spawned by the station workplace."""
+        with self._lock:
+            if msg.spawned:
+                self._product_model_name = msg.product_model_name
+                self._product_link = msg.product_link
+            else:
+                self._product_model_name = None
+                self._product_link = None
+        if msg.spawned:
+            self._node.get_logger().info(
+                f"Dispensed material will be welded to '{msg.product_model_name}::{msg.product_link}'."
+            )
+        else:
+            self._node.get_logger().info('No simulated product is spawned in the station workplace.')
 
     @staticmethod
     def _generate_model_name(prefix: str) -> str:
@@ -254,19 +282,20 @@ class SimulatedDispenserController(DispenserController):
             raise RuntimeError('Controller is not set up; cannot look up TCP pose.')
 
         tcp_frame_id = self._config.calibrated_tcp_frame_id
+        product_frame_id = self._config.localized_product_frame_id
         timeout = Duration(seconds=self._TF_TIMEOUT_S)
         try:
             transform = self._tf_buffer.lookup_transform(
-                self._product_frame_id, tcp_frame_id, stamp, timeout=timeout
+                product_frame_id, tcp_frame_id, stamp, timeout=timeout
             )
         except TransformException as exc:
             self._node.get_logger().warning(
-                f"Failed to look up '{tcp_frame_id}' in '{self._product_frame_id}' at the "
+                f"Failed to look up '{tcp_frame_id}' in '{product_frame_id}' at the "
                 f'requested time ({exc}); falling back to the latest transform.'
             )
             # Time() is the zero stamp, which tf2 resolves to "latest available".
             transform = self._tf_buffer.lookup_transform(
-                self._product_frame_id, tcp_frame_id, Time(), timeout=timeout
+                product_frame_id, tcp_frame_id, Time(), timeout=timeout
             )
 
         translation = transform.transform.translation
@@ -294,9 +323,21 @@ class SimulatedDispenserController(DispenserController):
         Returns:
             The spawned model name, or ``None`` if the model could not be spawned.
         """
-        if self._world_client is None or self._owner is None:
+        if self._world_client is None or self._owner is None or self._config is None:
             self._node.get_logger().error(
                 'Controller is not set up with the Gazebo world client; skipping material spawn.'
+            )
+            return None
+        config = self._config
+
+        with self._lock:
+            product_model_name = self._product_model_name
+            product_link = self._product_link
+        if product_model_name is None or product_link is None:
+            self._node.get_logger().error(
+                'No simulated product is known (nothing received on '
+                f"'/{config.station_workplace_node_name}/simulated_product_metadata'); "
+                'skipping material spawn.'
             )
             return None
 
@@ -336,8 +377,8 @@ class SimulatedDispenserController(DispenserController):
 
         try:
             model_name, sdf_content = self._generate_sdf_content(
-                self._product_model_name,
-                self._product_link,
+                product_model_name,
+                product_link,
                 length_mm,
                 volume_mm3,
             )
@@ -354,8 +395,9 @@ class SimulatedDispenserController(DispenserController):
                     ModelSpecDTO(
                         model_id=model_name,
                         sdf=sdf_content,
+                        delete_with_child=True,
                         pose=PoseDTO(
-                            frame_id=self._product_frame_id,
+                            frame_id=config.localized_product_frame_id,
                             x=start_position[0],
                             y=start_position[1],
                             z=start_position[2],
@@ -447,11 +489,30 @@ class SimulatedDispenserController(DispenserController):
             callback_group=self._world_client_callback_group,
         )
 
+        self._product_metadata_subscription = self._node.create_subscription(
+            SimulatedProductMetadata,
+            f'/{config.station_workplace_node_name}/simulated_product_metadata',
+            self._on_product_metadata,
+            self._PRODUCT_METADATA_QOS,
+            callback_group=self._world_client_callback_group,
+        )
+
     def teardown(self) -> None:
         """Tear down the hardware controller."""
+        if self._product_metadata_subscription is not None:
+            self._node.destroy_subscription(self._product_metadata_subscription)
+        self._product_metadata_subscription = None
+        with self._lock:
+            self._product_model_name = None
+            self._product_link = None
+
         if self._world_client is not None:
             try:
-                if self._owner is not None:
+                if (
+                    self._owner is not None
+                    and self._config is not None
+                    and self._config.delete_material_on_deactivation
+                ):
                     self._world_client.delete(owner=self._owner)
             except WorldManagerError as exc:
                 self._node.get_logger().error(

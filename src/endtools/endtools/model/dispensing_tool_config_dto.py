@@ -12,6 +12,16 @@ class DispensingToolConfigDTO(ToolConfigBaseDTO):
         default=1.0,
         description='Volumetric flow rate (ml/s). Used by the mock now and by real hardware later. Must be >= 0.',
     )
+    delete_material_on_deactivation: bool = Field(
+        default=False,
+        description='Simulation only: delete the dispensed material models owned by the tool when it is deactivated.',
+    )
+    station_workplace_node_name: str = Field(
+        default='workplace_rfid_scanner',
+        description='Simulation only: node name of the station workplace whose '
+        '"simulated_product_metadata" topic names the product model and link that '
+        'dispensed material is welded to.',
+    )
     default_tcp_valid_period: float = Field(
         default=86400.0,
         description='Default validity period (seconds) for a cached TCP value. '

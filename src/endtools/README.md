@@ -45,6 +45,8 @@ transitions; nothing is created in `__init__` except parameter declarations.
 | `model` | `""` | Read-only. Model (resource directory name under `model/`) of this tool; the tools manager reads it while the node is `unconfigured`. Set at startup through the launch `model` argument. |
 | `pattern_executor` | `""` | Read-only. Node name of the pattern executor associated with this tool (discovery information only). Set at startup through the launch `pattern_executor` argument. |
 | `simulated` | `True` | Selects `SimulatedDispenserController` vs `HardwareDispenserController`. |
+| `simulation.delete_material_on_deactiviation` | `False` | Simulation only. When `True`, the simulated controller deletes its owned dispensed material models on deactivation. Read at configure time. |
+| `simulation.station_workplace_node_name` | `"workplace_rfid_scanner"` | Simulation only. Node name of the `station_workplace` node; the simulated controller subscribes to its latched `/<name>/simulated_product_metadata` (`station_workplace/SimulatedProductMetadata`) to learn the Gazebo product model and link dispensed material is welded to. Material is not spawned while no product is known. Read at configure time. |
 | `tool_sn` | `"dispensing_ABC123"` | Tool serial number; also the base of the calibrated TCP frame name and the TCP cache key. |
 | `tcp_frame_id` | `"tool0"` | Parent frame the TCP offset is applied to (the flange). |
 | `tcp_uncalibrated` | `[0.0837, 0.0, -0.267, 1.570797, 0.0, 1.570797]` | Nominal (uncalibrated) tip pose `[x, y, z, roll, pitch, yaw]` (m, rad). Used as the fallback when no cached TCP is available. |
@@ -52,6 +54,7 @@ transitions; nothing is created in `__init__` except parameter declarations.
 | `tcp_valid_period` | `86400.0` | Default validity period (seconds) for a cached TCP value. Clipped to a hard maximum of 3 days (see below). |
 | `mounted` | `False` | Whether the tool is currently on the tool-mount. **Gates activation.** |
 | `flowrate` | `1.0` | Volumetric flow rate (cc/s) used by the mock to integrate volume. |
+| `localized_product_frame_id` | `"product_origin"` | Frame of the localized product (published by the `localization` node). The simulated controller resolves the TCP path and places dispensed material relative to it. |
 
 ### Lifecycle behaviour
 
@@ -99,7 +102,8 @@ transitions; nothing is created in `__init__` except parameter declarations.
    - `~/dispense_stop` — `endtools/StopDispensing`
 
 **`on_deactivate`** destroys the two dispense services and calls
-`controller.teardown()`. The simulated controller deletes its owned dispensed
+`controller.teardown()`. When `simulation.delete_material_on_deactiviation` is
+`True`, the simulated controller deletes its owned dispensed
 material models before releasing its Gazebo clients.
 
 **`on_cleanup`** clears config, destroys the `~/set_tcp` service, the `~/mounted`
@@ -140,6 +144,9 @@ cleanup, which has no motion to align to.
   between them decides stripe vs. dot (`_STRIPE_MIN_LENGTH_MM`, above zero so a
   sub-millimetre residual of a nominally stationary dwell stays a dot).
 - There is no physical actuation — the volume is pure time integration.
+- The material model is spawned with `delete_with_child=True`, so the Gazebo world
+  manager removes it (detached first) when the product it is attached to is deleted,
+  even if `delete_material_on_deactiviation` is `False`.
 
 #### Hardware controller (`HardwareDispenserController`)
 - `setup`/`teardown` store/clear config only.
@@ -211,7 +218,9 @@ The macro parameters (`model_name`, `station_model_name`, `tool_mount_link`,
 Launch arguments: `simulated`, `use_sim_time` (defaults to `simulated`), `world_name`,
 `tool_sn`, `model` (default `dispensing_tool`), `pattern_executor` (default empty),
 `tcp_frame_id`, `tcp_uncalibrated`, `station_cache_name`, `tcp_valid_period`,
-`mounted`, `flowrate`, `node_name`,
+`mounted`, `flowrate`, `localized_product_frame_id`,
+`station_workplace_node_name` (default `workplace_rfid_scanner`; sets
+`simulation.station_workplace_node_name`), `node_name`,
 `start_world_manager` (default `false`; set true when no parent launch starts
 the shared manager).
 
@@ -225,8 +234,10 @@ launch for every rack tool (together with its pattern executor).
 It starts the `volumetric_dispensing_tool` node and, unless disabled, includes
 `world_manager` with the same `simulated` and `world_name` values. Simulated
 dispensed stripes and dots are expanded from Xacro and spawned through the
-typed `GazeboWorldClient`; their poses are expressed in the product frame and
-the controller removes its owned models on deactivation. Gazebo communication
+typed `GazeboWorldClient`; their poses are expressed in the product frame,
+they are welded to the product model and link announced by the station
+workplace on `simulated_product_metadata`, and the controller removes its owned models on deactivation when
+`simulation.delete_material_on_deactiviation` is `true`. Gazebo communication
 is handled by `world_manager` directly, without per-tool ROS/Gazebo bridges.
 An external orchestrator must configure and activate the included world-manager
 nodes before the tool uses their services.

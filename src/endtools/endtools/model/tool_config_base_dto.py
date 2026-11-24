@@ -63,6 +63,10 @@ class ToolConfigBaseDTO(BaseModel):
         default='default',
         description='Name of the simulation world.',
     )
+    localized_product_frame_id: str = Field(
+        default='product_origin',
+        description='Frame of the localized product; simulated dispensed material is placed relative to it.',
+    )
     mounted: bool = Field(
         default=False,
         description='Whether the tool is mounted. Drives mount/unmount side-effects; read only at configure time.',

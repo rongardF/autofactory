@@ -39,7 +39,6 @@ from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPo
 from rclpy.subscription import Subscription
 from std_msgs.msg import Bool
 
-from station_workplace.enums.constants import ATTACH_LINK
 from station_workplace.enums.process_type_enum import ProcessTypeEnum
 from station_workplace.interface.product_data_reader import ProductDataReader
 from station_workplace.interface.simulation_hooks import SimulationHooks
@@ -65,7 +64,7 @@ class WorkplaceNodeBase(LifecycleNode):
 
     * ``~/workplace`` (``station_workplace/WorkplaceState``, latched);
     * ``~/wait_routing`` (``station_workplace/WaitRouting`` action);
-    * TF ``estimated_product_origin`` (parent ``carrier``) on ``/tf_static``;
+    * TF ``estimated_product_frame_id`` (parent ``carrier``) on ``/tf_static``;
     * ``~/spawn_product`` and ``~/remove_product`` services, only if ``simulated``.
     """
 
@@ -90,6 +89,11 @@ class WorkplaceNodeBase(LifecycleNode):
                       'Object model storage node name.')
         self._declare('collision_allowed_link', defaults.collision_allowed_link,
                       'Robot link the carrier model and the safety object may collide with.')
+        self._declare('attach_link', defaults.attach_link,
+                      'Robot link all planning-scene objects are attached to; TF parent of the '
+                      'estimated product frame.')
+        self._declare('estimated_product_frame_id', defaults.estimated_product_frame_id,
+                      'TF frame (child of the carrier) of the estimated product origin.')
         self._declare('safety_object.x', safety.x, 'Safety box size along X [m] (> 0).')
         self._declare('safety_object.y', safety.y, 'Safety box size along Y [m] (> 0).')
         self._declare('safety_object.z', safety.z, 'Safety box size along Z [m] (> 0).')
@@ -162,6 +166,8 @@ class WorkplaceNodeBase(LifecycleNode):
             'production_manager_node_name': self._param('production_manager_node_name'),
             'object_model_repository_node_name': self._param('object_model_repository_node_name'),
             'collision_allowed_link': self._param('collision_allowed_link'),
+            'attach_link': self._param('attach_link'),
+            'estimated_product_frame_id': self._param('estimated_product_frame_id'),
             'safety_object': {
                 'x': self._param('safety_object.x'),
                 'y': self._param('safety_object.y'),
@@ -191,7 +197,7 @@ class WorkplaceNodeBase(LifecycleNode):
             runner = ProcessRunner(self.get_logger())
             scene = PlanningSceneAdapter(
                 self,
-                attach_link=ATTACH_LINK,
+                attach_link=config.attach_link,
                 collision_allowed_link=config.collision_allowed_link,
                 safety_size=config.safety_object,
                 timeout_sec=config.service_call_timeout_sec,
@@ -238,7 +244,8 @@ class WorkplaceNodeBase(LifecycleNode):
             self._reader.activate(self, self._io_group)
             self._process.activate()
             self._state_publisher.activate(self)
-            self._tf_publisher.activate(self)
+            self._tf_publisher.activate(
+                self, self._config.attach_link, self._config.estimated_product_frame_id)
             result = super().on_activate(state)
             if result != TransitionCallbackReturn.SUCCESS:
                 raise RuntimeError(f'base activation returned {result}')

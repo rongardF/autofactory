@@ -56,6 +56,7 @@ set(interface_files
   msg/ProductData.msg
   msg/WorkplaceState.msg
   msg/LabelData.msg
+  msg/SimulatedProductMetadata.msg
   action/WaitRouting.action
   srv/SpawnProduct.srv
   srv/RemoveProduct.srv
@@ -177,6 +178,9 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
   ament_add_pytest_test(test_planning_scene_adapter
     tests/unit/test_planning_scene_adapter.py
+  )
+  ament_add_pytest_test(test_simulated_product_metadata
+    tests/unit/test_simulated_product_metadata.py
   )
 endif()
 

@@ -70,10 +70,12 @@ def tool_sdf(model: str, links: tuple[str, ...] = ('mount', 'rack')) -> str:
     ])
 
 
-def spec(model: str, sdf: str | None = None, attach_link: str = '', frame_id: str = '') -> ModelSpecDTO:
+def spec(
+    model: str, sdf: str | None = None, attach_link: str = '', frame_id: str = '', delete_with_child: bool = False,
+) -> ModelSpecDTO:
     return ModelSpecDTO(
         model_id=model, sdf=sdf if sdf is not None else tool_sdf(model), attach_link=attach_link,
-        pose=PoseDTO(frame_id=frame_id))
+        delete_with_child=delete_with_child, pose=PoseDTO(frame_id=frame_id))
 
 
 class FakeGzAdapter(GzTransportAdapter):

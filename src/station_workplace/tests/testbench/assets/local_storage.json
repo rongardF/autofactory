@@ -26,7 +26,8 @@
         "model_type": "sdf",
         "filter_keys": [],
         "metadata_json": {
-            "carrier_model_id": "c4e38990-3383-4375-b2ac-0d1468d6604f"
+            "carrier_model_id": "c4e38990-3383-4375-b2ac-0d1468d6604f",
+            "product_link": "product_link"
         }
     },
     {

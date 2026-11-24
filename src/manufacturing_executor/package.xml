@@ -1,0 +1,60 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>manufacturing_executor</name>
+  <version>0.0.0</version>
+  <description>Executes the manufacturing loop of a station: routing, localization, tool mounting, pattern execution and reporting.</description>
+  <maintainer email="ronnyBravo32@proton.me">Ron Freimann</maintainer>
+  <license>BSD-3-Clause</license>
+
+  <!-- Build tool -->
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+
+  <!-- Interface generation -->
+  <buildtool_depend>rosidl_default_generators</buildtool_depend>
+
+  <!-- Runtime interface support -->
+  <exec_depend>rosidl_default_runtime</exec_depend>
+
+  <!-- Interface field dependencies (actions require action_msgs) -->
+  <depend>builtin_interfaces</depend>
+  <depend>action_msgs</depend>
+
+  <!-- Python runtime -->
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>python3-pydantic</exec_depend>
+
+  <!-- Interfaces of the collaborating nodes -->
+  <exec_depend>lifecycle_msgs</exec_depend>
+  <exec_depend>rcl_interfaces</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>station_workplace</exec_depend>
+  <exec_depend>localization</exec_depend>
+  <exec_depend>movement_controller</exec_depend>
+  <exec_depend>cameras</exec_depend>
+  <exec_depend>repositories</exec_depend>
+  <exec_depend>production_manager</exec_depend>
+  <exec_depend>tools_manager</exec_depend>
+  <exec_depend>execution_optimizer</exec_depend>
+  <exec_depend>pattern_executors</exec_depend>
+
+  <!-- Launch -->
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+
+  <!-- Marks this package as containing ROS2 interface definitions -->
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <!-- Test dependencies -->
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+  <test_depend>ament_pytest</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

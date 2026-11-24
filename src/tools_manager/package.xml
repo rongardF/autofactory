@@ -27,6 +27,7 @@
 
   <!-- Launch composition of the endtools and their pattern executors -->
   <exec_depend>pattern_executors</exec_depend>
+  <exec_depend>execution_optimizer</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>ros_gz_bridge</exec_depend>

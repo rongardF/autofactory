@@ -35,11 +35,6 @@ class OptimizerConfigDTO(BaseModel):
 
     model_config = ConfigDict(frozen=True, str_strip_whitespace=True)
 
-    product_frame_id: str = Field(
-        default='product_origin',
-        min_length=1,
-        description='Frame of all pattern poses and of the output capture poses.',
-    )
     camera_node_name: str = Field(
         default='basler_camera',
         min_length=1,

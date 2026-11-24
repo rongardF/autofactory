@@ -1,0 +1,7 @@
+---
+float64 total_manufacturing_time_s
+bool success
+string error_message
+---
+# Human readable description of the phase that is about to start, e.g. "Localizing product"
+string execution_phase

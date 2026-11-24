@@ -31,6 +31,7 @@ from typing import Protocol
 from production_manager.interface.production_backend import ProductionBackend
 from production_manager.model.current_operation_dto import CurrentOperationDTO
 from production_manager.model.production_data_dto import ProductionDataDTO
+from production_manager.model.report_result_dto import ReportResultDTO
 from production_manager.model.result_dto import ResultDTO
 from production_manager.utils.assembly_reader import (
     find_operation,
@@ -54,15 +55,18 @@ class LocalManager(ProductionBackend):
         self._assembly = load_assembly_file(assembly_file_path)
         validate_assembly(self._assembly)
         self._logger = logger
-        self._current_operation: CurrentOperationDTO | None = None
+        self._queue: dict[int, CurrentOperationDTO] = {}
         self._lock = Lock()
 
     def set_operation(
         self,
+        index: int,
         operation_id: str,
         serial_number: str,
         station_id: str,
     ) -> ResultDTO:
+        if index < 0:
+            return ResultDTO.failure('index must be >= 0.')
         if not is_uuid4(operation_id):
             return ResultDTO.failure('operation_id must be a valid UUID4.')
         if not is_uuid4(station_id):
@@ -70,13 +74,25 @@ class LocalManager(ProductionBackend):
         if find_operation(self._assembly, operation_id) is None:
             return ResultDTO.failure(f'Operation {operation_id!r} was not found in the assembly.')
 
-        current = CurrentOperationDTO(
+        entry = CurrentOperationDTO(
+            index=index,
             operation_id=operation_id,
             serial_number=serial_number,
             station_id=station_id,
         )
         with self._lock:
-            self._current_operation = current
+            queued_serial = self._queued_serial()
+            if queued_serial is not None and queued_serial != serial_number:
+                if index != 0:
+                    return ResultDTO.failure(
+                        'index must be 0 when starting the operation sequence of a new serial_number.'
+                    )
+                self._queue.clear()
+            if index > len(self._queue):
+                return ResultDTO.failure(
+                    f'index {index} leaves a gap; the next free index is {len(self._queue)}.'
+                )
+            self._queue[index] = entry
         return ResultDTO.ok()
 
     def get_production_data(
@@ -90,12 +106,12 @@ class LocalManager(ProductionBackend):
         """Return local production data; schema version is checked on assembly use."""
         del schema_version
         with self._lock:
-            current = self._current_operation
-        if current is None:
+            queue = dict(self._queue)
+        if not queue:
             return ProductionDataDTO.failure('No operation has been set.')
-        if serial_number != current.serial_number:
+        if serial_number != self._queued_serial(queue):
             return ProductionDataDTO.failure('serial_number does not match the stored operation.')
-        if current.station_id != station_id:
+        if any(entry.station_id != station_id for entry in queue.values()):
             return ProductionDataDTO.failure(
                 'The stored operation is assigned to a different station_id.'
             )
@@ -104,6 +120,10 @@ class LocalManager(ProductionBackend):
         if product_revision != get_product_revision(self._assembly):
             return ProductionDataDTO.failure('product_revision does not match the assembly file.')
 
+        pending = [queue[index] for index in sorted(queue) if not queue[index].done]
+        if not pending:
+            return ProductionDataDTO.failure('No pending operation.')
+        current = pending[0]
         operation = find_operation(self._assembly, current.operation_id)
         if operation is None:
             return ProductionDataDTO.failure(
@@ -122,26 +142,53 @@ class LocalManager(ProductionBackend):
         operation_id: str,
         success: bool,
         station_id: str,
-    ) -> ResultDTO:
+        reason: str = '',
+    ) -> ReportResultDTO:
         if not is_uuid4(assembly_id):
-            return ResultDTO.failure('assembly_id must be a valid UUID4.')
+            return ReportResultDTO.failure('assembly_id must be a valid UUID4.')
         if not is_uuid4(operation_id):
-            return ResultDTO.failure('operation_id must be a valid UUID4.')
+            return ReportResultDTO.failure('operation_id must be a valid UUID4.')
         if assembly_id != get_assembly_id(self._assembly):
-            return ResultDTO.failure('assembly_id does not match the assembly file.')
+            return ReportResultDTO.failure('assembly_id does not match the assembly file.')
         with self._lock:
-            current = self._current_operation
-        if current is None:
-            return ResultDTO.failure('No operation has been set.')
-        if operation_id != current.operation_id:
-            return ResultDTO.failure('operation_id does not match the stored operation.')
+            if not self._queue:
+                return ReportResultDTO.failure('No operation has been set.')
+            reported = next(
+                (
+                    self._queue[index]
+                    for index in sorted(self._queue)
+                    if self._queue[index].operation_id == operation_id
+                    and not self._queue[index].done
+                ),
+                None,
+            )
+            if reported is None:
+                return ReportResultDTO.failure(
+                    'operation_id does not match any queued operation.'
+                )
+            self._queue[reported.index] = reported.model_copy(update={'done': True})
+            finished_in_station = (not success) or not any(
+                index > reported.index for index in self._queue
+            )
+            if finished_in_station:
+                self._queue.clear()
 
-        self._logger.info(
-            f'Reported operation {operation_id} for assembly {assembly_id} with '
-            f'outcome success={success} at station {station_id}.'
-        )
-        return ResultDTO.ok()
+        if success:
+            self._logger.info(
+                f'Reported operation {operation_id} for assembly {assembly_id} with '
+                f'outcome success=True at station {station_id}.'
+            )
+        else:
+            self._logger.info(
+                f'Reported operation {operation_id} for assembly {assembly_id} with '
+                f'outcome success=False at station {station_id}; reason: {reason}.'
+            )
+        return ReportResultDTO.ok(finished_in_station)
 
     def clear(self) -> None:
         with self._lock:
-            self._current_operation = None
+            self._queue.clear()
+
+    def _queued_serial(self, queue: dict[int, CurrentOperationDTO] | None = None) -> str | None:
+        entries = self._queue if queue is None else queue
+        return next(iter(entries.values())).serial_number if entries else None

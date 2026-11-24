@@ -24,11 +24,12 @@
 # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
-"""Launch the workplace node and optionally the shared world managers."""
+"""Launch the workplace node, the RFID scanner it reads from and optionally the shared world managers."""
 
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
+    GroupAction,
     IncludeLaunchDescription,
     OpaqueFunction,
 )
@@ -61,6 +62,11 @@ _PARAMETERS = [
      'Object model storage node name.', str),
     ('collision_allowed_link', 'conveyor_origin',
      'Robot link the carrier model and the safety object may collide with.', str),
+    ('attach_link', 'carrier',
+     'Robot link all planning-scene objects are attached to; TF parent of the estimated '
+     'product frame.', str),
+    ('estimated_product_frame_id', 'estimated_product_origin',
+     'TF frame (child of the carrier) of the estimated product origin.', str),
     ('safety_object.x', '0.25', 'Safety box size along X [m].', float),
     ('safety_object.y', '0.4', 'Safety box size along Y [m].', float),
     ('safety_object.z', '0.3', 'Safety box size along Z [m].', float),
@@ -78,6 +84,8 @@ _PARAMETERS = [
     ('simulation.product_model_name', 'product_model', 'Name of the spawned product model.', str),
     ('simulation.penetration_tolerance', '0.001',
      'Product/carrier penetration depth still treated as touching [m].', float),
+    ('simulation.world_manager_timeout_sec', '15.0',
+     'Timeout for availability and response of the Gazebo world manager services [s].', float),
     ('rfid_scanner_node_name', 'simatic_rf240r_ascii', 'RFID scanner node name.', str),
     ('tag_detected_timeout_sec', '5.0',
      'Maximum wait for tag_detected=True after product arrival [s].', float),
@@ -119,6 +127,11 @@ def generate_launch_description() -> LaunchDescription:
     ld.add_action(DeclareLaunchArgument(
         'start_world_manager', default_value='false',
         description='Start shared world managers; disable if a parent launch does so.'))
+    ld.add_action(DeclareLaunchArgument(
+        'start_rfid_scanner', default_value='true', choices=['true', 'false'],
+        description='Start the RFID scanner node (rfid_scanner_node_name); disable if it is '
+        'started elsewhere. Its device_name (simatic_rf240r) must equal the xacro device name '
+        'of the Gazebo model.'))
     for name, default, description, _ in _PARAMETERS:
         ld.add_action(DeclareLaunchArgument(name, default_value=default, description=description))
     ld.add_action(IncludeLaunchDescription(
@@ -129,6 +142,19 @@ def generate_launch_description() -> LaunchDescription:
             'world_name': LaunchConfiguration('simulation.world_name'),
         }.items(),
         condition=IfCondition(LaunchConfiguration('start_world_manager')),
+    ))
+    # Scoped so the scanner's own 'simulated' / 'node_name' arguments do not collide with ours.
+    ld.add_action(GroupAction(
+        [IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                [FindPackageShare('rfid_scanner'), '/launch/simatic_rf240r_ascii.launch.py']),
+            launch_arguments={
+                'simulated': LaunchConfiguration('simulated'),
+                'node_name': LaunchConfiguration('rfid_scanner_node_name'),
+            }.items(),
+        )],
+        scoped=True,
+        condition=IfCondition(LaunchConfiguration('start_rfid_scanner')),
     ))
     ld.add_action(OpaqueFunction(function=_launch_node))
     return ld

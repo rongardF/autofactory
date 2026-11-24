@@ -115,7 +115,7 @@ class DispensingOptimizer(OptimizerBase):
         )
 
     def _create_optimizer(self, config: DispensingOptimizerConfigDTO) -> DispensingGroupingService:
-        return DispensingGroupingService(config)
+        return DispensingGroupingService(config, log=self.get_logger().info)
 
     def _create_interface(self) -> Service:
         return self.create_service(

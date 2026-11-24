@@ -22,7 +22,22 @@ Talks to Gazebo through the gz-transport Python bindings (no `ros_gz_bridge`), o
 variants. Services (under `/gazebo_world_manager/`): `spawn_models`, `delete_models`, `set_model_pose`,
 `set_model_attachment`, `list_models`. Every response carries `success` and `error_message`.
 
+gz service requests run in a helper process (`python -m world_manager.services.gz_request_process`, started on
+the first request and inheriting the `GZ_*` environment). The gz-transport Python binding keeps the GIL during a
+blocking request, while subscription callbacks need it on gz-transport's single receive thread. A joint state event
+that arrives during a request (for example the carrier's `attached` event while the product is being created)
+would otherwise hold back the reply until the request times out.
+
 State topic `~/models` (`world_manager/ModelList`, reliable + transient-local) is republished only when the list changes.
+
+### Deleting models
+
+`delete_models` takes model ids or an owner. A model that another model still holds through a non-detached
+DetachableJoint cannot be deleted alone: the call is rejected before anything is deleted. The exception is a holder
+spawned with `delete_with_child=true` (`ModelSpec`): it is added to the delete set, whatever its owner (transitively),
+detached and removed before the model it holds. The dispensed material of the endtools is spawned this way, so deleting
+a product also removes the material on it. If a cascaded holder can neither be detached nor removed, the model it holds
+is kept and the call fails. Cascaded models do not use up `operation_timeout_sec`.
 
 Parameters: `world_name` (required), `world_frame`, `service_timeout_sec`, `tf_timeout_sec`, `confirm_timeout_sec`,
 `republish_period_sec`, `operation_timeout_sec`, `rollback_timeout_sec` (see [config](config/world_manager.yaml)).

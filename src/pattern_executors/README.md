@@ -39,7 +39,11 @@ messages.
 (`pattern_executors/action/ExecuteDispensingPattern`):
 
 - **Goal**: `repositories/OperationRepositoryDispensingPattern[] patterns`,
-  `string operation_id`. Every pose in the goal carries its own
+  `string operation_id`, `string session_id`. `session_id` is an existing
+  `movement_controller` session owned by the caller: the executor extends it
+  (`in_session`) before every movement and uses it for all movements of the
+  goal, but never closes it. An empty `session_id` keeps the behaviour without
+  a session. Every pose in the goal carries its own
   `header.frame_id` (`start_pose` and each movement's `target_pose`); the
   executor forwards them unchanged.
 - **Result**: `bool success`, `string error_message`, `float64 execution_time_s`,
@@ -120,7 +124,8 @@ any exception mid-goal the executor cancels the in-flight movement goal, forces
 |-----------|------|---------|-------------|
 | `tool_sn` | string | `""` (required) | End-tool serial number. Movement `tool_frame` is `{tool_sn}_calibrated_tcp`. |
 | `endtool_node_name` | string | `""` (required) | Node name of the end tool whose lifecycle is driven. |
-| `movement_action_name` | string | `movement_controller/execute_trajectory` | Movement controller action name. |
+| `execution_optimizer` | string | `""` | Read-only. Node name of the execution optimizer for this executor (discovery information only). Set at startup through the launch `execution_optimizer` argument, which passes it as a ROS argument; it is readable while the node is `unconfigured`. |
+| `movement_controller_node_name` | string | `/movement_controller` | Movement controller node name; the `execute_trajectory` action and the `in_session` service are resolved by appending their names. |
 | `movement_server_timeout_s` | double | `5.0` | `wait_for_server` timeout. |
 | `endtool_service_timeout_s` | double | `5.0` | End-tool lifecycle/parameter/service call timeout. |
 | `simulated` | bool | `true` | Reserved for future Gazebo-world manipulation; no behavioural effect yet. |
@@ -161,7 +166,8 @@ colcon build --symlink-install --packages-select pattern_executors
 source install/setup.bash
 
 ros2 launch pattern_executors dispensing_pattern_executor.launch.py \
-    tool_sn:=abc123 endtool_node_name:=dispenser_abc123
+    tool_sn:=abc123 endtool_node_name:=dispenser_abc123 \
+    execution_optimizer:=dispensing_optimizer
 ```
 
 The node is a lifecycle node; drive it with `ros2 lifecycle set

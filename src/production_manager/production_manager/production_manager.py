@@ -34,6 +34,7 @@ from rclpy.lifecycle.node import LifecycleState, TransitionCallbackReturn
 from rclpy.service import Service
 
 from production_manager.model.production_manager_node_config import ProductionManagerNodeConfig
+from production_manager.model.report_result_dto import ReportResultDTO
 from production_manager.model.result_dto import ResultDTO
 from production_manager.services.backend_manager import BackendManager
 from production_manager.services.local_manager import LocalManager
@@ -251,14 +252,17 @@ class ProductionManager(LifecycleNode):
                 request.operation_id,
                 request.success,
                 self._config.station_id,
+                request.reason,
             )
             self._set_result(response, result)
+            response.finished_in_station = result.finished_in_station
             if not result.success:
                 self.get_logger().warning(f'Production report rejected: {result.error_message}')
         except Exception as error:
             self.get_logger().error(f'report_production failed: {error}')
             response.success = False
             response.error_message = str(error)
+            response.finished_in_station = False
         return response
 
     def _set_operation_cb(
@@ -268,8 +272,8 @@ class ProductionManager(LifecycleNode):
     ) -> SetOperation.Response:
         try:
             self.get_logger().info(
-                f'Setting operation={request.operation_id} for serial={request.serial_number} '
-                f'at station={request.station_id}.'
+                f'Setting operation={request.operation_id} (index {request.index}) for '
+                f'serial={request.serial_number} at station={request.station_id}.'
             )
             if not is_uuid4(request.operation_id):
                 raise ValueError('operation_id must be a valid UUID4.')
@@ -278,6 +282,7 @@ class ProductionManager(LifecycleNode):
             if not isinstance(self._backend, LocalManager):
                 raise RuntimeError('set_operation is available only in local manager mode.')
             result = self._backend.set_operation(
+                request.index,
                 request.operation_id,
                 request.serial_number,
                 request.station_id,
@@ -294,7 +299,7 @@ class ProductionManager(LifecycleNode):
     def _set_result(
         self,
         response: ReportProduction.Response | SetOperation.Response,
-        result: ResultDTO,
+        result: ResultDTO | ReportResultDTO,
     ) -> None:
         response.success = result.success
         response.error_message = result.error_message

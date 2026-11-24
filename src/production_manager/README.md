@@ -4,7 +4,7 @@ The `production_manager` ROS 2 lifecycle node selects the current assembly opera
 
 ## Modes
 
-- **Local manager** (`local_manager:=true`): reads and validates the assembly JSON file once during configuration. Use `~/set_operation` to assign the operation and serial number that the next `~/get_production_data` request should return.
+- **Local manager** (`local_manager:=true`): reads and validates the assembly JSON file once during configuration. Use `~/set_operation` to queue the operations (by index) and the serial number that the next `~/get_production_data` requests should return.
 - **Cloud backend** (`local_manager:=false`): validates the service URL and exposes the same production-data and reporting services. Both return `success=false` and `error_message="not implemented"`; no HTTP requests are made.
 
 ## Parameters
@@ -29,13 +29,15 @@ Response: `assembly_id`, `operation_id`, `assembly_model_id`, `success`, `error_
 
 ### `~/report_production` — `production_manager/srv/ReportProduction`
 
-Request: UUID4 `assembly_id`, UUID4 `operation_id`, and the operation outcome `success`.
+Request: UUID4 `assembly_id`, UUID4 `operation_id`, the operation outcome `success` and a `reason` (the failure reason, empty on success).
 
-Response: whether the report was accepted and an `error_message`.
+Response: whether the report was accepted (`success`, `error_message`) and `finished_in_station`. In local mode `finished_in_station` is `false` only when the report is successful and a higher-index operation is queued; a failure report always returns `true`. When it is `true` the whole operation queue is cleared. Cloud mode takes the value from the remote service.
 
 ### `~/set_operation` — `production_manager/srv/SetOperation`
 
-Available only in local mode. Request: UUID4 `operation_id`, `serial_number`, and UUID4 `station_id`. Response: `success` and `error_message`.
+Available only in local mode. Request: UUID4 `operation_id`, `serial_number`, UUID4 `station_id` and `index` (position of the operation in the product's sequence; the first operation is `0`). Response: `success` and `error_message`.
+
+Operations form a queue ordered by `index`. Setting an index again overwrites the entry and resets its done state; an index that leaves a gap is rejected. The queue belongs to one serial number: `index: 0` with a different serial number starts a new queue, any other index with a different serial number is rejected. `~/get_production_data` returns the lowest-index operation that has not been reported yet.
 
 ## Lifecycle
 
@@ -74,7 +76,7 @@ After configuring and activating the node, call the services in order:
 ```bash
 ros2 service call /production_manager/set_operation \
   production_manager/srv/SetOperation \
-  "{operation_id: 'dab06081-0e24-4583-9f33-06d3c26b69f7', serial_number: 'SERIAL-001', station_id: '<station-uuid4>'}"
+  "{operation_id: 'dab06081-0e24-4583-9f33-06d3c26b69f7', serial_number: 'SERIAL-001', station_id: '<station-uuid4>', index: 0}"
 
 ros2 service call /production_manager/get_production_data \
   production_manager/srv/GetProductionData \
@@ -82,7 +84,7 @@ ros2 service call /production_manager/get_production_data \
 
 ros2 service call /production_manager/report_production \
   production_manager/srv/ReportProduction \
-  "{assembly_id: '6384f49c-a0d5-4d8d-bdcf-a45c6f02d20d', operation_id: 'dab06081-0e24-4583-9f33-06d3c26b69f7', success: true}"
+  "{assembly_id: '6384f49c-a0d5-4d8d-bdcf-a45c6f02d20d', operation_id: 'dab06081-0e24-4583-9f33-06d3c26b69f7', success: true, reason: ''}"
 ```
 
 Replace `<station-uuid4>` with the same UUID4 passed to the launch file.

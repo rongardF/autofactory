@@ -255,6 +255,7 @@ def generate_launch_description() -> LaunchDescription:
         'production_manager_node_name': 'production_manager',
         'object_model_repository_node_name': 'object_model_storage',
         'rfid_scanner_node_name': 'simatic_rf240r_ascii',
+        'start_rfid_scanner': 'false',
         'start_world_manager': 'false',
         'collision_allowed_link': 'conveyor_origin',
         'simulation.world_name': WORLD_NAME,

@@ -60,6 +60,7 @@ from execution_optimizer.util.camera_pose import (
     pose_quaternion,
     verify_group,
 )
+from execution_optimizer.util.frames import common_frame_id
 from execution_optimizer.util.geometry import build_pattern_roi
 
 _MAX_LISTED_IDS = 20
@@ -123,13 +124,17 @@ class _GroupFitter:
 class DispensingGroupingService:
     """Groups dispensing patterns and computes the image capture pose of every group."""
 
-    def __init__(self, config: DispensingOptimizerConfigDTO) -> None:
+    def __init__(
+        self, config: DispensingOptimizerConfigDTO, log: Callable[[str], None] | None = None
+    ) -> None:
         """Store the validated configuration.
 
         :param config: Immutable optimizer configuration.
         :type config: DispensingOptimizerConfigDTO
+        :param log: Optional sink for informational progress messages.
         """
         self._config = config
+        self._log = log or (lambda _message: None)
 
     def group(
         self, patterns: Sequence[PatternPointsDTO], intrinsics: CameraIntrinsicsDTO
@@ -144,15 +149,23 @@ class DispensingGroupingService:
         self._validate_request(patterns)
         rois = self._build_rois(patterns)
         area_px = self._config.operational_area or (0, 0, intrinsics.width, intrinsics.height)
+        self._log(
+            f'Grouping {len(rois)} pattern(s), operational area {list(area_px)} px, '
+            f'resolution range {list(self._config.feature_resolution_range)} px/mm'
+        )
         fitter = _GroupFitter(rois, self._config, intrinsics, area_px)
         self._check_singletons(rois, fitter)
 
         best: list[list[int]] | None = None
+        best_strategy: OrderingStrategyEnum | None = None
         for strategy in OrderingStrategyEnum:
             groups = self._eliminate(fitter, self._first_fit(fitter, self._order(rois, strategy)))
+            self._log(f'Ordering {strategy.value}: {len(groups)} group(s)')
             if best is None or len(groups) < len(best):
                 best = groups
-        assert best is not None
+                best_strategy = strategy
+        assert best is not None and best_strategy is not None
+        self._log(f'Selected ordering {best_strategy.value} with {len(best)} group(s)')
         return self._build_result(rois, fitter, best)
 
     # region: validation
@@ -175,15 +188,7 @@ class DispensingGroupingService:
         if duplicates:
             raise OptimizationError(f'Duplicate pattern ids: {_format_ids(duplicates)}')
 
-        frame = self._config.product_frame_id
-        wrong_frame = [
-            pattern.id for pattern in patterns
-            if any(frame_id != frame for frame_id in pattern.frame_ids)
-        ]
-        if wrong_frame:
-            raise OptimizationError(
-                f"Pattern poses not in product frame '{frame}': {_format_ids(wrong_frame)}"
-            )
+        common_frame_id(patterns)
 
         empty = [pattern.id for pattern in patterns if not pattern.points]
         if empty:

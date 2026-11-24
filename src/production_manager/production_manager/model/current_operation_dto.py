@@ -31,6 +31,8 @@ from pydantic import BaseModel, ConfigDict, Field
 class CurrentOperationDTO(BaseModel):
     model_config = ConfigDict(frozen=True)
 
+    index: int = Field(ge=0, description='Position of the operation in the product sequence.')
     operation_id: str = Field(description='UUID4 of the selected assembly operation.')
     serial_number: str = Field(description='Serial number assigned to the operation.')
     station_id: str = Field(description='UUID4 of the station assigned to the operation.')
+    done: bool = Field(default=False, description='Whether this operation has been reported.')

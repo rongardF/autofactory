@@ -29,6 +29,8 @@
 from typing import Tuple
 from unittest.mock import MagicMock
 
+import pytest
+
 from rclpy.lifecycle import LifecycleNode
 from rclpy.impl.rcutils_logger import RcutilsLogger
 from rclpy.client import Client
@@ -332,3 +334,58 @@ def test_constraints_not_injected_when_all_disabled():
     assert len(item.req.path_constraints.orientation_constraints) == 0
 
 # endregion: set_constraints and constraint injection tests
+
+
+# region: scaling factor tests
+
+_LIMITED_CONFIG = ConstraintConfigDTO(
+    max_cartesian_speed=1.0,
+    max_cartesian_acceleration=2.0,
+    max_joint_speed=2.0,
+    max_joint_acceleration=4.0,
+    default_cartesian_velocity=0.2,
+    default_cartesian_acceleration=1.0,
+    default_rotational_velocity=0.5,
+    default_rotational_acceleration=2.0,
+)
+
+
+@pytest.mark.parametrize('unset', [0.0, -1.0])
+def test_scaling_factors_use_cartesian_defaults_for_non_positive_lin_values(unset):
+    """LIN speed/acceleration of 0.0 or -1.0 fall back to the node defaults, never 0 scaling."""
+    svc, _ = _build_service()
+    svc.set_constraints(_LIMITED_CONFIG)
+    path = _make_path_dto(cartesian_speed=unset, cartesian_acceleration=unset)
+
+    vel, acc = svc._calculate_scaling_factors(path)
+
+    assert vel == pytest.approx(0.2)
+    assert acc == pytest.approx(0.5)
+
+
+@pytest.mark.parametrize('unset', [0.0, -1.0])
+def test_scaling_factors_use_rotational_defaults_for_non_positive_ptp_values(unset):
+    """PTP speed/acceleration of 0.0 or -1.0 fall back to the node defaults, never 0 scaling."""
+    svc, _ = _build_service()
+    svc.set_constraints(_LIMITED_CONFIG)
+    path = _make_path_dto(
+        motion_type=MotionTypeEnum.PTP, joint_speed=unset, joint_acceleration=unset
+    )
+
+    vel, acc = svc._calculate_scaling_factors(path)
+
+    assert vel == pytest.approx(0.25)
+    assert acc == pytest.approx(0.5)
+
+
+def test_scaling_factors_use_explicit_positive_speed():
+    """An explicit positive LIN speed is scaled against the node maximum."""
+    svc, _ = _build_service()
+    svc.set_constraints(_LIMITED_CONFIG)
+    path = _make_path_dto(cartesian_speed=0.03, cartesian_acceleration=-1.0)
+
+    vel, _ = svc._calculate_scaling_factors(path)
+
+    assert vel == pytest.approx(0.03)
+
+# endregion: scaling factor tests

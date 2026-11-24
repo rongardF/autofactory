@@ -34,7 +34,6 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.subscription import Subscription
 
-from station_workplace.models.product_data_dto import ProductDataDTO
 from station_workplace.models.workplace_state_dto import WorkplaceStateDTO
 from station_workplace.msg import WorkplaceState
 
@@ -86,15 +85,7 @@ class WorkplaceMonitor:
             self._baseline = state
 
     def _on_state(self, msg: WorkplaceState) -> None:
-        product = msg.product_data[0] if msg.product_data else None
-        state = WorkplaceStateDTO(
-            in_place=bool(msg.in_place),
-            product_data=None if product is None else ProductDataDTO(
-                product_number=product.product_number,
-                product_revision=product.product_revision,
-                serial_number=product.serial_number,
-            ),
-        )
+        state = WorkplaceStateDTO.from_msg(msg)
         with self._lock:
             self._latest = state
             baseline = self._baseline

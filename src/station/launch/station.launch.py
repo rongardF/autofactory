@@ -50,6 +50,7 @@ from launch.substitutions import (
     PathJoinSubstitution,
 )
 from launch_ros.actions import LifecycleNode
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -69,6 +70,7 @@ def generate_launch_description() -> LaunchDescription:
     gazebo_gui = LaunchConfiguration("gazebo_gui")
     station_id = LaunchConfiguration("station_id")
     local_cache = LaunchConfiguration("local_cache")
+    local_object_models = LaunchConfiguration("local_object_models")
     world_file = LaunchConfiguration("world_file")
 
     declared_arguments = [
@@ -121,6 +123,15 @@ def generate_launch_description() -> LaunchDescription:
             description=(
                 "Select the in-memory LocalCacheBackend (true) or the cloud "
                 "backend (false) for the station_cache node."
+            ),
+        ),
+        DeclareLaunchArgument(
+            "local_object_models",
+            default_value="true",
+            choices=["true", "false"],
+            description=(
+                "Select local storage (true) or the cloud backend (false) for "
+                "the object_model_storage node."
             ),
         ),
         DeclareLaunchArgument(
@@ -244,6 +255,90 @@ def generate_launch_description() -> LaunchDescription:
 
     # use GroupAction to scope the launch files so that their declared arguments don't leak into 
     # the global namespace
+    operation_repository_node = LifecycleNode(
+        package="repositories",
+        executable="operation_repository",
+        name="operation_repository",
+        namespace="",
+        output="screen",
+        parameters=[{
+            "station_id": station_id,
+            "use_sim_time": simulated,
+        }],
+    )
+
+    image_repository_node = LifecycleNode(
+        package="repositories",
+        executable="image_repository",
+        name="image_repository",
+        namespace="",
+        output="screen",
+        parameters=[{
+            "station_id": station_id,
+            "use_sim_time": simulated,
+        }],
+    )
+
+    object_model_storage_node = LifecycleNode(
+        package="repositories",
+        executable="object_model_storage",
+        name="object_model_storage",
+        namespace="",
+        output="screen",
+        parameters=[{
+            "station_id": station_id,
+            "local_storage": ParameterValue(local_object_models, value_type=bool),
+            "use_sim_time": simulated,
+        }],
+    )
+
+    production_manager_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution(
+                [FindPackageShare("production_manager"), "launch", "production_manager_launch.py"]
+            )
+        ),
+        launch_arguments={
+            "station_id": station_id,
+            "use_sim_time": simulated,
+        }.items(),
+    )
+
+    # The workplace launch also starts the RFID scanner; the world manager is started above.
+    station_workplace_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution(
+                [FindPackageShare("station_workplace"), "launch", "workplace_rfid_scanner.launch.py"]
+            )
+        ),
+        launch_arguments={
+            "use_sim_time": simulated,
+            "simulated": simulated,
+            "simulation.world_name": "default",
+            "start_world_manager": "false",
+        }.items(),
+    )
+
+    product_carrier_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution(
+                [FindPackageShare("product_carrier"), "launch", "conveyor.launch.py"]
+            )
+        ),
+        launch_arguments={"simulated": simulated}.items(),
+    )
+
+    manufacturing_executor_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution(
+                [FindPackageShare("manufacturing_executor"), "launch", "manufacturing_executor.launch.py"]
+            )
+        ),
+        launch_arguments={"use_sim_time": simulated}.items(),
+    )
+
+    # use GroupAction to scope the launch files so that their declared arguments don't leak into 
+    # the global namespace
     return LaunchDescription(
         declared_arguments
         + [
@@ -254,5 +349,12 @@ def generate_launch_description() -> LaunchDescription:
             GroupAction([world_manager_launch], scoped=True),
             GroupAction([tools_manager], scoped=True),
             GroupAction([station_cache_node], scoped=True),
+            GroupAction([operation_repository_node], scoped=True),
+            GroupAction([image_repository_node], scoped=True),
+            GroupAction([object_model_storage_node], scoped=True),
+            GroupAction([production_manager_launch], scoped=True),
+            GroupAction([station_workplace_launch], scoped=True),
+            GroupAction([product_carrier_launch], scoped=True),
+            GroupAction([manufacturing_executor_launch], scoped=True),
         ]
     )

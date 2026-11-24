@@ -116,9 +116,29 @@ class VolumetricDispensingTool(LifecycleNode):
             ParameterDescriptor(description='Whether the node is running in simulation mode'),
         )
         self.declare_parameter(
+            'simulation.delete_material_on_deactivation',
+            False,
+            ParameterDescriptor(
+                description='Simulation only: delete the dispensed material models owned by the tool on deactivation',
+            ),
+        )
+        self.declare_parameter(
+            'simulation.station_workplace_node_name',
+            'workplace_rfid_scanner',
+            ParameterDescriptor(
+                description='Simulation only: node name of the station workplace publishing the spawned '
+                'product model and link on "simulated_product_metadata"; read at configure time',
+            ),
+        )
+        self.declare_parameter(
             'world_name',
             "default",
             ParameterDescriptor(description='Name of the simulation world'),
+        )
+        self.declare_parameter(
+            'localized_product_frame_id',
+            "product_origin",
+            ParameterDescriptor(description='Frame of the localized product (published by the localization node)'),
         )
         
         self.declare_parameter(
@@ -348,6 +368,15 @@ class VolumetricDispensingTool(LifecycleNode):
                 mounted=self.get_parameter('mounted').get_parameter_value().bool_value,
                 flow_rate=self.get_parameter('flowrate').get_parameter_value().double_value,
                 simulated=self.get_parameter('simulated').get_parameter_value().bool_value,
+                localized_product_frame_id=self.get_parameter(
+                    'localized_product_frame_id'
+                ).get_parameter_value().string_value,
+                delete_material_on_deactivation=self.get_parameter(
+                    'simulation.delete_material_on_deactivation'
+                ).get_parameter_value().bool_value,
+                station_workplace_node_name=self.get_parameter(
+                    'simulation.station_workplace_node_name'
+                ).get_parameter_value().string_value,
                 default_tcp_valid_period=self.get_parameter('tcp_valid_period').get_parameter_value().double_value,
             )
 

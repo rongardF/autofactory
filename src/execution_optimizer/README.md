@@ -55,7 +55,7 @@ Response:
 | `error_message` | Empty on success; otherwise the cause, naming pattern ids where applicable. |
 
 `PatternGroup`: `pattern_ids` (UUID4 strings, request order) and `image_capture_poses`
-(`geometry_msgs/PoseStamped[]`, `header.frame_id = product_frame_id`, always exactly one pose for
+(`geometry_msgs/PoseStamped[]`, `header.frame_id` = the frame shared by all pattern poses, always exactly one pose for
 dispensing). Every request pattern is in exactly one group.
 
 Client used internally: the `GetImage` action of the `cameras` package at
@@ -65,7 +65,6 @@ Client used internally: the `GetImage` action of the `cameras` package at
 
 | Name | Type | Default | Meaning |
 |---|---|---|---|
-| `product_frame_id` | string | `product_origin` | Frame of all pattern poses and of the output poses. |
 | `feature_resolution_range` | double[2] | `[3.33, 4.16]` | Inclusive `[low, high]` px/mm, `0 < low <= high`. The default matches 400–500 mm for the simulated camera (fx ≈ 1663 px); a real camera must override it. |
 | `max_angle_deviation` | double | `20.0` | Degrees, `0 <= v < 90`. Maximum angle between any ROI normal of a group and the group's mean normal. |
 | `operational_area` | int[] | `[]` | Empty (whole image) or inclusive `[x_min, y_min, x_max, y_max]` pixels, top-left origin. Checked against the image size on activation. |
@@ -78,7 +77,8 @@ Parameters are read and validated in `on_configure`; invalid values fail the tra
 ## Behaviour
 
 **Pattern points.** The start position, every movement target position and every circular
-movement point. All poses must be in `product_frame_id` (no TF lookups); arcs are not sampled.
+movement point. All poses must share one non-empty frame (no TF lookups); the output capture poses
+are expressed in that frame. Arcs are not sampled.
 
 **Region of interest (ROI).** The minimum-area rectangle of the points in the pattern's plane. The
 plane normal comes from a least-squares fit and points up (positive product Z). Points further than
@@ -88,8 +88,9 @@ zero-area ROI and the product +Z as normal; a horizontal normal fails the reques
 **Camera model.** Pinhole without distortion; only `fx, fy, cx, cy, width, height` of the camera's
 `CameraInfo` are used. Poses are poses of the camera TCP (projection centre). The optical axis is
 anti-parallel to the group's mean ROI normal and the roll is fixed so that image-right follows the
-product X axis. The TCP frame follows the Gazebo camera convention (+X optical axis, +Y image-left,
-+Z image-up).
+product -Y axis. The TCP frame follows the Gazebo camera convention (+X optical axis, +Y image-left,
++Z image-up), so for a downward-looking camera the TCP +Z (flange axis) points along product +X,
+a wrist orientation that is reachable within the planning joint limits.
 
 **Group feasibility.** A set of patterns can share one image if every ROI normal is within
 `max_angle_deviation` of the mean normal and a camera position exists for which every ROI corner has

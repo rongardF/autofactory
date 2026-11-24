@@ -145,7 +145,7 @@ class GazeboWorldService:
         created: list[str] = []
         try:
             for spec in models:
-                self._registry.add_pending(spec.model_id, owner, parsed[spec.model_id][0].joints)
+                self._registry.add_pending(spec.model_id, owner, parsed[spec.model_id][0].joints, spec.delete_with_child)
             for spec in models:
                 if spec.attach_link:
                     self._require_controllable(spec.model_id)
@@ -213,10 +213,12 @@ class GazeboWorldService:
     def delete(self, model_ids: Sequence[str] = (), owner: str = '') -> tuple[DeleteResultDTO, str]:
         """Delete models; returns the result and an error message that is empty on full success.
 
-        Up-front rejections raise ModelValidationError before anything is deleted.
+        Models spawned with ``delete_with_child`` that hold a joint on a deleted model are deleted
+        with it, first, whatever their owner. Any other attached holder outside the call is rejected
+        up front with ModelValidationError, before anything is deleted.
         """
         with self._operation_lock:
-            return self._delete(model_ids, owner, Deadline(self._config.operation_timeout_sec))
+            return self._delete(model_ids, owner)
 
     def _plan_delete(self, model_ids: Sequence[str], owner: str) -> tuple[list[str], list[str]]:
         if not model_ids and not owner:
@@ -234,6 +236,19 @@ class GazeboWorldService:
             else:
                 targets.append(model_id)
         return targets, unknown
+
+    def _with_cascade(self, targets: list[str]) -> tuple[list[str], set[str]]:
+        """Add the ``delete_with_child`` holders of every target, transitively; returns the targets and the added ids."""
+        expanded = list(targets)
+        cascaded: set[str] = set()
+        queue = list(targets)
+        while queue:
+            for holder in self._registry.cascade_holders_of(queue.pop(0)):
+                if holder not in expanded:
+                    expanded.append(holder)
+                    cascaded.add(holder)
+                    queue.append(holder)
+        return expanded, cascaded
 
     def _delete_order(self, targets: list[str]) -> list[str]:
         """Order the targets so that a model is deleted only after the models holding a joint on it."""
@@ -269,24 +284,42 @@ class GazeboWorldService:
         self._controller.unwatch(topics)
         return True
 
-    def _delete(self, model_ids: Sequence[str], owner: str, deadline: Deadline) -> tuple[DeleteResultDTO, str]:
+    def _delete(self, model_ids: Sequence[str], owner: str) -> tuple[DeleteResultDTO, str]:
         targets, unknown = self._plan_delete(model_ids, owner)
+        targets, cascaded = self._with_cascade(targets)
         ordered = self._delete_order(targets)
+        deadline = Deadline(self._config.operation_timeout_sec)
         deleted: list[str] = []
         failed: list[str] = []
+        skipped: list[str] = []
         error = ''
         for model_id in ordered:
+            if model_id in cascaded:
+                # Cascaded models are not part of the request: they neither expire the deadline nor
+                # use up the time left for the requested models.
+                if self._delete_one(model_id):
+                    deleted.append(model_id)
+                else:
+                    failed.append(model_id)
+                deadline = Deadline(self._config.operation_timeout_sec)
+                continue
             try:
                 deadline.check(f"deleting '{model_id}'")
             except OperationTimeoutError as e:
                 error = str(e)
                 break
-            if self._delete_one(model_id):
+            if any(holder in failed for holder in self._registry.dependents_of(model_id)):
+                # A failed holder may still keep its joint on this model in the physics engine.
+                skipped.append(model_id)
+            elif self._delete_one(model_id):
                 deleted.append(model_id)
             else:
                 failed.append(model_id)
         if failed:
             error = f"failed to delete: {', '.join(failed)}" + (f'; {error}' if error else '')
+        if skipped:
+            error = (f"not deleted because an attached holder could not be deleted: {', '.join(skipped)}"
+                     + (f'; {error}' if error else ''))
         if unknown:
             self._logger.warning(f"delete: unknown model ids: {', '.join(unknown)}")
         return DeleteResultDTO(deleted_ids=tuple(deleted), unknown_ids=tuple(unknown)), error

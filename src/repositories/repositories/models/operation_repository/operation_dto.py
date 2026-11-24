@@ -49,6 +49,14 @@ class MaterialDTO(BaseModel, frozen=True):
         message.product_revision = self.product_revision
         return message
 
+    @classmethod
+    def from_msg(cls, message: OperationRepositoryMaterial) -> 'MaterialDTO':
+        """Validate a ROS material message."""
+        return cls(
+            product_number=message.product_number,
+            product_revision=message.product_revision,
+        )
+
 
 class EndToolDTO(BaseModel, frozen=True):
     """End-tool product identity."""
@@ -62,6 +70,14 @@ class EndToolDTO(BaseModel, frozen=True):
         message.product_number = self.product_number
         message.product_revision = self.product_revision
         return message
+
+    @classmethod
+    def from_msg(cls, message: OperationRepositoryEndTool) -> 'EndToolDTO':
+        """Validate a ROS end-tool message."""
+        return cls(
+            product_number=message.product_number,
+            product_revision=message.product_revision,
+        )
 
 
 class OperationDTO(BaseModel, frozen=True):
@@ -105,6 +121,10 @@ class OperationDTO(BaseModel, frozen=True):
                 ArgumentDTO.from_named_value(name, value)
                 for name, value in arguments.items()
             ]
+        elif isinstance(arguments, list) and all(
+            isinstance(argument, ArgumentDTO) for argument in arguments
+        ):
+            copied['operation_args'] = arguments
         else:
             raise ValueError('operation_args must be an object or null')
         return copied
@@ -138,6 +158,34 @@ class OperationDTO(BaseModel, frozen=True):
             case OperationTypeEnum.DISPENSING:
                 payload['dispensing_patterns'] = patterns
         return cls.model_validate(payload)
+
+    @classmethod
+    def from_msg(cls, message: OperationRepositoryOperation) -> 'OperationDTO':
+        """Validate a ROS operation message; the frame id of its poses is dropped."""
+        try:
+            operation_type = OperationTypeEnum(message.operation_type)
+        except ValueError as error:
+            raise ValueError(f'unknown operation_type {message.operation_type!r}') from error
+        patterns: list[DispensingPatternDTO] = []
+        if operation_type == OperationTypeEnum.DISPENSING:
+            patterns = [
+                DispensingPatternDTO.from_msg(pattern)
+                for pattern in message.dispensing_patterns
+            ]
+        return cls.model_validate(
+            {
+                'id': message.id,
+                'operation_type': operation_type,
+                'operation_number': message.operation_number,
+                'description': message.description,
+                'start_assembly_model_id': message.start_assembly_model_id,
+                'end_assembly_model_id': message.end_assembly_model_id,
+                'material': MaterialDTO.from_msg(message.material),
+                'end_tool': EndToolDTO.from_msg(message.end_tool),
+                'operation_args': [ArgumentDTO.from_msg(arg) for arg in message.operation_args],
+                'dispensing_patterns': patterns,
+            }
+        )
 
     def to_msg(self, frame_id: str) -> OperationRepositoryOperation:
         """Convert the operation DTO to its ROS message."""

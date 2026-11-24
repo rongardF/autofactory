@@ -3,9 +3,6 @@
 # Copy or override these values via a launch file or `--params-file`.
 /**:
   ros__parameters:
-    # Frame of all pattern poses (they must all be expressed in it) and of the
-    # output image capture poses.
-    product_frame_id: "product_origin"
     # Inclusive [low, high] feature resolution range in px/mm. The default
     # corresponds to a 400-500 mm camera distance for the simulated camera
     # (fx ~ 1663 px); a real camera must override it. Use decimals.
