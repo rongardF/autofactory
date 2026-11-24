@@ -86,6 +86,10 @@ class ExecutorService:
         elif state != LifecycleStateEnum.ACTIVE:
             raise SystemFailureError(f'Pattern executor {client.node_name} is {state.value}')
 
+    def is_mounted(self, tool: ToolInfoDto) -> bool:
+        """Whether ``tool`` is the currently mounted tool."""
+        return self._inventory.mounted_tool_sn() == tool.tool_sn
+
     def mount(self, tool: ToolInfoDto, ctx: AbortContext) -> None:
         """Mount the tool unless it already is the mounted one."""
         mounted = self._inventory.mounted_tool_sn()

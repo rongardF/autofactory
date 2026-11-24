@@ -20,10 +20,20 @@ float64 total_manufacturing_time_s
 bool success
 string error_message
 ---
-# feedback: none
+# Human readable description of the phase that is about to start, e.g. "Localizing product"
+string execution_phase
 ```
 
 * One goal at a time; a second goal is rejected.
+* Feedback `execution_phase` is published right before each phase starts, in this order:
+  `Waiting for product injection`, `Localizing product`, `Mounting the endtool`,
+  `Waiting localization calculations to finish`, `Initializing endtool`, `Performing execution optimization`,
+  then per pattern group (`<group-index>` is 0-based) `Capturing operation '<operation-number>' pattern group <group-index> before image`,
+  `Executing operation '<operation-number>' pattern group <group-index> patterns`,
+  `Capturing operation '<operation-number>' pattern group <group-index> after image`, and finally
+  `Waiting for product ejection`.
+  Phases that do not happen are not published: no mounting when the tool is already mounted, no waiting for the
+  localization / optimization when its result is already available, no captures for a group without capture poses.
 * The goal ends only when the caller cancels it, a system failure occurs or the node is deactivated.
 * Caller cancel: `success=true`, empty `error_message` (a cancel is not a failure).
 * Node side abort: `success=false` with a descriptive `error_message`.

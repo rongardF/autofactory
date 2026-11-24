@@ -56,6 +56,11 @@ class OptimizationCall:
         self._ctx = ctx
         self._logger = logger
 
+    @property
+    def done(self) -> bool:
+        """Whether the optimizer has already answered."""
+        return self._call.done
+
     def wait(self) -> list[PatternGroup]:
         """Wait for the optimization.
 

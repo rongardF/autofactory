@@ -96,6 +96,11 @@ class ServiceCall:
         self._done = threading.Event()
         future.add_done_callback(lambda _future: self._done.set())
 
+    @property
+    def done(self) -> bool:
+        """Whether the response (or an error) has arrived."""
+        return self._done.is_set()
+
     @classmethod
     def start(
         cls, client: Client, request: Any, *, availability_timeout_s: float, ctx: AbortContext, description: str

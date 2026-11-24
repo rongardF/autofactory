@@ -32,7 +32,8 @@ execute the pattern groups with before/after images, report the result and eject
 product when the station has no more work for it.
 
 Interface (available only while the node is active):
-    * action ``~/manufacture`` (``manufacturing_executor/action/Manufacture``)
+    * action ``~/manufacture`` (``manufacturing_executor/action/Manufacture``); the feedback
+      ``execution_phase`` is published before every phase that is actually executed
 
 The node never changes its own lifecycle state.
 """
@@ -333,7 +334,7 @@ class ManufacturingExecutor(LifecycleNode):
         try:
             if loop is None:
                 raise SystemFailureError('Manufacturing loop is not available')
-            loop.run(ctx)
+            loop.run(ctx, lambda phase: self._publish_phase(goal_handle, phase))
         except ManufacturingError as caught:
             error = caught
         except Exception as caught:  # noqa: BLE001 - nothing may cross the action boundary
@@ -362,6 +363,16 @@ class ManufacturingExecutor(LifecycleNode):
             self._goal_running = False
         self._goal_finished.set()
         return result
+
+    def _publish_phase(self, goal_handle: ServerGoalHandle, phase: str) -> None:
+        """Publish the ``execution_phase`` feedback; a failed publish never stops manufacturing."""
+        self.get_logger().info(f'Execution phase: {phase}')
+        feedback = Manufacture.Feedback()
+        feedback.execution_phase = phase
+        try:
+            goal_handle.publish_feedback(feedback)
+        except Exception as error:  # noqa: BLE001 - feedback is informational only
+            self.get_logger().warning(f'Could not publish feedback {phase!r}: {error}')
 
     def _finish_cancelled(self, goal_handle: ServerGoalHandle) -> None:
         """Mark the goal canceled once rclpy recorded the cancel request."""

@@ -109,6 +109,11 @@ class LocalizationRun:
                 raise SystemFailureError('Localization failed during the image collection')
             self._goal.done.wait(0.05)
 
+    @property
+    def result_ready(self) -> bool:
+        """Whether the localization goal has already ended."""
+        return self._goal.done.is_set()
+
     def wait_result(self) -> str:
         """Wait for the localization result.
 

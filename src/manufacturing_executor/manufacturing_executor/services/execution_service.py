@@ -26,6 +26,8 @@
 # POSSIBILITY OF SUCH DAMAGE.
 """Step 13: image capture and pattern execution of all pattern groups."""
 
+from collections.abc import Callable
+
 from rclpy.node import Node
 
 from execution_optimizer.msg import PatternGroup
@@ -65,13 +67,18 @@ class ExecutionService:
         patterns_by_id: dict[str, OperationRepositoryDispensingPattern],
         *,
         executor_node: str,
+        operation_number: str,
         operation_id: str,
         product: ProductDataDTO,
         ctx: AbortContext,
+        report_phase: Callable[[str], None],
     ) -> None:
         """For every group: images, patterns, images.
 
         The movement session is closed when this returns or raises.
+
+        :param report_phase: Called with the description of each phase before it starts;
+            captures of groups without capture poses are not reported.
 
         :raises SystemFailureError: If a pattern is unknown or any step fails.
         """
@@ -79,16 +86,24 @@ class ExecutionService:
         try:
             session.ensure_valid()
             self._logger.info(f'Movement session {session.session_id} opened')
-            for number, group in enumerate(groups, start=1):
+            for index, group in enumerate(groups):
+                number = index + 1
+                phase_prefix = f"operation '{operation_number}' pattern group {index}"
+                has_captures = len(group.image_capture_poses) > 0
                 self._logger.info(
                     f'Group {number}/{len(groups)}: {len(group.image_capture_poses)} capture pose(s), '
                     f'patterns={list(group.pattern_ids)}'
                 )
                 self._logger.info(f'Group {number}/{len(groups)}: capturing images before dispensing')
+                if has_captures:
+                    report_phase(f'Capturing {phase_prefix} before image')
                 self._capture_all(group, operation_id, product, session, ctx)
                 self._logger.info(f'Group {number}/{len(groups)}: executing patterns')
+                report_phase(f'Executing {phase_prefix} patterns')
                 self._run_patterns(group, patterns_by_id, executor_node, operation_id, session, ctx)
                 self._logger.info(f'Group {number}/{len(groups)}: capturing images after dispensing')
+                if has_captures:
+                    report_phase(f'Capturing {phase_prefix} after image')
                 self._capture_all(group, operation_id, product, session, ctx)
                 self._logger.info(f'Group {number}/{len(groups)}: done')
         finally:

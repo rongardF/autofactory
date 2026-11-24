@@ -26,6 +26,8 @@
 # POSSIBILITY OF SUCH DAMAGE.
 """The manufacturing loop."""
 
+from collections.abc import Callable
+
 from rclpy.node import Node
 
 from manufacturing_executor.exceptions import OperationFailureError
@@ -77,8 +79,12 @@ class ManufacturingLoop:
         self._execution = execution
         self._idle_pose = idle_pose
 
-    def run(self, ctx: AbortContext) -> None:
-        """Run until the context is aborted or a system failure is raised."""
+    def run(self, ctx: AbortContext, report_phase: Callable[[str], None]) -> None:
+        """Run until the context is aborted or a system failure is raised.
+
+        :param report_phase: Called with the description of each phase before it starts;
+            phases that are skipped (e.g. no tool change needed) are not reported.
+        """
         self._logger.info('Manufacturing loop started')
         eject = False
         while True:
@@ -88,6 +94,7 @@ class ManufacturingLoop:
                 move = self._idle_pose.start_move(ctx)
                 try:
                     self._logger.info(' Waiting for the product to be ejected')
+                    report_phase('Waiting for product ejection')
                     self._routing.eject(ctx)
                     move.wait()
                 finally:
@@ -95,14 +102,17 @@ class ManufacturingLoop:
                 eject = False
                 continue
             self._logger.info(' Waiting for a product to be injected')
+            report_phase('Waiting for product injection')
             product = self._routing.inject(ctx)
-            eject = self._manufacture(product, ctx)
+            eject = self._manufacture(product, ctx, report_phase)
             self._logger.info(
                 f'Product {product.serial_number} '
                 f'{"finished in this station, ejecting" if eject else "stays in the station for the next operation"}'
             )
 
-    def _manufacture(self, product: ProductDataDTO, ctx: AbortContext) -> bool:
+    def _manufacture(
+        self, product: ProductDataDTO, ctx: AbortContext, report_phase: Callable[[str], None]
+    ) -> bool:
         """Manufacture one operation.
 
         :returns: ``finished_in_station``: whether the product has to be ejected.
@@ -134,7 +144,7 @@ class ManufacturingLoop:
             self._logger.error(f'Operation {production.operation_id} failed: {failure}')
             self._logger.info(f'Reporting operation {production.operation_id} as failed')
             return self._production.report(production, False, str(failure), ctx)
-        self._run_operation(product, production, operation, tool, ctx)
+        self._run_operation(product, production, operation, tool, ctx, report_phase)
         self._logger.info(f'Reporting operation {production.operation_id} as successful')
         return self._production.report(production, True, '', ctx)
 
@@ -145,11 +155,13 @@ class ManufacturingLoop:
         operation: OperationDTO,
         tool: ToolInfoDto,
         ctx: AbortContext,
+        report_phase: Callable[[str], None],
     ) -> None:
         cleanup = AbortContext.detached()
         self._logger.info(
             f' Starting localization for assembly model {production.assembly_model_id}'
         )
+        report_phase('Localizing product')
         localization = LocalizationRun.start(
             self._clients,
             production.assembly_model_id,
@@ -174,9 +186,13 @@ class ManufacturingLoop:
             self._logger.info(' Waiting for the localization image collection to finish')
             localization.wait_collection_done(ctx)
             self._logger.info(' Localization image collection done, robot is free')
-            self._logger.info(f' Mounting tool {tool.tool_sn}')
+            if not self._executors.is_mounted(tool):
+                self._logger.info(f' Mounting tool {tool.tool_sn}')
+                report_phase('Mounting the endtool')
             self._executors.mount(tool, ctx)
             self._logger.info(' Waiting for the localization result')
+            if not localization.result_ready:
+                report_phase('Waiting localization calculations to finish')
             frame = localization.wait_result()
             self._logger.info(f' Product localized in frame {frame!r}')
             patterns = operation.to_msg(frame).dispensing_patterns
@@ -186,17 +202,22 @@ class ManufacturingLoop:
             )
             optimization = self._optimizer.start(nodes.optimizer_node, patterns, ctx)
             self._logger.info(f'Activating pattern executor {executor_node}')
+            report_phase('Initializing endtool')
             self._executors.activate(executor_node, ctx)
             self._logger.info('Waiting for the optimization result')
+            if not optimization.done:
+                report_phase('Performing execution optimization')
             groups = optimization.wait()
             self._logger.info(f'Executing {len(groups)} pattern group(s) with {executor_node}')
             self._execution.execute(
                 groups,
                 {pattern.id: pattern for pattern in patterns},
                 executor_node=executor_node,
+                operation_number=operation.operation_number,
                 operation_id=production.operation_id,
                 product=product,
                 ctx=ctx,
+                report_phase=report_phase,
             )
         finally:
             localization.cancel()

@@ -73,7 +73,7 @@ poses:
   - [x, y, z, roll, pitch, yaw]   # relative to localization_origin; m, rad
 ```
 
-See `config/localization_poses.yaml` (placeholder values).
+See `config/localization_poses.yaml`.
 
 ## Run
 

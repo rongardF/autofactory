@@ -51,7 +51,7 @@ class ManufacturingExecutorConfigDTO(BaseModel):
         default='station', min_length=1, description='Reference frame of the idle pose.'
     )
     idle_pose: PoseRpyDTO = Field(
-        default_factory=lambda: PoseRpyDTO(position=(1.059, -0.401, 1.555), orientation=(0.382, -0.039, -0.002)),
+        default_factory=lambda: PoseRpyDTO(position=(0.959, -0.167, 1.527), orientation=(0.005, -0.005, -0.012)),
         description='Pose of flange_tcp in base_frame_id the robot waits at while the product is ejected.',
     )
     dependency_nodes: DependencyNodesDTO = Field(
