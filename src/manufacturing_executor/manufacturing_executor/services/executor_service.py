@@ -68,24 +68,31 @@ class ExecutorService:
         """Deactivate the executor if it is active (this deactivates its endtool as well)."""
         client = self._registry.get(executor_node)
         if client.get_state(ctx) == LifecycleStateEnum.ACTIVE:
+            self._logger.info(f'Deactivating pattern executor {client.node_name}')
             client.deactivate(ctx)
 
     def activate(self, executor_node: str, ctx: AbortContext) -> None:
         """Activate the executor (this activates its endtool as well)."""
         client = self._registry.get(executor_node)
         state = client.get_state(ctx)
+        self._logger.info(f'Pattern executor {client.node_name} is {state.value}')
         if state == LifecycleStateEnum.UNCONFIGURED:
+            self._logger.info(f'Configuring pattern executor {client.node_name}')
             client.configure(ctx)
             state = LifecycleStateEnum.INACTIVE
         if state == LifecycleStateEnum.INACTIVE:
+            self._logger.info(f'Activating pattern executor {client.node_name}')
             client.activate(ctx)
         elif state != LifecycleStateEnum.ACTIVE:
             raise SystemFailureError(f'Pattern executor {client.node_name} is {state.value}')
 
     def mount(self, tool: ToolInfoDto, ctx: AbortContext) -> None:
         """Mount the tool unless it already is the mounted one."""
-        if self._inventory.mounted_tool_sn() == tool.tool_sn:
+        mounted = self._inventory.mounted_tool_sn()
+        if mounted == tool.tool_sn:
+            self._logger.info(f'Tool {tool.tool_sn} is already mounted')
             return
+        self._logger.info(f'Mounting tool {tool.tool_sn} (currently mounted: {mounted or "none"})')
         goal = MountTool.Goal()
         goal.tool_sn = tool.tool_sn
         outcome = run_action(
@@ -97,3 +104,4 @@ class ExecutorService:
             result_timeout_s=self._config.mount_tool_timeout_s,
         )
         outcome.ensure_success(f'Mounting tool {tool.tool_sn}')
+        self._logger.info(f'Tool {tool.tool_sn} mounted')

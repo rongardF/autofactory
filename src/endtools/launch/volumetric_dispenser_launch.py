@@ -37,6 +37,12 @@ def generate_launch_description():
     )
     mounted = LaunchConfiguration('mounted', default='false')
     flowrate = LaunchConfiguration('flowrate', default='1.0')
+    localized_product_frame_id = LaunchConfiguration(
+        'localized_product_frame_id', default='product_origin'
+    )
+    station_workplace_node_name = LaunchConfiguration(
+        'station_workplace_node_name', default='workplace_rfid_scanner'
+    )
     node_name = LaunchConfiguration(
         'node_name', default='volumetric_dispensing_tool'
     )
@@ -115,6 +121,19 @@ def generate_launch_description():
             description='Volumetric flow rate (ml/s); must be non-negative.',
         ),
         DeclareLaunchArgument(
+            'localized_product_frame_id',
+            default_value='product_origin',
+            description='Frame of the localized product (published by the localization node).',
+        ),
+        DeclareLaunchArgument(
+            'station_workplace_node_name',
+            default_value='workplace_rfid_scanner',
+            description=(
+                'Simulation only: node name of the station workplace publishing the '
+                'spawned product model and link on "simulated_product_metadata".'
+            ),
+        ),
+        DeclareLaunchArgument(
             'node_name',
             default_value='volumetric_dispensing_tool',
             description='Name of the endtool lifecycle node.',
@@ -165,6 +184,8 @@ def generate_launch_description():
                 'tcp_valid_period': tcp_valid_period,
                 'mounted': mounted,
                 'flowrate': flowrate,
+                'localized_product_frame_id': localized_product_frame_id,
+                'simulation.station_workplace_node_name': station_workplace_node_name,
             },
         ],
     )

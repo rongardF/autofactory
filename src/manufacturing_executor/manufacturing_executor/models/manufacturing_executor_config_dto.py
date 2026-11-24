@@ -29,6 +29,7 @@
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from manufacturing_executor.models.dependency_nodes_dto import DependencyNodesDTO
+from manufacturing_executor.models.pose_rpy_dto import PoseRpyDTO
 
 
 def _normalize(name: str) -> str:
@@ -43,6 +44,16 @@ class ManufacturingExecutorConfigDTO(BaseModel):
     camera_tcp: str = Field(
         default='camera_tcp_calibrated', min_length=1, description='TF frame used as tool_frame for image capture moves.'
     )
+    flange_tcp: str = Field(
+        default='flange', min_length=1, description='TF frame used as tool_frame for the move to the idle pose.'
+    )
+    base_frame_id: str = Field(
+        default='station', min_length=1, description='Reference frame of the idle pose.'
+    )
+    idle_pose: PoseRpyDTO = Field(
+        default_factory=lambda: PoseRpyDTO(position=(1.059, -0.401, 1.555), orientation=(0.382, -0.039, -0.002)),
+        description='Pose of flange_tcp in base_frame_id the robot waits at while the product is ejected.',
+    )
     dependency_nodes: DependencyNodesDTO = Field(
         default_factory=DependencyNodesDTO, description='Node names of all dependencies.'
     )
@@ -50,7 +61,8 @@ class ManufacturingExecutorConfigDTO(BaseModel):
         default=('dispensing_optimizer',), description='Optimizer nodes configured and cleaned up by this node.'
     )
     pattern_executor_nodes: tuple[str, ...] = Field(
-        default=('dispensing_pattern_executor',), description='Pattern executor nodes configured and cleaned up by this node.'
+        default=('dispensing_executor_abc123', 'dispensing_executor_def123'),
+        description='Pattern executor nodes configured and cleaned up by this node.',
     )
     service_call_timeout_s: float = Field(
         default=5.0, gt=0.0, description='Timeout of service calls and of wait_for_server / wait_for_service [s].'

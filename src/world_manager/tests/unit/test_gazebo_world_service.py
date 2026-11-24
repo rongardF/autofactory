@@ -324,6 +324,83 @@ def test_delete_after_holder_detached_is_allowed(stack):
     assert (result.deleted_ids, error) == (('station2',), '')
 
 
+def _putty(model: str, held: str = 'station2'):
+    """A model that holds ``held`` and is flagged to be deleted with it."""
+    sdf = make_sdf(model, [(held, 'link', f'/p/{model}/a', f'/p/{model}/d', f'/p/{model}/s')])
+    return spec(model, sdf, delete_with_child=True)
+
+
+def test_delete_cascades_to_flagged_holders_of_other_owner(stack):
+    """Flagged holders are detached and removed before the held model, whatever their owner."""
+    stack.service.spawn([spec('station2', make_sdf('station2'))], 'workplace')
+    stack.service.spawn([_putty('p1'), _putty('p2')], 'endtool')
+    result, error = stack.service.delete(owner='workplace')
+    assert (set(result.deleted_ids), error) == ({'station2', 'p1', 'p2'}, '')
+    assert stack.adapter.names('remove')[-1] == 'station2'
+    calls = stack.adapter.calls
+    assert calls.index(('publish', '/p/p1/d')) < calls.index(('remove', 'p1'))
+    assert stack.service.list_models() == []
+
+
+def test_delete_cascade_is_transitive(stack):
+    """A flagged holder of a flagged holder is deleted too, outermost first."""
+    stack.service.spawn([spec('station2', make_sdf('station2'))], 'o')
+    stack.service.spawn([_putty('p1')], 'o')
+    stack.service.spawn([_putty('p2', held='p1')], 'o')
+    result, error = stack.service.delete(['station2'])
+    assert error == ''
+    assert stack.adapter.names('remove') == ['p2', 'p1', 'station2']
+
+
+def test_delete_cascade_ignores_unflagged_holders(stack):
+    """An unflagged holder still blocks the delete."""
+    stack.service.spawn([spec('station2', make_sdf('station2'))], 'o')
+    stack.service.spawn([_putty('p1')], 'o')
+    holder = make_sdf('tool2', [('station2', 'link', '/l/a', '/l/d', '/l/s')])
+    stack.service.spawn([spec('tool2', holder)], 'o')
+    with raises(ModelValidationError, match="'tool2'"):
+        stack.service.delete(['station2'])
+    assert stack.adapter.names('remove') == []
+
+
+def test_delete_keeps_held_model_when_cascaded_holder_stays_attached(stack):
+    """If a cascaded holder cannot be detached and removed, the model it holds stays too."""
+    stack.service.spawn([spec('station2', make_sdf('station2'))], 'o')
+    stack.service.spawn([_putty('p1'), _putty('p2')], 'o')
+    stack.adapter.fail_remove.add('p1')
+    stack.adapter.ignore_topics.add('/p/p1/d')
+    result, error = stack.service.delete(['station2'])
+    assert result.deleted_ids == ('p2',)
+    assert 'p1' in error and 'station2' in error
+    assert 'station2' not in stack.adapter.names('remove')
+
+
+def test_delete_proceeds_when_cascaded_holder_was_detached_but_not_removed(stack):
+    """A holder whose joint is detached no longer blocks the held model, even if its removal failed."""
+    stack.service.spawn([spec('station2', make_sdf('station2'))], 'o')
+    stack.service.spawn([_putty('p1')], 'o')
+    stack.adapter.fail_remove.add('p1')
+    result, error = stack.service.delete(['station2'])
+    assert result.deleted_ids == ('station2',)
+    assert 'p1' in error
+
+
+def test_cascaded_deletions_do_not_use_up_the_deadline(stack):
+    """The requested model is still deleted when the cascaded holders took longer than the timeout."""
+    stack.service.spawn([spec('station2', make_sdf('station2'))], 'o')
+    stack.service.spawn([_putty('p1')], 'o')
+    original = stack.service._delete_one
+
+    def slow(model_id):
+        sleep(0.2 if model_id == 'p1' else 0)
+        return original(model_id)
+
+    stack.service._delete_one = slow
+    stack.service._config = stack.service._config.model_copy(update={'operation_timeout_sec': 0.1})
+    result, error = stack.service.delete(['station2'])
+    assert (set(result.deleted_ids), error) == ({'p1', 'station2'}, '')
+
+
 def test_delete_failure_of_known_model_is_reported(stack):
     """A failed remove of a registered model marks the call failed but deletes the others."""
     stack.service.spawn([spec('a'), spec('b')], 'o')

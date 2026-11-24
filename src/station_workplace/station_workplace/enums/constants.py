@@ -26,9 +26,6 @@
 # POSSIBILITY OF SUCH DAMAGE.
 """Fixed names used by the station workplace nodes."""
 
-ATTACH_LINK = 'carrier'
-"""Robot link all planning-scene objects are attached to (TF parent frame)."""
-
 PRODUCT_OBJECT_ID = 'product_object_model'
 """Planning-scene ID of the product model."""
 
@@ -37,9 +34,6 @@ CARRIER_OBJECT_ID = 'carrier_object_model'
 
 SAFETY_OBJECT_ID = 'safety_object_model'
 """Planning-scene ID of the safety box used while the product is unidentified."""
-
-PRODUCT_ORIGIN_FRAME = 'estimated_product_origin'
-"""TF frame of the estimated product origin."""
 
 UNKNOWN = 'UNKNOWN'
 """Product data value used when the product could not be identified."""

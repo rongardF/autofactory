@@ -88,8 +88,9 @@ zero-area ROI and the product +Z as normal; a horizontal normal fails the reques
 **Camera model.** Pinhole without distortion; only `fx, fy, cx, cy, width, height` of the camera's
 `CameraInfo` are used. Poses are poses of the camera TCP (projection centre). The optical axis is
 anti-parallel to the group's mean ROI normal and the roll is fixed so that image-right follows the
-product X axis. The TCP frame follows the Gazebo camera convention (+X optical axis, +Y image-left,
-+Z image-up).
+product -Y axis. The TCP frame follows the Gazebo camera convention (+X optical axis, +Y image-left,
++Z image-up), so for a downward-looking camera the TCP +Z (flange axis) points along product +X,
+a wrist orientation that is reachable within the planning joint limits.
 
 **Group feasibility.** A set of patterns can share one image if every ROI normal is within
 `max_angle_deviation` of the mean normal and a camera position exists for which every ROI corner has

@@ -34,7 +34,7 @@ string error_message
 
 ```mermaid
 flowchart TD
-    A[eject_product?] -- yes --> B[wait_routing: ejection] --> A
+    A[eject_product?] -- yes --> P[start PTP flange_tcp to idle_pose,<br/>not awaited] --> B[wait_routing: ejection] --> W[await the idle move] --> A
     A -- no --> C[wait_routing: injection]
     C --> D[get_production_data]
     D --> E[get_operation]
@@ -54,6 +54,10 @@ flowchart TD
 ```
 
 1. **Routing**: `wait_routing` of the station workplace (`injection`, or `ejection` when `eject_product` is set).
+   When the product is ejected, the robot is moved (PTP, own movement session, `flange_tcp`) to `idle_pose` in
+   `base_frame_id` at the same time: the move is started without waiting for it and the ejection wait begins
+   immediately. If the move fails the wait is aborted and the goal fails; if the product leaves first, the node
+   still waits for the move to end before it continues.
    An `UNKNOWN` product is a system failure.
 2. **Production data**: `get_production_data` of the production manager.
 3. **Operation**: `get_operation` of the operation repository.
@@ -102,10 +106,14 @@ Deactivating the node while a goal runs ends the goal as a failure whose message
 | Name | Type | Default | Description |
 |---|---|---|---|
 | `camera_tcp` | string | `camera_tcp_calibrated` | TF frame used as `tool_frame` for the image capture moves. |
+| `flange_tcp` | string | `flange` | TF frame used as `tool_frame` for the move to the idle pose. |
+| `base_frame_id` | string | `station` | Reference frame of the idle pose. |
+| `idle_pose.position` | double[3] | `[1.059, -0.401, 1.555]` | Idle pose position `[x, y, z]` [m] in `base_frame_id`. |
+| `idle_pose.orientation` | double[3] | `[0.382, -0.039, -0.002]` | Idle pose orientation `[roll, pitch, yaw]` [rad] in `base_frame_id`. |
 | `dependency_nodes.names` | string[] | all keys below | Dependency keys; parallel to `dependency_nodes.values`. |
 | `dependency_nodes.values` | string[] | defaults below | Node names; same length as `.names`. |
 | `execution_optimizer_nodes` | string[] | `['dispensing_optimizer']` | Optimizers this node configures and cleans up. |
-| `pattern_executor_nodes` | string[] | `['dispensing_pattern_executor']` | Pattern executors this node configures and cleans up. |
+| `pattern_executor_nodes` | string[] | `['dispensing_executor_abc123', 'dispensing_executor_def123']` | Pattern executors this node configures and cleans up (the ones started by the `tools_manager` launch). |
 | `service_call_timeout_s` | double | `5.0` | Service calls and availability checks of services and action servers. |
 | `image_capture_settling_s` | double | `0.5` | Wait after each capture move before the image is taken. |
 | `lifecycle_transition_timeout_s` | double | `10.0` | Lifecycle transition of another node. |

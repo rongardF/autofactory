@@ -26,6 +26,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 """Steps 7, 10 and 12: selecting the optimizer and optimizing the patterns."""
 
+from rclpy.impl.rcutils_logger import RcutilsLogger
 from rclpy.node import Node
 
 from execution_optimizer.msg import PatternGroup
@@ -39,6 +40,7 @@ from manufacturing_executor.services.abort_context import AbortContext
 from manufacturing_executor.services.async_calls import ServiceCall
 from manufacturing_executor.services.lifecycle_client import LifecycleClientRegistry
 from manufacturing_executor.services.loop_clients import LoopClients
+from manufacturing_executor.utils.log_format import format_pose
 from manufacturing_executor.utils.node_names import strip_slash
 from repositories.msg import OperationRepositoryDispensingPattern
 
@@ -46,10 +48,13 @@ from repositories.msg import OperationRepositoryDispensingPattern
 class OptimizationCall:
     """A running ``optimize_patterns`` call."""
 
-    def __init__(self, call: ServiceCall, timeout_s: float, ctx: AbortContext) -> None:
+    def __init__(
+        self, call: ServiceCall, timeout_s: float, ctx: AbortContext, logger: RcutilsLogger
+    ) -> None:
         self._call = call
         self._timeout_s = timeout_s
         self._ctx = ctx
+        self._logger = logger
 
     def wait(self) -> list[PatternGroup]:
         """Wait for the optimization.
@@ -60,7 +65,16 @@ class OptimizationCall:
         response = self._call.wait(self._timeout_s, self._ctx)
         if not response.success:
             raise SystemFailureError(f'Pattern optimization failed: {response.error_message}')
-        return list(response.groups)
+        groups = list(response.groups)
+        self._logger.info(
+            f'Optimization returned {len(groups)} group(s) in {response.optimization_time_s:.3f} s'
+        )
+        for number, group in enumerate(groups):
+            self._logger.info(
+                f'  group {number}: patterns={list(group.pattern_ids)} '
+                f'capture_poses={[format_pose(pose) for pose in group.image_capture_poses]}'
+            )
+        return groups
 
 
 class OptimizerService:
@@ -86,13 +100,17 @@ class OptimizerService:
                 continue
             client = self._registry.get(name)
             if client.get_state(ctx) == LifecycleStateEnum.ACTIVE:
+                self._logger.info(f'Deactivating optimizer {client.node_name}')
                 client.deactivate(ctx)
         client = self._registry.get(selected)
         state = client.get_state(ctx)
+        self._logger.info(f'Optimizer {client.node_name} is {state.value}')
         if state == LifecycleStateEnum.UNCONFIGURED:
+            self._logger.info(f'Configuring optimizer {client.node_name}')
             client.configure(ctx)
             state = LifecycleStateEnum.INACTIVE
         if state == LifecycleStateEnum.INACTIVE:
+            self._logger.info(f'Activating optimizer {client.node_name}')
             client.activate(ctx)
         elif state != LifecycleStateEnum.ACTIVE:
             raise SystemFailureError(f'Optimizer {client.node_name} is {state.value}')
@@ -113,4 +131,4 @@ class OptimizerService:
             ctx=ctx,
             description='optimize_patterns',
         )
-        return OptimizationCall(call, self._config.optimization_timeout_s, ctx)
+        return OptimizationCall(call, self._config.optimization_timeout_s, ctx, self._logger)

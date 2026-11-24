@@ -550,7 +550,7 @@ def test_goal_accepted_when_path_speed_is_zero(node):
     """path.cartesian_speed=0.0 → check skipped (0.0 means unspecified in path)."""
     node._constraint_config = ConstraintConfigDTO(max_cartesian_speed=0.5)
     goal = _make_ros_goal()
-    goal.paths[0].cartesian_speed = 0.0  # unspecified, max speed will be used
+    goal.paths[0].cartesian_speed = 0.0  # unspecified, node default speed will be used
     try:
         result = node._goal_callback(goal)
         assert result == GoalResponse.ACCEPT

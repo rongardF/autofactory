@@ -57,11 +57,14 @@ class _JointEntry:
 
 
 class _ModelEntry:
-    __slots__ = ('model_id', 'owner', 'joints', 'committed')
+    __slots__ = ('model_id', 'owner', 'joints', 'committed', 'delete_with_child')
 
-    def __init__(self, model_id: str, owner: str, joints: Sequence[DetachableJointDTO]) -> None:
+    def __init__(
+        self, model_id: str, owner: str, joints: Sequence[DetachableJointDTO], delete_with_child: bool,
+    ) -> None:
         self.model_id = model_id
         self.owner = owner
+        self.delete_with_child = delete_with_child
         self.joints = {joint.link_name: _JointEntry(joint) for joint in joints}
         self.committed = False
 
@@ -136,12 +139,14 @@ class ModelRegistry:
                     return topic
             return ''
 
-    def add_pending(self, model_id: str, owner: str, joints: Sequence[DetachableJointDTO]) -> None:
+    def add_pending(
+        self, model_id: str, owner: str, joints: Sequence[DetachableJointDTO], delete_with_child: bool = False,
+    ) -> None:
         """Register a model that is about to be created."""
         with self._lock:
             if model_id in self._models:
                 raise ModelValidationError(f"model '{model_id}' is already registered")
-            self._models[model_id] = _ModelEntry(model_id, owner, joints)
+            self._models[model_id] = _ModelEntry(model_id, owner, joints, delete_with_child)
             self._recompute_controllable()
 
     def commit(self, model_ids: Iterable[str]) -> None:
@@ -245,6 +250,15 @@ class ModelRegistry:
                 if other.committed and other.model_id != model_id and any(
                     joint.config.child_model == model_id and joint.state != JointStateEnum.DETACHED
                     for joint in other.joints.values())
+            ]
+
+    def cascade_holders_of(self, model_id: str) -> list[str]:
+        """Committed models flagged ``delete_with_child`` that have a joint on ``model_id``, in any state."""
+        with self._lock:
+            return [
+                other.model_id for other in self._models.values()
+                if other.committed and other.delete_with_child and other.model_id != model_id and any(
+                    joint.config.child_model == model_id for joint in other.joints.values())
             ]
 
     def apply_state_event(self, topic: str, data: str) -> bool:

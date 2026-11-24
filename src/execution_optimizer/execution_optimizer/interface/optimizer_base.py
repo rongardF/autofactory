@@ -192,6 +192,7 @@ class OptimizerBase(LifecycleNode, ABC):
             return TransitionCallbackReturn.FAILURE
         try:
             intrinsics = self._camera_provider.initialize()
+            self.get_logger().info(f'Camera intrinsics: {intrinsics}')
             self._validate_intrinsics(intrinsics)
             self._service = self._create_interface()
             if super().on_activate(state) != TransitionCallbackReturn.SUCCESS:
@@ -212,6 +213,7 @@ class OptimizerBase(LifecycleNode, ABC):
         self._destroy_interface()
         if self._camera_provider is not None:
             self._camera_provider.deinitialize()
+        self.get_logger().info('Deactivated')
         return TransitionCallbackReturn.SUCCESS
 
     def on_cleanup(self, state: LifecycleState) -> TransitionCallbackReturn:
@@ -261,12 +263,17 @@ class OptimizerBase(LifecycleNode, ABC):
         try:
             if optimizer is None or intrinsics is None or config is None:
                 raise OptimizationError('Optimizer is not active')
+            self.get_logger().info(
+                f'Optimization requested for {len(request.patterns)} pattern(s): '
+                f'{[pattern.id for pattern in request.patterns]}'
+            )
             patterns = self._to_pattern_points(request.patterns)
             groups = optimizer.group(patterns, intrinsics)
             frame_id = common_frame_id(patterns)
             response.groups = [self._to_group_msg(group, frame_id) for group in groups]
             response.success = True
             response.error_message = ''
+            self._log_groups(groups, frame_id, time.perf_counter() - start)
         except OptimizationError as error:
             self.get_logger().error(str(error))
             self._fail(response, str(error))
@@ -275,6 +282,20 @@ class OptimizerBase(LifecycleNode, ABC):
             self._fail(response, f'internal error: {error}')
         response.optimization_time_s = time.perf_counter() - start
         return response
+
+    def _log_groups(self, groups: Sequence[PatternGroupDTO], frame_id: str, elapsed_s: float) -> None:
+        """Log the grouping result with the image capture pose of every group."""
+        self.get_logger().info(
+            f'Optimization succeeded: {len(groups)} group(s) in frame {frame_id!r} '
+            f'({elapsed_s:.3f} s)'
+        )
+        for number, group in enumerate(groups):
+            x, y, z = group.position
+            qx, qy, qz, qw = group.quaternion_xyzw
+            self.get_logger().info(
+                f'  group {number}: patterns={list(group.pattern_ids)} capture_pose '
+                f'xyz=({x:.4f}, {y:.4f}, {z:.4f}) q_xyzw=({qx:.4f}, {qy:.4f}, {qz:.4f}, {qw:.4f})'
+            )
 
     @staticmethod
     def _fail(response, message: str) -> None:

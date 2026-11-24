@@ -38,6 +38,8 @@ from rclpy.callback_groups import (
 from rclpy.client import Client
 from rclpy.duration import Duration
 from rclpy.node import Node
+from rclpy.publisher import Publisher
+from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.service import Service
 from rclpy.time import Time
 from tf2_ros import Buffer, TransformListener
@@ -52,6 +54,7 @@ from station_workplace.models.product_data_dto import ProductDataDTO
 from station_workplace.models.sdf_model_dto import SdfModelDTO
 from station_workplace.models.sim_model_metadata_dto import SimModelMetadataDTO
 from station_workplace.models.simulated_product_dto import SimulatedProductDTO
+from station_workplace.msg import SimulatedProductMetadata
 from station_workplace.services.collision_checker import CollisionChecker
 from station_workplace.srv import RemoveProduct, SpawnProduct
 from station_workplace.utils.async_service_caller import call_service
@@ -78,9 +81,20 @@ class SimulatedProductSpawner:
     * ``~/spawn_product`` (``station_workplace/SpawnProduct``);
     * ``~/remove_product`` (``station_workplace/RemoveProduct``).
 
+    Topic (created only while active): ``~/simulated_product_metadata``
+    (``station_workplace/SimulatedProductMetadata``, latched), published after
+    each successful spawn and removal.
+
     The services never touch the workplace process state. Both run in one
     mutually exclusive callback group and additionally share a lock.
     """
+
+    _METADATA_QOS = QoSProfile(
+        reliability=ReliabilityPolicy.RELIABLE,
+        durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        history=HistoryPolicy.KEEP_LAST,
+        depth=1,
+    )
 
     def __init__(
         self,
@@ -107,17 +121,17 @@ class SimulatedProductSpawner:
         self._model_client: Client | None = None
         self._spawn_service: Service | None = None
         self._remove_service: Service | None = None
+        self._metadata_publisher: Publisher | None = None
         self._tf_buffer: Buffer | None = None
         self._tf_listener: TransformListener | None = None
 
     # region lifecycle
     def activate(self) -> None:
         """Create the clients, the TF listener, the hook interfaces and the services."""
-        timeout = self._config.service_call_timeout_sec
         self._world_client = GazeboWorldClient(
             self._node,
             self._world_callback_group,
-            timeout_sec=timeout,
+            timeout_sec=self._sim.world_manager_timeout_sec,
         )
         try:
             self._world_client.list_models(owner=self._owner)
@@ -134,6 +148,8 @@ class SimulatedProductSpawner:
             callback_group=self._io_group)
         self._tf_buffer = Buffer()
         self._tf_listener = TransformListener(self._tf_buffer, self._node, spin_thread=False)
+        self._metadata_publisher = self._node.create_publisher(
+            SimulatedProductMetadata, '~/simulated_product_metadata', self._METADATA_QOS)
         self._spawn_service = self._node.create_service(
             SpawnProduct, '~/spawn_product', self._on_spawn_product,
             callback_group=self._service_group)
@@ -153,6 +169,9 @@ class SimulatedProductSpawner:
             if client is not None:
                 self._node.destroy_client(client)
                 setattr(self, name, None)
+        if self._metadata_publisher is not None:
+            self._node.destroy_publisher(self._metadata_publisher)
+            self._metadata_publisher = None
         if self._tf_listener is not None:
             self._tf_listener.unregister()
         self._tf_listener = None
@@ -229,6 +248,10 @@ class SimulatedProductSpawner:
         })
         carrier_model = self._parse(carrier_sdf, carrier_dir, 'carrier')
         product_model = self._parse(product_sdf, product_dir, 'product')
+        try:
+            find_link_pose(product_model, metadata.product_link)
+        except ValueError as exc:
+            raise SpawnError(f'product model: {exc}') from exc
 
         try:
             carrier_link_pose = pose6_to_matrix(
@@ -261,6 +284,7 @@ class SimulatedProductSpawner:
                 cancel=self._never_cancelled,
             )
             self._hooks.after_spawn(product.product)
+            self._publish_metadata(metadata.product_link)
         except Exception as exc:
             rollback_error = self._rollback()
             if rollback_error:
@@ -359,6 +383,7 @@ class SimulatedProductSpawner:
     def _remove_all(self) -> None:
         """Delete this workplace's registered models in dependency order."""
         self._delete_owned_models()
+        self._publish_metadata(None)
 
     def _delete_owned_models(self) -> None:
         """Delete all registered models owned by this workplace."""
@@ -380,6 +405,17 @@ class SimulatedProductSpawner:
             qw=pose.orientation.w,
         )
     # endregion remove
+
+    def _publish_metadata(self, product_link: str | None) -> None:
+        """Publish the spawned product's identity, or that no product is spawned (``None``)."""
+        if self._metadata_publisher is None:
+            raise SpawnError('simulated product spawner is not active')
+        msg = SimulatedProductMetadata()
+        msg.spawned = product_link is not None
+        if product_link is not None:
+            msg.product_model_name = self._sim.product_model_name
+            msg.product_link = product_link
+        self._metadata_publisher.publish(msg)
 
     def _require_world_client(self) -> GazeboWorldClient:
         if self._world_client is None:

@@ -38,12 +38,10 @@ from sensor_msgs.msg import Image
 from station_workplace.models.workplace_state_dto import WorkplaceStateDTO
 
 from localization.enums.constants import (
-    ESTIMATED_PRODUCT_ORIGIN_FRAME,
     LOCALIZATION_ORIGIN_FRAME,
     LOCALIZATION_ORIGIN_PLACEHOLDER_POSE,
     MOCK_CALCULATION_DURATION_S,
     PLANNING_FRAME,
-    PRODUCT_ORIGIN_FRAME,
     TF_LOOKUP_TIMEOUT_S,
 )
 from localization.exceptions import LocalizationCancelledError, LocalizationError
@@ -128,9 +126,9 @@ class MockLocalizationService(LocalizationService):
         return self._monitor.latest if self._monitor is not None else None
 
     def invalidate(self) -> None:
-        """Stop publishing ``product_origin``."""
+        """Stop publishing the localized product frame."""
         if self._tf_publisher is not None:
-            self._tf_publisher.clear_frame(PRODUCT_ORIGIN_FRAME)
+            self._tf_publisher.clear_frame(self._config.localized_product_frame_id)
 
     def localize(
         self,
@@ -138,7 +136,7 @@ class MockLocalizationService(LocalizationService):
         on_collection_done: Callable[[bool, int], None],
         cancel_event: threading.Event,
     ) -> LocalizationResultDTO:
-        """Collect the images, wait for the mocked calculation and publish ``product_origin``."""
+        """Collect the images, wait for the mocked calculation and publish the product frame."""
         started = time.monotonic()
         node = self._node
         monitor, publisher = self._monitor, self._tf_publisher
@@ -161,7 +159,8 @@ class MockLocalizationService(LocalizationService):
             pose = self._calculate_product_pose(cancel_event)
             if cancel_event.is_set():
                 raise LocalizationCancelledError('cancelled')
-            publisher.set_frame(PRODUCT_ORIGIN_FRAME, self._config.carrier_frame_id, pose)
+            publisher.set_frame(
+                self._config.localized_product_frame_id, self._config.carrier_frame_id, pose)
             node.get_logger().info(
                 f'Localized product {request.assembly_model_id} in '
                 f'{self._elapsed_s(started)} s')
@@ -222,7 +221,7 @@ class MockLocalizationService(LocalizationService):
             raise LocalizationCancelledError('cancelled')
         assert self._tf_lookup is not None
         transform = self._tf_lookup.lookup(
-            self._config.carrier_frame_id, ESTIMATED_PRODUCT_ORIGIN_FRAME).transform
+            self._config.carrier_frame_id, self._config.estimated_product_frame_id).transform
         pose = Pose()
         pose.position.x = transform.translation.x
         pose.position.y = transform.translation.y

@@ -45,6 +45,10 @@ class ModelSpecDTO(BaseModel):
     attach_link: str = Field(
         default='',
         description='Empty keeps the joints as authored; otherwise only the joint holding this child link stays attached')
+    delete_with_child: bool = Field(
+        default=False,
+        description='Delete this model (detached first) whenever a model that one of its joints holds is deleted, '
+                    'whatever the owner of either model')
 
     @staticmethod
     def from_msg(message: ModelSpec) -> 'ModelSpecDTO':
@@ -53,6 +57,7 @@ class ModelSpecDTO(BaseModel):
             model_id=message.model_id, sdf=message.sdf,
             pose=PoseDTO.from_stamped_msg(message.pose),
             attach_link=message.attach_link,
+            delete_with_child=message.delete_with_child,
         )
 
     @staticmethod
@@ -61,6 +66,7 @@ class ModelSpecDTO(BaseModel):
         message = ModelSpec()
         message.model_id, message.sdf = dto.model_id, dto.sdf
         message.attach_link = dto.attach_link
+        message.delete_with_child = dto.delete_with_child
         message.pose = PoseDTO.to_stamped_msg(dto.pose)
         return message
 

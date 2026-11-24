@@ -28,6 +28,7 @@
 
 from os import environ, getpid, setsid, killpg, getpgid
 from pathlib import Path
+import sys
 from shutil import which
 from subprocess import DEVNULL, Popen
 from time import monotonic, sleep
@@ -134,3 +135,40 @@ def test_existing_unmanaged_model_is_not_adopted(service):
     spec = ModelSpecDTO(model_id='station', sdf='<sdf version="1.9"><model name="station"/></sdf>')
     with raises(ModelValidationError, match='not managed'):
         service.spawn([spec], 'it')
+
+
+_FLOOD_PUBLISHER = '''
+import time
+from gz.msgs10.stringmsg_pb2 import StringMsg
+from gz.transport13 import Node
+node = Node()
+publisher = node.advertise('/world_manager_test/flood', StringMsg)
+while True:
+    publisher.publish(StringMsg(data='attached'))
+    time.sleep(0.001)
+'''
+
+
+def test_requests_answer_while_subscribed_messages_arrive(service):
+    """Messages on a subscribed topic arriving during a request must not stall the reply.
+
+    gz-transport's Python binding holds the GIL during a blocking request while subscription callbacks
+    need it on the reception thread, so such a request used to time out although Gazebo had answered.
+    """
+    adapter = RealGzTransportAdapter(MagicMock(spec=RcutilsLogger))
+    received: list[str] = []
+    adapter.subscribe_state('/world_manager_test/flood', received.append)
+    publisher = Popen([sys.executable, '-c', _FLOOD_PUBLISHER], stdout=DEVNULL, stderr=DEVNULL)
+    try:
+        deadline = monotonic() + 10.0
+        while not received and monotonic() < deadline:
+            sleep(0.1)
+        assert received, 'flood publisher not received'
+        for _ in range(5):
+            start = monotonic()
+            assert adapter.list_models(WORLD, 2.0) is not None
+            assert monotonic() - start < 1.0
+    finally:
+        publisher.kill()
+        publisher.wait()
+        adapter.close()

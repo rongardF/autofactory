@@ -95,9 +95,12 @@ class ToolSelectionService:
         if not response.success:
             raise SystemFailureError(f'get_tool_node_name failed: {response.error_message}')
         endtool_node = response.node_name
+        self._logger.info(f'Tool {tool.tool_sn} is served by endtool {endtool_node}')
         executor_node = self._registry.get(endtool_node).get_parameter('pattern_executor', ctx)
+        self._logger.info(f'Endtool {endtool_node} uses pattern executor {executor_node}')
         self._require_listed(executor_node, self._config.pattern_executor_nodes, 'pattern executor')
         optimizer_node = self._registry.get(executor_node).get_parameter('execution_optimizer', ctx)
+        self._logger.info(f'Pattern executor {executor_node} uses optimizer {optimizer_node}')
         self._require_listed(optimizer_node, self._config.execution_optimizer_nodes, 'execution optimizer')
         return ToolNodesDTO(
             tool_sn=tool.tool_sn,

@@ -123,8 +123,11 @@ Publishes a latched `tool_mounted` topic (`tools_manager/ToolInfo`) at
   delegates to `controller.lock_closed(...)`.
 - **Simulated controller:** subscribes to `/tool_mount_rfid_scanner/tag_data`;
   parses the `Dataframe` into the mounted `ToolInfoDto` (empty ⇒ nothing
-  mounted). `lock_closed()` is a no-op returning `True` (there is no physical
-  lock to drive in sim).
+  mounted). There is no physical lock to drive in sim, so `lock_closed()` only
+  records the requested state (initially closed) and always returns `True`. A
+  tool is reported as mounted only while the lock is closed, because the RFID
+  reader also sees a tool held within range while approaching or leaving the
+  rack.
 
 ---
 
@@ -354,7 +357,10 @@ neither an endtool nor an executor. For every endtool the launch includes
 `simulated`, `world_name` and tool identity. The executor node name is a launch
 argument per instance (`pattern_executor_<tool_sn>`); its resolved value names
 the executor node **and** is forwarded to the endtool launch as
-`pattern_executor`. Add or change tools by editing `_RACK_SLOTS`.
+`pattern_executor`. The `station_workplace_node_name` launch argument (default
+`workplace_rfid_scanner`) is forwarded to every endtool launch so simulated
+endtools weld their models to the product spawned by that workplace. Add or
+change tools by editing `_RACK_SLOTS`.
 
 The pattern executor launch lives in a package that already depends on
 `endtools`, so the composition is done here (`tools_manager` depends on both)

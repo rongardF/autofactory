@@ -209,6 +209,14 @@ class ChildGoal:
         except Exception:  # noqa: BLE001 - best effort
             pass
 
+    def add_done_callback(self, callback: Callable[[], None]) -> None:
+        """Call ``callback`` (on an executor thread) once the goal has a result; runs at once if it has one."""
+        self._result_future.add_done_callback(lambda _future: callback())
+
+    def release(self) -> None:
+        """Stop cancelling the goal on abort; for goals that are not awaited with :meth:`wait`."""
+        self._unregister()
+
     def cancel(self, wait: bool = False) -> None:
         """Request cancellation of the goal; optionally wait for the acknowledgement."""
         if self.done.is_set():

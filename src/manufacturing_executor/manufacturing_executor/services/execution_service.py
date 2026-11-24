@@ -78,11 +78,21 @@ class ExecutionService:
         session = MovementSessionClient(self._node, self._config, self._clients, ctx)
         try:
             session.ensure_valid()
-            for group in groups:
+            self._logger.info(f'Movement session {session.session_id} opened')
+            for number, group in enumerate(groups, start=1):
+                self._logger.info(
+                    f'Group {number}/{len(groups)}: {len(group.image_capture_poses)} capture pose(s), '
+                    f'patterns={list(group.pattern_ids)}'
+                )
+                self._logger.info(f'Group {number}/{len(groups)}: capturing images before dispensing')
                 self._capture_all(group, operation_id, product, session, ctx)
+                self._logger.info(f'Group {number}/{len(groups)}: executing patterns')
                 self._run_patterns(group, patterns_by_id, executor_node, operation_id, session, ctx)
+                self._logger.info(f'Group {number}/{len(groups)}: capturing images after dispensing')
                 self._capture_all(group, operation_id, product, session, ctx)
+                self._logger.info(f'Group {number}/{len(groups)}: done')
         finally:
+            self._logger.info(f'Closing movement session {session.session_id}')
             session.close()
 
     def _capture_all(
@@ -124,3 +134,4 @@ class ExecutionService:
             result_timeout_s=None,
         )
         outcome.ensure_success('Pattern execution')
+        self._logger.info(f'{executor_node} executed {len(goal.patterns)} pattern(s)')

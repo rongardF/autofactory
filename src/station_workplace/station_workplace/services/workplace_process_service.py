@@ -80,7 +80,7 @@ class WorkplaceProcessService:
         :param config: Validated node configuration.
         :param scene: Planning-scene manager.
         :param state_publisher: ``~/workplace`` publisher.
-        :param tf_publisher: ``estimated_product_origin`` TF publisher.
+        :param tf_publisher: estimated product origin TF publisher.
         :param reader: Node-specific product data reader.
         :param runner: Process runner providing the side-effect guard.
         :param callback_group: Callback group of the service clients.

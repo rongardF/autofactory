@@ -65,6 +65,15 @@ class CommonNodeConfigDTO(BaseModel):
         default='conveyor_origin', min_length=1,
         description='Robot link the carrier model and the safety object may collide with.',
     )
+    attach_link: str = Field(
+        default='carrier', min_length=1,
+        description='Robot link all planning-scene objects are attached to; also the TF parent '
+        'of the estimated product frame.',
+    )
+    estimated_product_frame_id: str = Field(
+        default='estimated_product_origin', pattern=ROS_NAME_PATTERN,
+        description='TF frame (child of the carrier) published for the estimated product origin.',
+    )
     safety_object: SafetyObjectConfigDTO = Field(
         default_factory=SafetyObjectConfigDTO,
         description='Safety box size.',

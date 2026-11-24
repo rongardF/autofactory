@@ -14,6 +14,9 @@ class SimulatedToolMountController(ToolMountController):
 
         self._mounted_info: ToolInfoDto|None = None
         self._mounted_info_lock = RLock()
+        # the tool counts as mounted only while the quick release is closed, because the RFID
+        # reader also sees a tool that is merely held close to it (approaching or leaving the rack)
+        self._lock_closed = True
 
         self._tool_data_subscription: Subscription | None = None
 
@@ -50,11 +53,12 @@ class SimulatedToolMountController(ToolMountController):
 
     def get_mounted_tool_info(self) -> ToolInfoDto|None:
         with self._mounted_info_lock:
-            return self._mounted_info
+            return self._mounted_info if self._lock_closed else None
 
     def is_mounted(self) -> bool:
-        with self._mounted_info_lock:
-            return self._mounted_info is not None
+        return self.get_mounted_tool_info() is not None
 
     def lock_closed(self, closed: bool) -> bool:
+        with self._mounted_info_lock:
+            self._lock_closed = closed
         return True

@@ -55,7 +55,9 @@ The node never changes its own state.
 | `camera_node_name` | `cameras/basler_camera` | Camera node including its namespace. |
 | `camera_frame_id` | `camera_tcp_calibrated` | Camera TCP, used as tool frame. |
 | `base_frame_id` | `station` | Frame of the initial pose; parent of `localization_origin`. |
-| `carrier_frame_id` | `carrier` | Parent of `product_origin`. |
+| `carrier_frame_id` | `carrier` | Parent of `localized_product_frame_id`. |
+| `localized_product_frame_id` | `product_origin` | Frame published for the localized product; returned as `localized_product_frame`. |
+| `estimated_product_frame_id` | `estimated_product_origin` | Frame of the product pose estimated by `station_workplace`, copied by the mock. |
 | `initial_localization_pose` | `[1.0, 0.0, 1.46, 0.0, 1.5708, 0.0]` | `[x, y, z, roll, pitch, yaw]` (m, rad) in `base_frame_id`. Placeholder. |
 | `calibration_poses_file` | `''` | Absolute path of the poses YAML (required). |
 | `image_capture_settling_s` | `0.5` | Wait between reaching a pose and capturing. |

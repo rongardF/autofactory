@@ -96,6 +96,7 @@ class GazeboWorldManager(LifecycleNode):
         self._active = False
         self._dirty = Event()
         self._service: GazeboWorldService | None = None
+        self._adapter: RealGzTransportAdapter | None = None
         self._publisher_thread: ModelListPublisher | None = None
         self._tf_buffer: Buffer | None = None
         self._tf_listener: TransformListener | None = None
@@ -130,6 +131,7 @@ class GazeboWorldManager(LifecycleNode):
             return TransitionCallbackReturn.FAILURE
 
         registry = ModelRegistry(on_change=self._dirty.set)
+        self._adapter = adapter
         self._service = GazeboWorldService(
             adapter=adapter,
             registry=registry,
@@ -211,6 +213,9 @@ class GazeboWorldManager(LifecycleNode):
         self._active = False
         self._destroy_active_interfaces()
         self._service = None
+        if self._adapter is not None:
+            self._adapter.close()
+            self._adapter = None
         return TransitionCallbackReturn.SUCCESS
 
     def on_shutdown(self, state: LifecycleState) -> TransitionCallbackReturn:

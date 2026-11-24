@@ -36,7 +36,6 @@ from rclpy.callback_groups import CallbackGroup
 from rclpy.node import Node
 
 from localization.action import LocalizeProduct
-from localization.enums.constants import PRODUCT_ORIGIN_FRAME
 from localization.interface.localization_service import LocalizationService
 from localization.models.localization_result_dto import (
     LocalizationRequestDTO,
@@ -57,16 +56,19 @@ class LocalizeProductActionServer:
         node: Node,
         service: LocalizationService,
         callback_group: CallbackGroup,
+        localized_product_frame_id: str,
         on_goal_accepted: Callable[[], None],
         on_succeeded: Callable[[], None],
     ) -> None:
         """Create the action server.
 
+        :param localized_product_frame_id: Frame reported in the result as the localized product.
         :param on_goal_accepted: Called when a goal is accepted; the previous localization is void.
         :param on_succeeded: Called when a localization finished successfully.
         """
         self._node = node
         self._service = service
+        self._localized_product_frame_id = localized_product_frame_id
         self._on_goal_accepted = on_goal_accepted
         self._on_succeeded = on_succeeded
         self._lock = threading.Lock()
@@ -136,7 +138,7 @@ class LocalizeProductActionServer:
             outcome = LocalizationResultDTO(error_message=f'unexpected error: {exc}')
 
         result = LocalizeProduct.Result()
-        result.localized_product_frame = PRODUCT_ORIGIN_FRAME
+        result.localized_product_frame = self._localized_product_frame_id
         result.localization_time_s = outcome.localization_time_s
         result.success = outcome.success
         result.error_message = outcome.error_message

@@ -220,10 +220,15 @@ actually settled on its end pose.
 - `motion_type` — `LIN`, `PTP`, or `CIRC`
 - `target_pose` — `geometry_msgs/PoseStamped`
 - `blend_radius` (default `0.0`) — blend into the next path (LIN/CIRC groups)
-- `cartesian_speed` (default `0.0`) — cartesian speed for the selected link
-- `cartesian_acceleration` (default `0.0`) — cartesian acceleration for the selected link
-- `joint_speed` (default `0.0`) — joint speed (same value applies to all joints)
-- `joint_acceleration` (default `0.0`) — joint acceleration (same value applies to all joints)
+- `cartesian_speed` (default `-1.0`) — cartesian speed for the selected link (LIN/CIRC)
+- `cartesian_acceleration` (default `-1.0`) — cartesian acceleration for the selected link (LIN/CIRC)
+- `joint_speed` (default `-1.0`) — joint speed (same value applies to all joints, PTP)
+- `joint_acceleration` (default `-1.0`) — joint acceleration (same value applies to all joints, PTP)
+
+Any non-positive speed/acceleration (`-1.0`, or `0.0`) means "unspecified":
+the planner substitutes the node-level `default_cartesian_velocity` /
+`default_cartesian_acceleration` (LIN/CIRC) or `default_rotational_velocity` /
+`default_rotational_acceleration` (PTP).
 - `tool_frame`
 - `circ_type` — `interim` (waypoint on arc) or `center` (arc center), CIRC only
 - `circ_point` — `geometry_msgs/Point`, CIRC only

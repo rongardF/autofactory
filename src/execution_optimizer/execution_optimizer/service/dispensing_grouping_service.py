@@ -124,13 +124,17 @@ class _GroupFitter:
 class DispensingGroupingService:
     """Groups dispensing patterns and computes the image capture pose of every group."""
 
-    def __init__(self, config: DispensingOptimizerConfigDTO) -> None:
+    def __init__(
+        self, config: DispensingOptimizerConfigDTO, log: Callable[[str], None] | None = None
+    ) -> None:
         """Store the validated configuration.
 
         :param config: Immutable optimizer configuration.
         :type config: DispensingOptimizerConfigDTO
+        :param log: Optional sink for informational progress messages.
         """
         self._config = config
+        self._log = log or (lambda _message: None)
 
     def group(
         self, patterns: Sequence[PatternPointsDTO], intrinsics: CameraIntrinsicsDTO
@@ -145,15 +149,23 @@ class DispensingGroupingService:
         self._validate_request(patterns)
         rois = self._build_rois(patterns)
         area_px = self._config.operational_area or (0, 0, intrinsics.width, intrinsics.height)
+        self._log(
+            f'Grouping {len(rois)} pattern(s), operational area {list(area_px)} px, '
+            f'resolution range {list(self._config.feature_resolution_range)} px/mm'
+        )
         fitter = _GroupFitter(rois, self._config, intrinsics, area_px)
         self._check_singletons(rois, fitter)
 
         best: list[list[int]] | None = None
+        best_strategy: OrderingStrategyEnum | None = None
         for strategy in OrderingStrategyEnum:
             groups = self._eliminate(fitter, self._first_fit(fitter, self._order(rois, strategy)))
+            self._log(f'Ordering {strategy.value}: {len(groups)} group(s)')
             if best is None or len(groups) < len(best):
                 best = groups
-        assert best is not None
+                best_strategy = strategy
+        assert best is not None and best_strategy is not None
+        self._log(f'Selected ordering {best_strategy.value} with {len(best)} group(s)')
         return self._build_result(rois, fitter, best)
 
     # region: validation

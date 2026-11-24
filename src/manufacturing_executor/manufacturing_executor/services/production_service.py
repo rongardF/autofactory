@@ -119,4 +119,8 @@ class ProductionService:
         )
         if not response.success:
             raise SystemFailureError(f'report_production failed: {response.error_message}')
+        self._logger.info(
+            f'Production report accepted for operation {production.operation_id} '
+            f'(success={success}, finished_in_station={bool(response.finished_in_station)})'
+        )
         return bool(response.finished_in_station)

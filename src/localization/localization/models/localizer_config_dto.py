@@ -56,7 +56,13 @@ class LocalizerConfigDTO(BaseModel):
         description='Frame of the initial localization pose; parent of localization_origin.')
     carrier_frame_id: str = Field(
         default='carrier', pattern=ROS_NAME_PATTERN,
-        description='Parent frame of product_origin.')
+        description='Parent frame of the localized product frame.')
+    localized_product_frame_id: str = Field(
+        default='product_origin', pattern=ROS_NAME_PATTERN,
+        description='Frame published (child of carrier_frame_id) for the localized product.')
+    estimated_product_frame_id: str = Field(
+        default='estimated_product_origin', pattern=ROS_NAME_PATTERN,
+        description='Frame of the product pose estimated by the station workplace.')
     initial_localization_pose: Pose6 = Field(
         description='Initial image capture pose [x, y, z, roll, pitch, yaw] in base_frame_id.')
     calibration_poses_file: str = Field(

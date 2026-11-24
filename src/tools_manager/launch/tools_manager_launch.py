@@ -121,6 +121,7 @@ def _endtool_actions(endtool: _Endtool):
             'tool_sn': endtool.tool_sn,
             'node_name': endtool.node_name,
             'pattern_executor': pattern_executor,
+            'station_workplace_node_name': LaunchConfiguration('station_workplace_node_name'),
         }.items(),
     )
     executor_launch = IncludeLaunchDescription(
@@ -167,6 +168,14 @@ def generate_launch_description():
             'movement_controller_node_name',
             default_value='movement_controller',
             description='Name of the movement controller node.',
+        ),
+        DeclareLaunchArgument(
+            'station_workplace_node_name',
+            default_value='workplace_rfid_scanner',
+            description=(
+                'Simulation only: node name of the station workplace whose spawned product '
+                'the endtools weld their simulated models to.'
+            ),
         ),
         DeclareLaunchArgument(
             'world_name',

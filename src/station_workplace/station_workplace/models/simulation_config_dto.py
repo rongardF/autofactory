@@ -67,3 +67,8 @@ class SimulationConfigDTO(BaseModel):
         default=0.001, ge=0, allow_inf_nan=False,
         description='Product/carrier penetration depth [m] still treated as touching.',
     )
+    world_manager_timeout_sec: float = Field(
+        default=15.0, gt=0, allow_inf_nan=False,
+        description='Timeout for availability and response of the Gazebo world manager services '
+        '[s]; must cover its operation_timeout_sec plus rollback.',
+    )

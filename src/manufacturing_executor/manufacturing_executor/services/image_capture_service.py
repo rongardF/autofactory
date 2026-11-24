@@ -26,7 +26,6 @@
 # POSSIBILITY OF SUCH DAMAGE.
 """Step 13.1 / 13.3: move the camera to a pose, capture an image and store it."""
 
-import copy
 import uuid
 
 from geometry_msgs.msg import PoseStamped
@@ -43,8 +42,7 @@ from manufacturing_executor.services.async_calls import call_service, run_action
 from manufacturing_executor.services.loop_clients import LoopClients
 from manufacturing_executor.services.movement_session_client import MovementSessionClient
 from manufacturing_executor.utils.capture_metadata import build_capture_metadata
-from movement_controller.action import ExecuteTrajectory
-from movement_controller.msg import TrajectoryPath
+from manufacturing_executor.utils.log_format import format_pose
 from repositories.srv import ImageRepositoryUploadImage
 from station_workplace.models.product_data_dto import ProductDataDTO
 
@@ -70,30 +68,22 @@ class ImageCaptureService:
 
         :raises SystemFailureError: If any of the steps fails.
         """
-        self._move(pose, session, ctx)
+        pose_text = format_pose(pose)
+        self._logger.info(f'Moving camera ({self._config.camera_tcp}) to capture pose {pose_text}')
+        session.move_ptp(pose, self._config.camera_tcp, 'Move to the image capture pose', ctx)
         sleep_abortable(self._config.image_capture_settling_s, ctx)
+        self._logger.info(f'Capturing image at {pose_text}')
         image = self._get_image(ctx)
-        self._upload(image, build_capture_metadata(operation_id, product.serial_number, pose), ctx)
-
-    def _move(self, pose: PoseStamped, session: MovementSessionClient, ctx: AbortContext) -> None:
-        session.ensure_valid()
-        path = TrajectoryPath()
-        path.path_id = str(uuid.uuid4())
-        path.motion_type = TrajectoryPath.MOTION_TYPE_PTP
-        path.target_pose = copy.deepcopy(pose)
-        path.tool_frame = self._config.camera_tcp
-        goal = ExecuteTrajectory.Goal()
-        goal.paths = [path]
-        goal.session_id = session.session_id
-        outcome = run_action(
-            self._clients.execute_trajectory,
-            goal,
-            ctx=ctx,
-            description='Move to the image capture pose',
-            accept_timeout_s=self._config.service_call_timeout_s,
-            result_timeout_s=None,
+        self._logger.info(
+            f'Image captured: {image.width}x{image.height} {image.encoding} '
+            f'frame={image.header.frame_id!r}'
         )
-        outcome.ensure_success('Move to the image capture pose')
+        image_name = self._upload(
+            image, build_capture_metadata(operation_id, product.serial_number, pose), ctx
+        )
+        self._logger.info(
+            f'Image {image_name} uploaded (operation {operation_id}, sn {product.serial_number})'
+        )
 
     def _get_image(self, ctx: AbortContext) -> Image:
         outcome = run_action(
@@ -106,7 +96,11 @@ class ImageCaptureService:
         )
         return outcome.ensure_success('Image capture').image
 
-    def _upload(self, image: Image, metadata: str, ctx: AbortContext) -> None:
+    def _upload(self, image: Image, metadata: str, ctx: AbortContext) -> str:
+        """Upload the image.
+
+        :returns: The image name.
+        """
         request = ImageRepositoryUploadImage.Request()
         request.image = image
         request.image_name = str(uuid.uuid4())
@@ -120,3 +114,4 @@ class ImageCaptureService:
         )
         if not response.success:
             raise SystemFailureError(f'Image upload failed: {response.error_message}')
+        return request.image_name

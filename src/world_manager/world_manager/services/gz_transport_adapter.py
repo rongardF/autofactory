@@ -39,6 +39,9 @@ class GzTransportAdapter(ABC):
     (``ok and reply.data``). Callbacks passed to ``subscribe_state`` run on gz threads.
     """
 
+    def close(self) -> None:
+        """Release resources held by the adapter; the default does nothing."""
+
     @abstractmethod
     def create_model(self, world: str, model_id: str, sdf: str, pose: PoseDTO, timeout_sec: float) -> bool:
         """Call ``/world/<w>/create/blocking``."""

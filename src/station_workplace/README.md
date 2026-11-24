@@ -24,6 +24,7 @@ Both nodes share all behaviour except reading the product data
 | `ProductData` | `product_number`, `product_revision`, `serial_number` |
 | `WorkplaceState` | `in_place`, `ProductData[<=1] product_data` (empty when no product) |
 | `LabelData` | `uint8[] data` (ASCII label), `builtin_interfaces/Time stamp` |
+| `SimulatedProductMetadata` | `bool spawned`, `string product_model_name`, `string product_link` (names empty when `spawned` is false) |
 
 An unidentified product is reported as `ProductData` with all fields `UNKNOWN`.
 
@@ -46,9 +47,10 @@ An unidentified product is reported as `ProductData` with all fields `UNKNOWN`.
 |------|------|-------|
 | `~/workplace` | `station_workplace/WorkplaceState` | Latched (reliable, transient local, depth 1); published only on change |
 | `~/wait_routing` | `station_workplace/action/WaitRouting` | Action; see [wait_routing](#wait_routing) |
-| TF `carrier` → `estimated_product_origin` | `/tf_static` | Not published before the first successful injection; reset to identity on ejection / injection error; never removed |
+| TF `<attach_link>` → `estimated_product_frame_id` (default `carrier` → `estimated_product_origin`) | `/tf_static` | Not published before the first successful injection; reset to identity on ejection / injection error; never removed |
 | `~/spawn_product` | `station_workplace/srv/SpawnProduct` | Only if `simulated`; see [Simulation](#simulation) |
 | `~/remove_product` | `station_workplace/srv/RemoveProduct` | Only if `simulated`; see [Simulation](#simulation) |
+| `~/simulated_product_metadata` | `station_workplace/msg/SimulatedProductMetadata` | Only if `simulated`; latched (reliable, transient local, depth 1); published after each successful `spawn_product` / `remove_product` |
 | `/<barcode_scanner_node_name>/simulated_label_data` | `station_workplace/msg/LabelData` | barcode, only if `simulated`; latched (reliable, transient local, depth 1) |
 
 ### Consumed
@@ -77,6 +79,8 @@ An unidentified product is reported as `ProductData` with all fields `UNKNOWN`.
 | `production_manager_node_name` | string | `production_manager` | Production manager node name |
 | `object_model_repository_node_name` | string | `object_model_storage` | Object model storage node name |
 | `collision_allowed_link` | string | `conveyor_origin` | Link the carrier model and the safety object may collide with |
+| `attach_link` | string | `carrier` | Robot link all planning-scene objects are attached to; also the TF parent of `estimated_product_frame_id` |
+| `estimated_product_frame_id` | string | `estimated_product_origin` | TF frame (child of `attach_link`) published for the estimated product origin; must match `estimated_product_frame_id` of the localization node |
 | `safety_object.x` / `.y` / `.z` | double | `0.25` / `0.4` / `0.3` | Safety box size [m] (> 0) |
 | `service_call_timeout_sec` | double | `5.0` | Timeout for service availability and for the response [s]; also the TF lookup timeout of `spawn_product` |
 | `simulated` | bool | `false` | Provide `spawn_product` / `remove_product`; the launch files start the shared Gazebo manager when enabled |
@@ -87,6 +91,7 @@ An unidentified product is reported as `ProductData` with all fields `UNKNOWN`.
 | `simulation.carrier_link` | string | `carrier_link` | Carrier link the product is placed relative to; product xacro argument `carrier_link` |
 | `simulation.product_model_name` | string | `product_model` | Name of the spawned product; product xacro argument `model_name` |
 | `simulation.penetration_tolerance` | double | `0.001` | Product/carrier penetration depth [m] still treated as touching (>= 0) |
+| `simulation.world_manager_timeout_sec` | double | `15.0` | Timeout for availability and response of the Gazebo world manager services [s] (> 0); must cover the manager's `operation_timeout_sec` plus rollback |
 
 `simulation.*` can be given as launch arguments, `-p` overrides or YAML (dotted
 keys or a nested `simulation:` map).
@@ -120,7 +125,7 @@ injection.
 
 Injection:
 
-1. Attach the safety box (`safety_object_model`) to `carrier`.
+1. Attach the safety box (`safety_object_model`) to `attach_link` (default `carrier`).
 2. Read the product data (RFID tag fields, or the first **valid** label stamped
    after the arrival — barcode has no timeout; a label that cannot be decoded
    or does not match the `label_patterns` is logged and skipped, and the node
@@ -196,7 +201,7 @@ the workplace state or `product_in_place`. Both run serialized.
 2. Validates the request: non-empty ASCII product fields, UUID4 `assembly_model_id`,
    finite `pose`. RFID: each field must fit its `tag_registers.<field>.length`.
 3. `get_models_info(assembly_model_id)`: exactly one `sdf` model whose `metadata_json`
-   contains a UUID4 `carrier_model_id`; `get_model` returns its folder.
+   contains a UUID4 `carrier_model_id` and a `product_link`; `get_model` returns its folder.
 4. `get_models_info(carrier_model_id)`: exactly one `sdf` model; `get_model` returns its folder.
 5. Expands `<folder>/model.sdf.xacro` of both models with the xacro arguments:
    - carrier: `model_name`, `station_model_name`, `station_link`; RFID additionally
@@ -212,6 +217,10 @@ the workplace state or `product_in_place`. Both run serialized.
    models attach on spawn.
 8. Barcode: publishes the label `<GS>1P<product_number><GS>21P<product_revision><GS>S<serial_number><RS><EOT>`
    (`GS`=0x1D, `RS`=0x1E, `EOT`=0x04) once on `simulated_label_data`.
+9. Publishes `SimulatedProductMetadata{spawned: true, product_model_name:
+   <simulation.product_model_name>, product_link: <metadata product_link>}` on
+   `~/simulated_product_metadata`. Simulated endtools subscribe to it to weld
+   their spawned models (e.g. dispensed material) to the product.
 
 If the post-spawn hook fails, the workplace deletes all of its owned models
 before returning the failure. Spawn request failures are rolled back atomically
@@ -219,7 +228,8 @@ by `gazebo_world_manager`.
 
 ### `remove_product`
 
-Deletes every registered model owned by this workplace in one request. The
+Deletes every registered model owned by this workplace in one request, then
+publishes `SimulatedProductMetadata{spawned: false}`. The
 world manager detaches joints and deletes dependent models before their parents,
 so the product is removed before the carrier. Returns success immediately when
 no owned models are registered. A failed deletion returns `success=false`.
@@ -239,7 +249,7 @@ models are unmanaged and are not adopted.
   Other shapes, `<submesh>`, a model without collision geometry, poses in degrees
   or quaternions, and link/collision poses `relative_to` other frames fail the call.
 - The carrier model has the link `simulation.carrier_link`; the product metadata
-  contains `carrier_model_id`.
+  contains `carrier_model_id` and `product_link`, a link of the product model.
 - Each model welds itself with a `gz::sim::systems::DetachableJoint` whose
   `<detach_topic>` / `<output_topic>` are `<prefix>/detach` / `<prefix>/state`, with
   `<prefix>` = `/<station_link>/<model_name>` for the carrier and

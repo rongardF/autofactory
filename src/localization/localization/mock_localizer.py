@@ -79,6 +79,7 @@ class MockLocalizer(LifecycleNode):
         for name in (
             'station_workplace_node_name', 'movement_controller_node_name', 'camera_node_name',
             'camera_frame_id', 'base_frame_id', 'carrier_frame_id',
+            'localized_product_frame_id', 'estimated_product_frame_id',
             'image_capture_settling_s', 'image_capture_timeout_s',
         ):
             self._declare(name, defaults[name].default, defaults[name].description)
@@ -128,7 +129,7 @@ class MockLocalizer(LifecycleNode):
 
     def on_activate(self, state: State) -> TransitionCallbackReturn:
         """Initialize the service and create the action server and the topic."""
-        if self._service is None:
+        if self._service is None or self._config is None:
             self.get_logger().error('Activation failed: node is not configured')
             return TransitionCallbackReturn.FAILURE
         try:
@@ -136,6 +137,7 @@ class MockLocalizer(LifecycleNode):
             self._localized_pub = self.create_publisher(Bool, '~/localized', self._LOCALIZED_QOS)
             self._action_server = LocalizeProductActionServer(
                 self, self._service, self._action_group,
+                localized_product_frame_id=self._config.localized_product_frame_id,
                 on_goal_accepted=self._on_goal_accepted, on_succeeded=self._on_succeeded)
             result = super().on_activate(state)
             if result != TransitionCallbackReturn.SUCCESS:

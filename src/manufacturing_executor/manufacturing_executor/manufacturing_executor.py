@@ -65,6 +65,7 @@ from manufacturing_executor.services.abort_context import AbortContext
 from manufacturing_executor.services.dependency_manager import DependencyManager
 from manufacturing_executor.services.execution_service import ExecutionService
 from manufacturing_executor.services.executor_service import ExecutorService
+from manufacturing_executor.services.idle_pose_service import IdlePoseService
 from manufacturing_executor.services.image_capture_service import ImageCaptureService
 from manufacturing_executor.services.lifecycle_client import LifecycleClientRegistry
 from manufacturing_executor.services.loop_clients import LoopClients
@@ -82,6 +83,8 @@ class ManufacturingExecutor(LifecycleNode):
 
     _SCALAR_PARAMETERS = (
         'camera_tcp',
+        'flange_tcp',
+        'base_frame_id',
         'service_call_timeout_s',
         'image_capture_settling_s',
         'lifecycle_transition_timeout_s',
@@ -110,6 +113,12 @@ class ManufacturingExecutor(LifecycleNode):
             'pattern_executor_nodes',
             list(defaults['pattern_executor_nodes'].default),
             defaults['pattern_executor_nodes'].description,
+        )
+        idle_pose = defaults['idle_pose'].default_factory()
+        self._declare('idle_pose.position', list(idle_pose.position), 'Idle pose position [x, y, z] in base_frame_id [m].')
+        self._declare(
+            'idle_pose.orientation', list(idle_pose.orientation),
+            'Idle pose orientation [roll, pitch, yaw] in base_frame_id [rad].',
         )
 
         self._group = ReentrantCallbackGroup()
@@ -144,6 +153,10 @@ class ManufacturingExecutor(LifecycleNode):
                 ),
                 execution_optimizer_nodes=tuple(self.get_parameter('execution_optimizer_nodes').value),
                 pattern_executor_nodes=tuple(self.get_parameter('pattern_executor_nodes').value),
+                idle_pose={
+                    'position': tuple(self.get_parameter('idle_pose.position').value),
+                    'orientation': tuple(self.get_parameter('idle_pose.orientation').value),
+                },
                 **{name: self.get_parameter(name).value for name in self._SCALAR_PARAMETERS},
             )
         except ValidationError as error:
@@ -251,6 +264,7 @@ class ManufacturingExecutor(LifecycleNode):
             OptimizerService(self, config, clients, self._registry),
             ExecutorService(self, config, clients, self._registry, self._inventory),
             ExecutionService(self, config, clients, image_capture),
+            IdlePoseService(self, config, clients),
         )
 
     def _release(self, owned_nodes: bool) -> list[str]:

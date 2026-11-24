@@ -26,6 +26,10 @@
 # POSSIBILITY OF SUCH DAMAGE.
 """The movement session that keeps the robot reserved for the manufacturing loop."""
 
+import copy
+import uuid
+
+from geometry_msgs.msg import PoseStamped
 from rclpy.node import Node
 
 from manufacturing_executor.exceptions import SystemFailureError
@@ -33,8 +37,10 @@ from manufacturing_executor.models.manufacturing_executor_config_dto import (
     ManufacturingExecutorConfigDTO,
 )
 from manufacturing_executor.services.abort_context import AbortContext
-from manufacturing_executor.services.async_calls import call_service
+from manufacturing_executor.services.async_calls import ChildGoal, call_service
 from manufacturing_executor.services.loop_clients import LoopClients
+from movement_controller.action import ExecuteTrajectory
+from movement_controller.msg import TrajectoryPath
 from movement_controller.services.movement_session import MovementSession
 from movement_controller.srv import CloseSession, InSession
 
@@ -75,6 +81,36 @@ class MovementSessionClient:
         if error:
             self._ctx.raise_if_aborted()
             raise SystemFailureError(f'Movement session: {error}')
+
+    def move_ptp(self, pose: PoseStamped, tool_frame: str, description: str, ctx: AbortContext) -> None:
+        """Move ``tool_frame`` to ``pose`` with one PTP motion and wait until it is done.
+
+        :raises SystemFailureError: If the session is invalid or the motion fails.
+        """
+        self.start_ptp(pose, tool_frame, description, ctx).wait(None).ensure_success(description)
+
+    def start_ptp(self, pose: PoseStamped, tool_frame: str, description: str, ctx: AbortContext) -> ChildGoal:
+        """Extend the session and start one PTP motion (default speeds) without waiting for its result.
+
+        :returns: The accepted goal; it is cancelled when ``ctx`` is aborted.
+        :raises SystemFailureError: If the session is invalid or the goal is not accepted.
+        """
+        self.ensure_valid()
+        path = TrajectoryPath()
+        path.path_id = str(uuid.uuid4())
+        path.motion_type = TrajectoryPath.MOTION_TYPE_PTP
+        path.target_pose = copy.deepcopy(pose)
+        path.tool_frame = tool_frame
+        goal = ExecuteTrajectory.Goal()
+        goal.paths = [path]
+        goal.session_id = self.session_id
+        return ChildGoal.start(
+            self._clients.execute_trajectory,
+            goal,
+            ctx=ctx,
+            description=description,
+            accept_timeout_s=self._timeout_s,
+        )
 
     def close(self) -> None:
         """Release the session; errors are logged, never raised."""

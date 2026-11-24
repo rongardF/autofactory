@@ -49,7 +49,7 @@ def test_gazebo_dto_round_trips():
         qx=0.1, qy=0.2, qz=0.3, qw=0.9,
     )
     spec = ModelSpecDTO(
-        model_id='tool', sdf='<sdf/>', pose=pose, attach_link='mount'
+        model_id='tool', sdf='<sdf/>', pose=pose, attach_link='mount', delete_with_child=True
     )
     model = ModelInfoDTO(
         model_id='tool', owner='test',

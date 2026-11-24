@@ -170,6 +170,9 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_tcp_expiration
     tests/unit/test_tcp_expiration.py
   )
+  ament_add_pytest_test(test_simulated_product_metadata
+    tests/unit/test_simulated_product_metadata.py
+  )
 endif()
 
 # --------------------------------------------------------------------------
