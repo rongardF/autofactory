@@ -32,8 +32,9 @@ string execution_phase
   `Executing operation '<operation-number>' pattern group <group-index> patterns`,
   `Capturing operation '<operation-number>' pattern group <group-index> after image`, and finally
   `Waiting for product ejection`.
-  Phases that do not happen are not published: no mounting when the tool is already mounted, no waiting for the
-  localization / optimization when its result is already available, no captures for a group without capture poses.
+  Phases that do not happen are not published: no `Waiting for product injection` while the product stays in the
+  station for its next operation, no localization when it is skipped (see step 5), no mounting when
+  the tool is already mounted, no waiting for the localization / optimization when its result is already available, no captures for a group without capture poses.
 * The goal ends only when the caller cancels it, a system failure occurs or the node is deactivated.
 * Caller cancel: `success=true`, empty `error_message` (a cancel is not a failure).
 * Node side abort: `success=false` with a descriptive `error_message`.
@@ -51,7 +52,7 @@ flowchart TD
     E --> F{operation fetched,<br/>type dispensing,<br/>tool and material in station?}
     F -- no --> R1[report_production: failure with reason]
     R1 --> X[eject_product = finished_in_station] --> A
-    F -- yes --> G[localize_product<br/>image collection]
+    F -- yes --> G[localize_product<br/>image collection<br/>unless skipped]
     G --> H[resolve endtool, pattern executor, optimizer<br/>activate the optimizer]
     H --> I[deactivate pattern executor<br/>wait until the images are collected<br/>mount_tool if needed]
     I --> J[wait for the localization result]
@@ -75,7 +76,15 @@ flowchart TD
    (`tool_mount/tool_mounted`) and match `end_tool` and `material` of the operation exactly (part number and
    revision). With several matches the mounted tool wins, otherwise the lowest slot index.
 5. **Localization**: `localize_product` of the localizer. The robot is not moved before the localizer reports
-   `collection_done`.
+   `collection_done`. The first operation of a product is always localized. For the following operations of the
+   same product the frame of the last successful localization is reused, unless `localize_per_operation` is
+   `true`. Boolean `operation_args` override the parameter for one operation:
+   * `force_localization: true` localizes; it wins over `skip_localization`.
+   * `skip_localization: true` reuses the last frame. When no frame exists yet the product is localized anyway
+     and a warning is logged.
+   * A `false` value has no effect; an argument of another type is ignored with a warning.
+
+   The reused frame is forgotten when the product is ejected and when a goal starts. A failed operation keeps it.
 6. **Nodes of the tool**: the endtool node name comes from `get_tool_node_name` of the tools manager; the
    read-only parameter `pattern_executor` of the endtool names the pattern executor and the read-only parameter
    `execution_optimizer` of the executor names the optimizer. Both must be listed in the node parameters.
@@ -128,6 +137,7 @@ Deactivating the node while a goal runs ends the goal as a failure whose message
 | `image_capture_settling_s` | double | `0.5` | Wait after each capture move before the image is taken. |
 | `lifecycle_transition_timeout_s` | double | `10.0` | Lifecycle transition of another node. |
 | `localization_result_timeout_s` | double | `120.0` | Wait for the localization result. |
+| `localize_per_operation` | bool | `false` | Localize before every operation; when `false` only the first operation of a product is localized (step 5). |
 | `optimization_timeout_s` | double | `60.0` | Wait for the pattern optimization. |
 | `mount_tool_timeout_s` | double | `300.0` | Wait for `mount_tool`. |
 | `image_capture_timeout_s` | double | `10.0` | `get_image` action and image upload. |

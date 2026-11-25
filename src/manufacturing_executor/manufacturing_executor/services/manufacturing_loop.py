@@ -44,6 +44,7 @@ from manufacturing_executor.services.optimizer_service import OptimizerService
 from manufacturing_executor.services.production_service import ProductionService
 from manufacturing_executor.services.routing_service import RoutingService
 from manufacturing_executor.services.tool_selection_service import ToolSelectionService
+from manufacturing_executor.utils.localization_args import localization_override
 from production_manager.model.production_data_dto import ProductionDataDTO
 from repositories.enums.operation_repository import OperationTypeEnum
 from repositories.models.operation_repository.operation_dto import OperationDTO
@@ -78,6 +79,8 @@ class ManufacturingLoop:
         self._executors = executors
         self._execution = execution
         self._idle_pose = idle_pose
+        # Frame of the last successful localization of the product in the station.
+        self._localized_frame: str | None = None
 
     def run(self, ctx: AbortContext, report_phase: Callable[[str], None]) -> None:
         """Run until the context is aborted or a system failure is raised.
@@ -86,7 +89,9 @@ class ManufacturingLoop:
             phases that are skipped (e.g. no tool change needed) are not reported.
         """
         self._logger.info('Manufacturing loop started')
+        self._localized_frame = None
         eject = False
+        in_station = False
         while True:
             ctx.raise_if_aborted()
             if eject:
@@ -101,10 +106,17 @@ class ManufacturingLoop:
                     move.close()
                 eject = False
                 continue
-            self._logger.info(' Waiting for a product to be injected')
-            report_phase('Waiting for product injection')
+            if in_station:
+                # The product is already there: routing returns at once, so there is no injection to report.
+                self._logger.info(' Product is still in the station, fetching its next operation')
+            else:
+                self._logger.info(' Waiting for a product to be injected')
+                report_phase('Waiting for product injection')
             product = self._routing.inject(ctx)
             eject = self._manufacture(product, ctx, report_phase)
+            in_station = not eject
+            if eject:
+                self._localized_frame = None
             self._logger.info(
                 f'Product {product.serial_number} '
                 f'{"finished in this station, ejecting" if eject else "stays in the station for the next operation"}'
@@ -148,6 +160,17 @@ class ManufacturingLoop:
         self._logger.info(f'Reporting operation {production.operation_id} as successful')
         return self._production.report(production, True, '', ctx)
 
+    def _should_localize(self, operation: OperationDTO) -> bool:
+        """Decide whether the operation localizes the product or reuses the last frame."""
+        override = localization_override(operation.operation_args, self._logger.warning)
+        if self._localized_frame is None:
+            if override is False:
+                self._logger.warning('Localization skip requested but no localized frame exists, localizing')
+            return True
+        if override is not None:
+            return override
+        return self._config.localize_per_operation
+
     def _run_operation(
         self,
         product: ProductDataDTO,
@@ -158,17 +181,21 @@ class ManufacturingLoop:
         report_phase: Callable[[str], None],
     ) -> None:
         cleanup = AbortContext.detached()
-        self._logger.info(
-            f' Starting localization for assembly model {production.assembly_model_id}'
-        )
-        report_phase('Localizing product')
-        localization = LocalizationRun.start(
-            self._clients,
-            production.assembly_model_id,
-            ctx=ctx,
-            accept_timeout_s=self._config.service_call_timeout_s,
-            result_timeout_s=self._config.localization_result_timeout_s,
-        )
+        localization: LocalizationRun | None = None
+        if self._should_localize(operation):
+            self._logger.info(
+                f' Starting localization for assembly model {production.assembly_model_id}'
+            )
+            report_phase('Localizing product')
+            localization = LocalizationRun.start(
+                self._clients,
+                production.assembly_model_id,
+                ctx=ctx,
+                accept_timeout_s=self._config.service_call_timeout_s,
+                result_timeout_s=self._config.localization_result_timeout_s,
+            )
+        else:
+            self._logger.info(f' Skipping localization, reusing frame {self._localized_frame!r}')
         executor_node = ''
         try:
             self._logger.info(f' Resolving the nodes of tool {tool.tool_sn}')
@@ -182,19 +209,22 @@ class ManufacturingLoop:
             self._optimizer.select(nodes.optimizer_node, ctx)
             self._logger.info(' Deactivating the active pattern executors')
             self._executors.deactivate_active(ctx)
-            # No robot motion before the localizer released the movement session.
-            self._logger.info(' Waiting for the localization image collection to finish')
-            localization.wait_collection_done(ctx)
-            self._logger.info(' Localization image collection done, robot is free')
+            if localization is not None:
+                # No robot motion before the localizer released the movement session.
+                self._logger.info(' Waiting for the localization image collection to finish')
+                localization.wait_collection_done(ctx)
+                self._logger.info(' Localization image collection done, robot is free')
             if not self._executors.is_mounted(tool):
                 self._logger.info(f' Mounting tool {tool.tool_sn}')
                 report_phase('Mounting the endtool')
             self._executors.mount(tool, ctx)
-            self._logger.info(' Waiting for the localization result')
-            if not localization.result_ready:
-                report_phase('Waiting localization calculations to finish')
-            frame = localization.wait_result()
-            self._logger.info(f' Product localized in frame {frame!r}')
+            if localization is not None:
+                self._logger.info(' Waiting for the localization result')
+                if not localization.result_ready:
+                    report_phase('Waiting localization calculations to finish')
+                self._localized_frame = localization.wait_result()
+                self._logger.info(f' Product localized in frame {self._localized_frame!r}')
+            frame = self._localized_frame
             patterns = operation.to_msg(frame).dispensing_patterns
             self._logger.info(
                 f'Requesting optimization of {len(patterns)} pattern(s) from '
@@ -220,7 +250,8 @@ class ManufacturingLoop:
                 report_phase=report_phase,
             )
         finally:
-            localization.cancel()
+            if localization is not None:
+                localization.cancel()
             if executor_node:
                 try:
                     self._executors.deactivate(executor_node, cleanup)

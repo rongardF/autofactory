@@ -76,6 +76,13 @@ class ManufacturingExecutorConfigDTO(BaseModel):
     localization_result_timeout_s: float = Field(
         default=120.0, gt=0.0, description='Time allowed for the localization result [s].'
     )
+    localize_per_operation: bool = Field(
+        default=False,
+        description=(
+            'Localize the product before every operation; when false only the first operation of a product '
+            'is localized and the following ones reuse its frame.'
+        ),
+    )
     optimization_timeout_s: float = Field(
         default=60.0, gt=0.0, description='Time allowed for the pattern optimization [s].'
     )
