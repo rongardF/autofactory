@@ -37,6 +37,7 @@ from endtools.model.dispensing_tool_config_dto import DispensingToolConfigDTO
 from endtools.service.simulated_dispenser_controller import SimulatedDispenserController
 from repositories.models.material_repository import FluidMaterial
 from station_workplace.msg import SimulatedProductMetadata
+from world_manager.exceptions import WorldManagerError
 
 _MATERIAL = FluidMaterial(
     product_number='material-123',
@@ -98,3 +99,72 @@ def test_material_is_not_spawned_without_product(
 
     controller._world_client.spawn.assert_not_called()
     controller._node.get_logger().error.assert_called_once()
+
+
+def _announce(controller: SimulatedDispenserController, model: str = 'heatsink_model') -> None:
+    controller._on_product_metadata(SimulatedProductMetadata(
+        spawned=True, product_model_name=model, product_link='heatsink'))
+
+
+def _prepare_spawns(controller: SimulatedDispenserController, names: list[str]) -> None:
+    controller._lookup_tcp_position = Mock(return_value=(0.0, 0.0, 0.0))
+    controller._generate_sdf_content = Mock(side_effect=[(name, '<sdf/>') for name in names])
+
+
+def test_material_is_chained_onto_the_previous_material(controller: SimulatedDispenserController) -> None:
+    """Only the first material is welded to the product; the rest to their predecessor."""
+    _announce(controller)
+    _prepare_spawns(controller, ['stripe_1', 'dot_2', 'stripe_3'])
+
+    for _ in range(3):
+        _spawn(controller)
+
+    anchors = [call.args[:2] for call in controller._generate_sdf_content.call_args_list]
+    assert anchors == [
+        ('heatsink_model', 'heatsink'),
+        ('stripe_1', SimulatedDispenserController._MATERIAL_LINK),
+        ('dot_2', SimulatedDispenserController._MATERIAL_LINK),
+    ]
+
+
+def test_chain_restarts_at_a_new_product(controller: SimulatedDispenserController) -> None:
+    """A new product has none of the previous product's material to chain onto."""
+    _announce(controller)
+    _prepare_spawns(controller, ['stripe_1', 'stripe_2'])
+    _spawn(controller)
+
+    _announce(controller, model='other_heatsink_model')
+    _spawn(controller)
+
+    assert controller._generate_sdf_content.call_args.args[:2] == ('other_heatsink_model', 'heatsink')
+
+
+def test_chain_is_kept_when_the_same_product_is_announced_again(
+    controller: SimulatedDispenserController,
+) -> None:
+    """Re-delivery of the latched announcement must not break the chain."""
+    _announce(controller)
+    _prepare_spawns(controller, ['stripe_1', 'stripe_2'])
+    _spawn(controller)
+
+    _announce(controller)
+    _spawn(controller)
+
+    assert controller._generate_sdf_content.call_args.args[:2] == (
+        'stripe_1', SimulatedDispenserController._MATERIAL_LINK)
+
+
+def test_chain_restarts_at_the_product_after_a_failed_spawn(
+    controller: SimulatedDispenserController,
+) -> None:
+    """A failed spawn may mean the chain tail is gone, so the next material welds to the product."""
+    _announce(controller)
+    _prepare_spawns(controller, ['stripe_1', 'stripe_2', 'stripe_3'])
+    _spawn(controller)
+    controller._world_client.spawn.side_effect = WorldManagerError('boom')
+    assert _spawn(controller) is None
+    controller._world_client.spawn.side_effect = None
+
+    _spawn(controller)
+
+    assert controller._generate_sdf_content.call_args.args[:2] == ('heatsink_model', 'heatsink')

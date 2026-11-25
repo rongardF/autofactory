@@ -1409,7 +1409,7 @@
               "motion_type": "LIN",
               "target_pose_m": [
                 0.063,
-                -0.164,
+                -0.16,
                 0.127,
                 0,
                 0,
@@ -1425,6 +1425,13 @@
                   "type": "open_valve",
                   "timing": "start",
                   "action_args": null
+                },
+                {
+                  "type": "wait",
+                  "timing": "start",
+                  "action_args": {
+                    "wait_time_s": 2.0
+                  }
                 },
                 {
                   "type": "close_valve",

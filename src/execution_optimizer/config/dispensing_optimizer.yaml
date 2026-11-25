@@ -12,7 +12,7 @@
     max_angle_deviation: 20.0
     # Pixel rectangle [x_min, y_min, x_max, y_max] (top-left origin, inclusive)
     # in which all ROI points must project. Empty means the whole image.
-    operational_area: []
+    operational_area: [460, 100, 1460, 980]
     # Camera node serving the get_image action; the action name is
     # "<camera_node_name>/get_image", resolved in the node namespace.
     camera_node_name: "basler_camera"

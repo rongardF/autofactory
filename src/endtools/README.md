@@ -258,7 +258,10 @@ It starts the `volumetric_dispensing_tool` node and, unless disabled, includes
 dispensed stripes and dots are expanded from Xacro and spawned through the
 typed `GazeboWorldClient`; their poses are expressed in the product frame,
 they are welded to the product model and link announced by the station
-workplace on `simulated_product_metadata`, and the controller removes its owned models on deactivation when
+workplace on `simulated_product_metadata` (only the first blob; each following blob is
+welded to the previously spawned one, because many joints on the product link make
+gz-physics add a solver constraint per blob and the real-time factor collapses as
+material accumulates), and the controller removes its owned models on deactivation when
 `simulation.delete_material_on_deactiviation` is `true`. Gazebo communication
 is handled by `world_manager` directly, without per-tool ROS/Gazebo bridges.
 An external orchestrator must configure and activate the included world-manager
