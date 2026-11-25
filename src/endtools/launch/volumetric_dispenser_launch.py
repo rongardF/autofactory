@@ -21,6 +21,11 @@ def generate_launch_description():
     tool_sn = LaunchConfiguration('tool_sn', default='unknown')
     model_id = LaunchConfiguration('model_id', default='dispensing_tool')
     pattern_executor = LaunchConfiguration('pattern_executor', default='')
+    material_product_number = LaunchConfiguration('material_product_number', default='')
+    material_product_revision = LaunchConfiguration('material_product_revision', default='')
+    material_repository_node_name = LaunchConfiguration(
+        'material_repository_node_name', default='material_repository'
+    )
     tcp_frame_id = LaunchConfiguration('tcp_frame_id', default='tool0')
     tcp_uncalibrated = LaunchConfiguration(
         'tcp_uncalibrated',
@@ -83,6 +88,27 @@ def generate_launch_description():
                 'Node name of the pattern executor associated with the tool, '
                 'exposed as the read-only "pattern_executor" parameter.'
             ),
+        ),
+        DeclareLaunchArgument(
+            'material_product_number',
+            default_value='',
+            description=(
+                'Product number of the material dispensed by the tool, exposed as '
+                'the read-only "material.product_number" parameter.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'material_product_revision',
+            default_value='',
+            description=(
+                'Product revision of the material dispensed by the tool, exposed as '
+                'the read-only "material.product_revision" parameter.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'material_repository_node_name',
+            default_value='material_repository',
+            description='Node name of the material_repository providing the material data.',
         ),
         DeclareLaunchArgument(
             'tcp_frame_id',
@@ -171,6 +197,10 @@ def generate_launch_description():
             ["model:='", model_id, "'"],
             '-p',
             ["pattern_executor:='", pattern_executor, "'"],
+            '-p',
+            ["material.product_number:='", material_product_number, "'"],
+            '-p',
+            ["material.product_revision:='", material_product_revision, "'"],
         ],
         parameters=[
             {
@@ -178,6 +208,9 @@ def generate_launch_description():
                 'world_name': world_name,
                 'use_sim_time': use_sim_time,
                 'tool_sn': ParameterValue(tool_sn, value_type=str),
+                'material_repository_node_name': ParameterValue(
+                    material_repository_node_name, value_type=str
+                ),
                 'tcp_frame_id': tcp_frame_id,
                 'tcp_uncalibrated': tcp_uncalibrated,
                 'station_cache_name': station_cache_name,

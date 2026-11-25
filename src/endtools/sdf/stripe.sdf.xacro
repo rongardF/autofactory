@@ -8,6 +8,7 @@
         product_link:=heatsink
         radius_m:=0.02
         length_m:=0.1
+        color_rgba:='0.33 0.66 0.99 1'
       ">
 
     <model name="${model_name}">
@@ -24,8 +25,8 @@
                 </sphere>
             </geometry>
             <material>
-              <ambient>0.33 0.66 0.99 1</ambient>
-              <diffuse>0.33 0.66 0.99 1</diffuse>
+              <ambient>${color_rgba}</ambient>
+              <diffuse>${color_rgba}</diffuse>
             </material>
         </visual>
         <visual name="stripe_cylinder_visual">
@@ -37,8 +38,8 @@
                 </cylinder>
             </geometry>
             <material>
-              <ambient>0.33 0.66 0.99 1</ambient>
-              <diffuse>0.33 0.66 0.99 1</diffuse>
+              <ambient>${color_rgba}</ambient>
+              <diffuse>${color_rgba}</diffuse>
             </material>
         </visual>
         <visual name="stripe_cap_end_visual">
@@ -49,8 +50,8 @@
                 </sphere>
             </geometry>
             <material>
-              <ambient>0.33 0.66 0.99 1</ambient>
-              <diffuse>0.33 0.66 0.99 1</diffuse>
+              <ambient>${color_rgba}</ambient>
+              <diffuse>${color_rgba}</diffuse>
             </material>
         </visual>
       </link>
@@ -73,6 +74,7 @@
   <xacro:arg name="product_link"             default="heatsink"/>
   <xacro:arg name="radius_m"              default="0.02"/>
   <xacro:arg name="length_m"              default="0.1"/>
+  <xacro:arg name="color_rgba"            default="0.33 0.66 0.99 1"/>
 
   <xacro:dispensed_stripe_model
       model_name="$(arg model_name)"
@@ -80,6 +82,7 @@
       product_link="$(arg product_link)"
       radius_m="$(arg radius_m)"
       length_m="$(arg length_m)"
+      color_rgba="$(arg color_rgba)"
   />
 
 </sdf>

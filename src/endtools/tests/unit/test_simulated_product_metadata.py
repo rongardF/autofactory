@@ -35,14 +35,25 @@ from rclpy.time import Time
 
 from endtools.model.dispensing_tool_config_dto import DispensingToolConfigDTO
 from endtools.service.simulated_dispenser_controller import SimulatedDispenserController
+from repositories.models.material_repository import FluidMaterial
 from station_workplace.msg import SimulatedProductMetadata
+
+_MATERIAL = FluidMaterial(
+    product_number='material-123',
+    product_revision='a1',
+    material_type='fluid',
+    is_serialized=False,
+    density_kg_m3=3150.0,
+    viscosity_pa_s=20.0,
+    color_rgba=[1.0, 0.631, 0.0, 1.0],
+)
 
 
 @pytest.fixture
 def controller() -> SimulatedDispenserController:
     """Provide a set-up controller whose TF, SDF and Gazebo dependencies are mocked."""
     controller = SimulatedDispenserController(Mock())
-    controller._config = DispensingToolConfigDTO(tool_sn='abc123')
+    controller._config = DispensingToolConfigDTO(tool_sn='abc123', material=_MATERIAL)
     controller._owner = 'endtools:abc123'
     controller._world_client = Mock()
     controller._lookup_tcp_position = Mock(side_effect=[(0.0, 0.0, 0.0), (0.01, 0.0, 0.0)])

@@ -19,8 +19,8 @@
       "start_assembly_model_id": "edf9129e-6656-4d99-895a-85d6b7de4ac7",
       "end_assembly_model_id": "78c630b7-730a-45ac-b57c-e01a43737b31",
       "material": {
-        "product_number": "SXN999",
-        "product_revision": "R1A"
+        "product_number": "material-456",
+        "product_revision": "a1"
       },
       "end_tool": {
         "product_number": "KRC123",
@@ -523,6 +523,336 @@
           ]
         },
         {
+          "id": "c36ad04c-a818-45b4-b5f7-2f440716faf7",
+          "start_pose_m": [
+            0.07,
+            -0.03,
+            0.1275,
+            0,
+            0,
+            -1.5708
+          ],
+          "pattern_args": {
+            "flowrate_m3_s": 22.5e-07
+          },
+          "movements": [
+            {
+              "id": "ca687d01-6a9e-48d3-8354-989d601af2fe",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.22,
+                -0.03,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.03,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "00485a35-5a1e-4aef-8d07-716bb2d5fcbc",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.217,
+                -0.03,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "a0170743-889e-44c0-a582-de53a4f99af3",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.22,
+                -0.03,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "35f16e39-23bb-4afc-981e-51c1466d6819",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.22,
+                -0.04,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "55d358d4-53df-4f67-8a21-8f49888ffae2",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.07,
+                -0.04,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.03,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "3070a0a3-0007-48b6-8964-64e541b991cc",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.073,
+                -0.04,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "edd749d4-74fe-4496-be0b-e51fed78ab74",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.07,
+                -0.04,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "20bb6937-b7cd-4db0-b42a-1bff83c92e5b",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.07,
+                -0.05,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "fd86a707-b2e9-41ed-ba6f-4fd828c9fce0",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.22,
+                -0.05,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.03,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "322bc9f0-f785-4fba-8079-739efedaf91a",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.217,
+                -0.05,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "a7b0b436-056d-4313-a0e1-3169a52fbc87",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.22,
+                -0.05,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "e6c814be-7315-4278-b140-a7220f414008",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.22,
+                -0.06,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "6b4d3a1d-a91c-4427-b8a3-efbf9c8d4108",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.07,
+                -0.06,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.03,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "13f9df90-3dea-44e8-97bd-9a65806b7ce3",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.073,
+                -0.06,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "890779fe-70fc-4ab3-9de7-4ae740fb507f",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.07,
+                -0.06,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            }
+          ]
+        },
+        {
           "id": "7ec76838-8928-4dfd-bfd8-a9d320d6d8fe",
           "start_pose_m": [
             0.225,
@@ -867,6 +1197,2233 @@
                 0.222,
                 -0.37,
                 0.137,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            }
+          ]
+        },
+        {
+          "id": "472cb99d-aac2-454b-823c-e7c46daa1f30",
+          "start_pose_m": [
+            0.063,
+            -0.14,
+            0.127,
+            0,
+            0,
+            -1.5708
+          ],
+          "pattern_args": {
+            "flowrate_m3_s": 5e-07
+          },
+          "movements": [
+            {
+              "id": "a3b59a3a-61f2-404d-a08a-777d2827f4fe",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.063,
+                -0.14,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "wait",
+                  "timing": "start",
+                  "action_args": {
+                    "wait_time_s": 2.0
+                  }
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "e76501c9-fa78-483b-9c1c-14ac0b3f5eb4",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.066,
+                -0.14,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "db69f9a8-5d3e-45f3-8616-efa57b0b373d",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.06,
+                -0.14,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "0b518b72-47fd-455a-9ecb-b0e458b7de3d",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.063,
+                -0.15,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "dc6c18d4-14fa-4d0f-be96-23bcdcafad68",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.063,
+                -0.15,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "wait",
+                  "timing": "start",
+                  "action_args": {
+                    "wait_time_s": 2.0
+                  }
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "539414d8-efe5-4578-ab23-b523dc5a6f2e",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.066,
+                -0.15,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "55300f2a-71a8-41ca-92fc-491798e11658",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.06,
+                -0.15,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "68dbb7dd-e86c-4e56-b498-85d8016861bc",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.063,
+                -0.16,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "e11570a8-f6a7-415f-aca4-5dcb25c310b5",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.063,
+                -0.164,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "1a30d731-58e1-4d9d-9440-f8584ffe563d",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.066,
+                -0.16,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "8d15942a-401a-420b-b6f2-f7cc9514c689",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.06,
+                -0.16,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "95d6fd16-d72b-47f3-a761-972a46a7d70f",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.05,
+                -0.14,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "ca4f17cf-98de-4241-ae7e-1ba5b1abe862",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.05,
+                -0.14,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "wait",
+                  "timing": "start",
+                  "action_args": {
+                    "wait_time_s": 2.0
+                  }
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "c1295f03-3b6b-498f-9499-1c2082d066ec",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.053,
+                -0.14,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "2c0375a0-e01f-439b-8631-31c43c5cf0f6",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.047,
+                -0.14,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "aff9c129-bfb8-4ef2-9868-4c1ab678ffbb",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.05,
+                -0.15,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "e52b5d59-8136-4942-b494-2f53b16e7d7e",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.05,
+                -0.15,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "wait",
+                  "timing": "start",
+                  "action_args": {
+                    "wait_time_s": 2.0
+                  }
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "43a0cd9a-0ba1-4de9-877e-9ba333d4c540",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.053,
+                -0.15,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "c562a1f9-bbab-48f4-a3ef-18921e67c319",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.048,
+                -0.15,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "3670fa36-a98d-42e2-b100-f6d3ea5862f1",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.05,
+                -0.16,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "1a49240e-683c-4a5d-b72e-2a491ea5f0b0",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.05,
+                -0.16,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "wait",
+                  "timing": "start",
+                  "action_args": {
+                    "wait_time_s": 2.0
+                  }
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "e63e257b-6fd6-48ee-ad16-19cce89bb1cd",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.053,
+                -0.16,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "67517446-5e12-47e1-95d1-1a1972608291",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.047,
+                -0.16,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "df2a3a9a-8b88-458b-a9ef-38772bbf15c3",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.037,
+                -0.14,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "745cc546-275d-404f-ba98-c86d6bf43f82",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.037,
+                -0.14,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "wait",
+                  "timing": "start",
+                  "action_args": {
+                    "wait_time_s": 2.0
+                  }
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "7a27331b-bf11-497f-83cd-dfe0f398f36f",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.04,
+                -0.14,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "e1bf9243-3870-443e-af28-6dd674e8134d",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.034,
+                -0.14,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "fcb6d64c-15e6-4fc8-8259-e4f07402b2a7",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.037,
+                -0.15,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "36059eea-6e0d-4366-82cd-0c11f8796226",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.037,
+                -0.15,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "wait",
+                  "timing": "start",
+                  "action_args": {
+                    "wait_time_s": 2.0
+                  }
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "11e89a76-26f0-4264-aba5-6db19c7b062f",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.04,
+                -0.15,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "b521c925-6e58-46d4-9d95-c5ef26c9ec5e",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.034,
+                -0.15,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "812fcdae-0e53-4298-904b-0bf596b41549",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.037,
+                -0.16,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "408c5977-7c5d-4532-a969-39fc4e9e5632",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.037,
+                -0.16,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "wait",
+                  "timing": "start",
+                  "action_args": {
+                    "wait_time_s": 2.0
+                  }
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "77c2863b-9751-46ea-adf2-33f392a411c8",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.04,
+                -0.16,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "2ee4264f-beb4-45be-bc49-2bc42b37c307",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.034,
+                -0.16,
+                0.127,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "eba6e1b0-600f-42e4-8987-46659d313e5b",
+      "operation_type": "dispensing",
+      "operation_number": "0002",
+      "description": "Dispensing thermal putty (manufacturing executor testbench)",
+      "start_assembly_model_id": "edf9129e-6656-4d99-895a-85d6b7de4ac7",
+      "end_assembly_model_id": "78c630b7-730a-45ac-b57c-e01a43737b31",
+      "material": {
+        "product_number": "material-123",
+        "product_revision": "a1"
+      },
+      "end_tool": {
+        "product_number": "KRC123",
+        "product_revision": "R1A"
+      },
+      "operation_args": null,
+      "patterns": [
+        {
+          "id": "45fa733f-82b8-4d3b-a7aa-4881a19d5fb9",
+          "start_pose_m": [
+            0.105,
+            -0.114,
+            0.1315,
+            0,
+            0,
+            -1.5708
+          ],
+          "pattern_args": {
+            "flowrate_m3_s": 10e-07
+          },
+          "movements": [
+            {
+              "id": "b30b0c71-7e3c-42c2-bc9c-7371d5a0e279",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.185,
+                -0.114,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.03,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "d8e536b8-0b15-444d-a07c-706dac17e1ac",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.182,
+                -0.114,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "1f9a49b2-19cd-448d-8ccd-3724c75281d0",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.185,
+                -0.114,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "f57bdfae-76b9-43d8-b56d-25f5917abbd8",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.185,
+                -0.12,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "800ca9a5-4e35-4588-8cf3-6fee3af20f3e",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.105,
+                -0.12,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.03,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "ac7b9c13-4609-47d2-ae72-5e8f3fff8a3a",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.108,
+                -0.12,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "b1e52890-b23c-4d79-a428-7e985f9858af",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.105,
+                -0.12,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "d4966fde-f135-466b-991e-d12a180ef90b",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.105,
+                -0.126,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "46efa5ed-3134-474c-b7f3-14b1f22a0469",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.185,
+                -0.126,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.03,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "eb9b1837-1ea4-429e-9c85-ecdc8b7d516b",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.182,
+                -0.126,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "8b368ee3-2953-4433-a891-6e1ce558f77b",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.185,
+                -0.126,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "a757daa6-59d4-42b7-b145-8dc08cb84276",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.185,
+                -0.132,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "0f14c262-6097-415d-887d-4ef1e8289bfe",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.105,
+                -0.132,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.03,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "988ba97b-08b6-449f-9b69-2f8df6acbe54",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.108,
+                -0.132,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "9f114b83-b961-497e-8098-888bc61a6bd5",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.105,
+                -0.132,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "adaae3bc-d30d-49a6-a7af-9377eb2422a2",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.105,
+                -0.138,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "b774a4d4-8212-4717-843b-b273fa427e0a",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.185,
+                -0.138,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.03,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "335c3ed3-b7f3-412f-ab49-755aa3717b0f",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.182,
+                -0.138,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "e12b068f-fc12-4040-8797-d80f211892f5",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.185,
+                -0.138,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "510913b7-319b-47bf-99d0-cb02ccb222fa",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.185,
+                -0.144,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "4f7f15f4-3289-4243-9d12-7c478d5c7760",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.105,
+                -0.144,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.03,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "a6cc908b-e663-4453-93a4-894e221d2fa3",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.108,
+                -0.144,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "3f5901d7-0dfd-45c1-ba86-f52ed1563c9d",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.105,
+                -0.144,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "1faa41d5-4fd4-4f3c-9140-53f59d569ed6",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.105,
+                -0.15,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "13431040-7fe8-48a0-8b4c-58335300bb66",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.185,
+                -0.15,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.03,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "c36129c9-c9ac-4b11-ad86-231f9f5fb026",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.182,
+                -0.15,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "43941eb5-9473-47a6-9279-297b52bcfd30",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.185,
+                -0.15,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "297a6c36-c18a-4cf9-8660-1fdfa7c4068e",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.185,
+                -0.156,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "4d94c817-8813-4d64-94e3-886f71d5bd7a",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.105,
+                -0.156,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.03,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "f24da002-d997-426a-a17f-4363072152c5",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.108,
+                -0.156,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "13d4a142-133c-4185-93db-bfbecec0e4ce",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.105,
+                -0.156,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "e2cc77fe-ac44-4161-a7db-3ecf482181b0",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.105,
+                -0.162,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "2a740484-7db6-4ffa-907b-64a4271ca975",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.185,
+                -0.162,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.03,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "5ac1c4d3-9778-4f57-86e4-b40f1118102b",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.182,
+                -0.162,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "f906bfef-e7e5-4a17-be1f-fe9b13d3f55c",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.185,
+                -0.162,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "1a421749-5f7c-4e16-8fcd-3ddafe93c654",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.185,
+                -0.168,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "21f801c4-27b9-4446-a59c-c44061a9ba64",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.105,
+                -0.168,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.03,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "08b012f3-338a-4be0-bb5b-91026ced3ffc",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.108,
+                -0.168,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "f41b4550-e8b1-44ad-8277-0bdb3933af22",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.105,
+                -0.168,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "a610cdf0-8a03-4a04-9c93-e8d851061762",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.105,
+                -0.174,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "9cf71e89-264a-4355-8ded-8bf9cc4298f2",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.185,
+                -0.174,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.03,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "8c3b55fa-7f4d-484c-b351-d5cb58adf1f8",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.182,
+                -0.174,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "6c5c18a9-321f-432e-aa24-e4f5543a325f",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.185,
+                -0.174,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "4f1bead8-1c65-4fac-82f0-5192676b445e",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.185,
+                -0.18,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "a3691ab0-6bf5-42fa-baa5-6b06b57f2aab",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.105,
+                -0.18,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.03,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "788de261-c4d4-4d48-aa2a-c57e78995d52",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.108,
+                -0.18,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "1ca68397-2859-4c75-9c8b-4e68d262e410",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.105,
+                -0.18,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "fc78027d-5293-4ec4-8b06-ac3e87b64afa",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.105,
+                -0.186,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "02e13593-8a7c-42b8-b503-1b573b3cb843",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.185,
+                -0.186,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.03,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "7d5d9d55-062f-4e98-a955-a00e271bcc6f",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.182,
+                -0.186,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "8ed8c0b2-57c2-44ab-a0b5-657d6c7ab317",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.185,
+                -0.186,
+                0.1315,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            }
+          ]
+        },
+        {
+          "id": "a5408471-4017-4487-ae13-b0592f4250a7",
+          "start_pose_m": [
+            0.23,
+            -0.22,
+            0.1275,
+            0,
+            0,
+            -1.5708
+          ],
+          "pattern_args": {
+            "flowrate_m3_s": 12.5e-07
+          },
+          "movements": [
+            {
+              "id": "62e90db0-103e-4022-9940-826efe02637d",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.23,
+                -0.12,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.03,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "df002276-8aee-4284-97ae-6ed1b94c8e9a",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.23,
+                -0.123,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "fa540b94-5437-4453-9658-1a5efc2f60e8",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.23,
+                -0.12,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "1a7b82bd-ee5b-448a-a52e-5838730d86e0",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.24,
+                -0.12,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "e973866b-4079-4132-92d2-38b265b799ed",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.24,
+                -0.22,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.03,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "fed4f809-ab50-43b6-b9b3-d867d53dfc17",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.24,
+                -0.217,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "6c3e5396-a467-4d84-b093-7ba42bf9b0f6",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.24,
+                -0.22,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "531872d8-e06c-4abc-b81e-50d718cf13e7",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.25,
+                -0.22,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "28f64813-b893-44ae-b3e5-6bc776c0d5bd",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.25,
+                -0.12,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.03,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "46570f97-57cb-4318-b825-d1780af05aa7",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.25,
+                -0.123,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "0204f10b-b772-472c-9126-d089c5a14627",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.25,
+                -0.12,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "d987d048-987b-4c6a-8d58-0cf7e814e693",
+              "motion_type": "PTP",
+              "target_pose_m": [
+                0.26,
+                -0.12,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.0,
+              "cartesian_speed_m_s": 0.0,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "cddcacb3-f3cb-49fe-9251-464baa2b2556",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.26,
+                -0.22,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": null,
+              "cartesian_speed_m_s": 0.03,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": [
+                {
+                  "type": "open_valve",
+                  "timing": "start",
+                  "action_args": null
+                },
+                {
+                  "type": "close_valve",
+                  "timing": "end",
+                  "action_args": null
+                }
+              ]
+            },
+            {
+              "id": "9b9ab572-65eb-4c8e-853e-f3644f71c04d",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.26,
+                -0.217,
+                0.1275,
+                0,
+                0,
+                -1.5708
+              ],
+              "blend_radius_m": 0.001,
+              "cartesian_speed_m_s": 0.06,
+              "joint_speed_rad_s": null,
+              "circ_type": null,
+              "circ_point_m": null,
+              "actions": []
+            },
+            {
+              "id": "3e679547-487c-4989-bf08-403885811c3d",
+              "motion_type": "LIN",
+              "target_pose_m": [
+                0.26,
+                -0.22,
+                0.1275,
                 0,
                 0,
                 -1.5708

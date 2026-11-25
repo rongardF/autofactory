@@ -27,6 +27,8 @@
 
 from typeguard import value
 
+import time
+
 from rclpy import init, shutdown
 from pydantic import ValidationError
 from rcl_interfaces.msg import ParameterDescriptor
@@ -47,8 +49,13 @@ from builtin_interfaces.msg import Time
 from geometry_msgs.msg import TransformStamped
 from tf2_msgs.msg import TFMessage
 
+from repositories.models.material_repository import FluidMaterial
 from repositories.msg import StationCacheNumberArrayCache
-from repositories.srv import StationCacheFetchNumberArray, StationCacheStoreNumberArray
+from repositories.srv import (
+    MaterialRepositoryGetMaterialData,
+    StationCacheFetchNumberArray,
+    StationCacheStoreNumberArray,
+)
 
 from endtools.srv import SetTcp, StartDispensing, StopDispensing
 
@@ -108,6 +115,37 @@ class VolumetricDispensingTool(LifecycleNode):
             ParameterDescriptor(
                 description='Node name of the pattern executor associated with this tool; set once at startup',
                 read_only=True,
+            ),
+        )
+        self.declare_parameter(
+            'material.product_number',
+            '',
+            ParameterDescriptor(
+                description='Product number of the material dispensed by this tool; set once at startup',
+                read_only=True,
+            ),
+        )
+        self.declare_parameter(
+            'material.product_revision',
+            '',
+            ParameterDescriptor(
+                description='Product revision of the material dispensed by this tool; set once at startup',
+                read_only=True,
+            ),
+        )
+        self.declare_parameter(
+            'material_repository_node_name',
+            'material_repository',
+            ParameterDescriptor(
+                description='Node name of the material_repository providing the material data'
+            ),
+        )
+        self.declare_parameter(
+            'material_request_timeout_sec',
+            10.0,
+            ParameterDescriptor(
+                description='Time limit (seconds) shared by waiting for the material repository '
+                'service and for its response while configuring; must be > 0',
             ),
         )
         self.declare_parameter(
@@ -196,6 +234,8 @@ class VolumetricDispensingTool(LifecycleNode):
         # Clients live in a separate group so synchronous calls made from within
         # a service callback do not deadlock the executor.
         self._cache_client_callback_group = ReentrantCallbackGroup()
+        # Same reasoning for the one-shot material repository client.
+        self._material_client_callback_group = ReentrantCallbackGroup()
 
     # region: tool_tcp property
     @property
@@ -353,14 +393,74 @@ class VolumetricDispensingTool(LifecycleNode):
         self._tcp_expiration_publisher.publish(expiration)
     # endregion: tcp helpers
 
+    # region: material helpers
+    def _fetch_material(self) -> FluidMaterial:
+        """Fetch the dispensed material from the material repository.
+
+        Waiting for the service and for its response share one budget of
+        ``material_request_timeout_sec``.
+
+        :returns: The validated fluid material.
+        :raises ValueError: If the material parameters are unset or the payload does not
+            parse into a ``FluidMaterial``.
+        :raises RuntimeError: If the repository is unavailable, times out or reports a failure.
+        """
+        timeout_sec = self.get_parameter('material_request_timeout_sec').get_parameter_value().double_value
+        if timeout_sec <= 0.0:
+            raise ValueError(f'material_request_timeout_sec must be > 0, got {timeout_sec}')
+        product_number = self.get_parameter('material.product_number').get_parameter_value().string_value
+        product_revision = self.get_parameter('material.product_revision').get_parameter_value().string_value
+        if not product_number or not product_revision:
+            raise ValueError('material.product_number and material.product_revision must be set')
+
+        repository_name = self.get_parameter('material_repository_node_name').get_parameter_value().string_value
+        service_name = f'/{repository_name}/get_material_data'
+        client = self.create_client(
+            MaterialRepositoryGetMaterialData,
+            service_name,
+            callback_group=self._material_client_callback_group,
+        )
+        try:
+            deadline = time.monotonic() + timeout_sec
+            if not client.wait_for_service(timeout_sec=timeout_sec):
+                raise RuntimeError(f'material repository service {service_name!r} is not available')
+
+            request = MaterialRepositoryGetMaterialData.Request()
+            request.product_number = product_number
+            request.product_revision = product_revision
+            response = client.call(request, timeout_sec=max(0.0, deadline - time.monotonic()))
+            if response is None:
+                raise RuntimeError(f'request to {service_name!r} timed out')
+            if not response.success:
+                raise RuntimeError(
+                    f"material repository could not provide material '{product_number}' "
+                    f"revision '{product_revision}': {response.error_message}"
+                )
+            return FluidMaterial.from_msg(response.material_data)
+        finally:
+            self.destroy_client(client)
+    # endregion: material helpers
+
     # region: lifecycle callbacks
     def on_configure(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info(f'Configuring from state: {state.label}')
         if super().on_configure(state) != TransitionCallbackReturn.SUCCESS:
             return TransitionCallbackReturn.FAILURE
 
+        # Fetched before any resource is created so a failure leaves nothing behind.
+        try:
+            material = self._fetch_material()
+        except Exception as e:
+            self.get_logger().error(f'Failed to get the material data: {e}')
+            return TransitionCallbackReturn.FAILURE
+        self.get_logger().info(
+            f'Using material {material.product_number} revision {material.product_revision} '
+            f'(density {material.density_kg_m3} kg/m^3, color {material.color_rgba}).'
+        )
+
         try:
             self._config = DispensingToolConfigDTO(
+                material=material,
                 tool_type=ToolTypeEnum(self.get_parameter('tool_type').get_parameter_value().string_value),
                 tool_sn=self.get_parameter('tool_sn').get_parameter_value().string_value,
                 tcp_frame_id=self.get_parameter('tcp_frame_id').get_parameter_value().string_value,
@@ -615,7 +715,8 @@ class VolumetricDispensingTool(LifecycleNode):
             )
             response.success = True
             response.error_message = ""
-            response.dispensed_volume = metrics.dispensed_volume_cc
+            response.dispensed_volume_cc = metrics.dispensed_volume_cc
+            response.dispensed_mass_kg = metrics.dispensed_mass_kg
             response.duration_seconds = metrics.dispensing_duration_s
         except RuntimeError as e:
             response.success = False

@@ -30,12 +30,17 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from tools_manager.model.tools_manager_config import ToolSlotDTO
+
 
 class ToolMountNodeConfigDTO(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-
+    slots: list[ToolSlotDTO] = Field(
+        description='All physical rack slots with their expected (home) tool.',
+        default_factory=list,
+    )
     parent_frame_id: str = Field(
         default="station",
         description='Parent frame ID.',

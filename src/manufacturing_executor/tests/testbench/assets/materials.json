@@ -1,0 +1,34 @@
+[
+    {
+        "product_number": "material-123",
+        "product_revision": "a1",
+        "material_type": "fluid",
+        "is_serialized": false,
+        "payload_json": {
+            "density_kg_m3": 3150.0,
+            "viscosity_pa_s": 20.0,
+            "color_rgba": [
+                1.0,
+                0.631,
+                0.0,
+                1.0
+            ]
+        }
+    },
+    {
+        "product_number": "material-456",
+        "product_revision": "a1",
+        "material_type": "fluid",
+        "is_serialized": false,
+        "payload_json": {
+            "density_kg_m3": 3450.0,
+            "viscosity_pa_s": 20.0,
+            "color_rgba": [
+                0.0,
+                0.529,
+                0.859,
+                1.0
+            ]
+        }
+    }
+]

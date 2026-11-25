@@ -125,7 +125,8 @@ class SimulatedDispenserController(DispenserController):
         product_model_name: str,
         product_link: str,
         radius_mm: float,
-        length_mm: float
+        length_mm: float,
+        color_rgba: str,
     ) -> str:
         model_path = os.path.join(
             get_package_share_directory("endtools"),
@@ -141,6 +142,7 @@ class SimulatedDispenserController(DispenserController):
                 # SDF geometry is expressed in metres, inputs are millimetres
                 'radius_m': str(radius_mm / 1000.0),
                 'length_m': str(length_mm / 1000.0),
+                'color_rgba': color_rgba,
             },
         )
 
@@ -149,7 +151,8 @@ class SimulatedDispenserController(DispenserController):
         model_name: str,
         product_model_name: str,
         product_link: str,
-        radius_mm: float
+        radius_mm: float,
+        color_rgba: str,
     ) -> str:
         model_path = os.path.join(
             get_package_share_directory("endtools"),
@@ -164,6 +167,7 @@ class SimulatedDispenserController(DispenserController):
                 'product_link': product_link,
                 # SDF geometry is expressed in metres, inputs are millimetres
                 'radius_m': str(radius_mm / 1000),
+                'color_rgba': color_rgba,
             },
         )
 
@@ -239,8 +243,13 @@ class SimulatedDispenserController(DispenserController):
         Returns:
             Tuple of the unique model name and the SDF content as a string. The model
             name must be reused when spawning so the entity name matches the
-            DetachableJoint topic namespace baked into the SDF.
+            DetachableJoint topic namespace baked into the SDF. The primitives are
+            colored with the color of the dispensed material.
         """
+        if self._config is None:
+            raise RuntimeError("Controller is not set up with a configuration.")
+        color_rgba = ' '.join(str(channel) for channel in self._config.material.color_rgba)
+
         if length_mm > self._STRIPE_MIN_LENGTH_MM:
             model_name = self._generate_model_name('stripe')
             radius_mm = self._calculate_capsule_radius(length_mm, volume_mm3)
@@ -249,7 +258,8 @@ class SimulatedDispenserController(DispenserController):
                 product_model_name,
                 product_link,
                 radius_mm,
-                length_mm
+                length_mm,
+                color_rgba,
             )
         else:  # DOT
             model_name = self._generate_model_name('dot')
@@ -258,7 +268,8 @@ class SimulatedDispenserController(DispenserController):
                 model_name,
                 product_model_name,
                 product_link,
-                radius_mm
+                radius_mm,
+                color_rgba,
             )
 
     def _lookup_tcp_position(self, stamp: Time) -> tuple[float, float, float]:
@@ -457,6 +468,8 @@ class SimulatedDispenserController(DispenserController):
         # pose stamps are the same instant, which yields a dot of the dwell volume.
         dispensing_time = dispensing_end_time - self._dispensing_start_time
         dispensed_volume = self._config.flow_rate * dispensing_time.nanoseconds / 1e9  # Convert nanoseconds to seconds
+        # 1 cc = 1e-6 m^3
+        dispensed_mass_kg = self._config.material.density_kg_m3 * dispensed_volume * 1e-6
 
         self._spawn_dispensed_material(
             volume_cc=dispensed_volume,
@@ -469,6 +482,7 @@ class SimulatedDispenserController(DispenserController):
 
         return DispensingMetricsDTO(
             dispensed_volume_cc=dispensed_volume,
+            dispensed_mass_kg=dispensed_mass_kg,
             dispensing_duration_s=dispensing_time.nanoseconds / 1e9,
             flowrate_cc=self._config.flow_rate,
         )

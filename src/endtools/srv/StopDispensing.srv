@@ -3,6 +3,7 @@ builtin_interfaces/Time pose_stamp   # Instant the TCP pose that ends the dispen
                                      # zero means "sample the node clock on arrival"
 ---
 bool     success            # True if the stop succeeded (was dispensing)
-float64  dispensed_volume 0.0   # dispensed volume = flow_rate * duration_seconds
+float64  dispensed_volume_cc 0.0   # dispensed volume in cubic centimeters = flow_rate * duration_seconds
+float64  dispensed_mass_kg 0.0  # dispensed mass = dispensed volume * material density
 float64  duration_seconds 0.0   # Elapsed dispensing time in seconds
 string   error_message      # Populated when success is False

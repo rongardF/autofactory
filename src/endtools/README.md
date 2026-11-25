@@ -44,6 +44,10 @@ transitions; nothing is created in `__init__` except parameter declarations.
 | `tool_type` | `"dispensing"` | Read-only tool type tag. Parsed into `ToolTypeEnum`. |
 | `model` | `""` | Read-only. Model (resource directory name under `model/`) of this tool; the tools manager reads it while the node is `unconfigured`. Set at startup through the launch `model` argument. |
 | `pattern_executor` | `""` | Read-only. Node name of the pattern executor associated with this tool (discovery information only). Set at startup through the launch `pattern_executor` argument. |
+| `material.product_number` | `""` | Read-only. Product number of the material this tool dispenses; **must be non-empty** or configuration fails. The tool rack and tool mount read it while the node is `unconfigured`. Set at startup through the launch `material_product_number` argument. |
+| `material.product_revision` | `""` | Read-only. Product revision of the material this tool dispenses; **must be non-empty** or configuration fails. Set at startup through the launch `material_product_revision` argument. |
+| `material_repository_node_name` | `"material_repository"` | Node name of the `material_repository` that provides the material data through `/<name>/get_material_data`. |
+| `material_request_timeout_sec` | `10.0` | Time limit (seconds, must be `> 0`) shared by waiting for the material repository service and for its response while configuring. |
 | `simulated` | `True` | Selects `SimulatedDispenserController` vs `HardwareDispenserController`. |
 | `simulation.delete_material_on_deactiviation` | `False` | Simulation only. When `True`, the simulated controller deletes its owned dispensed material models on deactivation. Read at configure time. |
 | `simulation.station_workplace_node_name` | `"workplace_rfid_scanner"` | Simulation only. Node name of the `station_workplace` node; the simulated controller subscribes to its latched `/<name>/simulated_product_metadata` (`station_workplace/SimulatedProductMetadata`) to learn the Gazebo product model and link dispensed material is welded to. Material is not spawned while no product is known. Read at configure time. |
@@ -59,6 +63,17 @@ transitions; nothing is created in `__init__` except parameter declarations.
 ### Lifecycle behaviour
 
 **`on_configure`**
+0. Fetches the dispensed material first, before anything else is created: the
+   two `material.*` parameters must be set, then `<material_repository_node_name>/get_material_data`
+   is called synchronously (service availability and the response share the
+   `material_request_timeout_sec` time limit, default 10 s) and `payload_json` is parsed into a `FluidMaterial` (from the
+   `repositories` package). A missing parameter, an unavailable or failing
+   repository, a `success=false` response or an unparsable payload is logged and
+   fails the configuration. The material is stored in the config
+   (`DispensingToolConfigDTO.material`): its `color_rgba` colors the spawned
+   primitives in simulation and its `density_kg_m3` is used to compute the
+   dispensed mass. The material repository must therefore be `active` before the
+   endtool is configured.
 1. Reads all parameters into a frozen `DispensingToolConfigDTO` (Pydantic
    validates: `tcp_uncalibrated` must have 6 elements, `flow_rate >= 0`).
 2. Creates a **latched** (`TRANSIENT_LOCAL`, depth 1) publisher `~/mounted` and
@@ -121,8 +136,8 @@ The node is spun with a `MultiThreadedExecutor(num_threads=5)` and uses
   returns `success=True`. `RuntimeError`s are converted to `success=False` with
   an `error_message`.
 - **`~/dispense_stop`** (`StopDispensing`): calls `stop_dispensing(pose_stamp)`,
-  returning `success`, `dispensed_volume`, `duration_seconds`, and
-  `error_message`.
+  returning `success`, `dispensed_volume_cc`, `dispensed_mass_kg`,
+  `duration_seconds`, and `error_message`.
 
 Both requests carry a `pose_stamp`: the instant the TCP reached the pose that
 starts/ends the dispensed element, supplied by the caller from the movement
@@ -137,12 +152,15 @@ cleanup, which has no motion to align to.
   supplied pose stamp.
 - `stop_dispensing(pose_stamp)` — clears the flag, computes
   `dispensed_volume = flow_rate × elapsed_seconds` from the **node clock** window
-  (how long the valve was actually open) and returns a
-  `DispensingMetricsDTO(dispensed_volume_cc, dispensing_duration_s, flowrate_cc)`.
+  (how long the valve was actually open), derives
+  `dispensed_mass_kg = density_kg_m3 × dispensed_volume × 1e-6` from the material
+  density and returns a
+  `DispensingMetricsDTO(dispensed_volume_cc, dispensed_mass_kg, dispensing_duration_s, flowrate_cc)`.
 - The deposited-material model is placed from the **pose stamps**: the TCP is
   looked up in TF at the start and end stamps, and the straight-line distance
   between them decides stripe vs. dot (`_STRIPE_MIN_LENGTH_MM`, above zero so a
-  sub-millimetre residual of a nominally stationary dwell stays a dot).
+  sub-millimetre residual of a nominally stationary dwell stays a dot). The
+  stripe/dot primitives are colored with the material's `color_rgba`.
 - There is no physical actuation — the volume is pure time integration.
 - The material model is spawned with `delete_with_child=True`, so the Gazebo world
   manager removes it (detached first) when the product it is attached to is deleted,
@@ -217,6 +235,9 @@ The macro parameters (`model_name`, `station_model_name`, `tool_mount_link`,
 
 Launch arguments: `simulated`, `use_sim_time` (defaults to `simulated`), `world_name`,
 `tool_sn`, `model` (default `dispensing_tool`), `pattern_executor` (default empty),
+`material_product_number` / `material_product_revision` (default empty; set the
+read-only `material.product_number` / `material.product_revision`),
+`material_repository_node_name` (default `material_repository`),
 `tcp_frame_id`, `tcp_uncalibrated`, `station_cache_name`, `tcp_valid_period`,
 `mounted`, `flowrate`, `localized_product_frame_id`,
 `station_workplace_node_name` (default `workplace_rfid_scanner`; sets
@@ -224,10 +245,11 @@ Launch arguments: `simulated`, `use_sim_time` (defaults to `simulated`), `world_
 `start_world_manager` (default `false`; set true when no parent launch starts
 the shared manager).
 
-`model` and `pattern_executor` are forwarded as quoted ROS parameter arguments
-(`--ros-args -p name:='value'`), not through the launch node's `parameters`.
+`model`, `pattern_executor` and the two material arguments are forwarded as quoted
+ROS parameter arguments (`--ros-args -p name:='value'`), not through the launch
+node's `parameters`.
 Quoting preserves string values, including the default empty executor name.
-The node constructor declares both parameters read-only, and their ROS argument
+The node constructor declares these parameters read-only, and their ROS argument
 overrides provide the startup values. The tools manager launch composes this
 launch for every rack tool (together with its pattern executor).
 
@@ -250,9 +272,11 @@ nodes before the tool uses their services.
 colcon build --symlink-install --packages-select endtools
 source install/setup.bash
 
-# Standalone (simulation), as a mounted tool:
+# Standalone (simulation), as a mounted tool. The material_repository must be
+# active (it serves material-123/a1 from /tmp/station/materials.json by default):
 ros2 launch endtools volumetric_dispenser_launch.py \
-  tool_sn:=abc123 mounted:=true
+  tool_sn:=abc123 mounted:=true \
+  material_product_number:=material-123 material_product_revision:=a1
 
 # Drive the lifecycle, then dispense:
 ros2 lifecycle set /volumetric_dispensing_tool configure

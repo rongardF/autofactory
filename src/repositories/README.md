@@ -14,10 +14,12 @@ repositories/
 ├── object_model_storage.py        # object_model_storage node
 ├── operation_repository.py        # operation_repository node
 ├── image_repository.py            # image_repository node
-├── enums/{station_cache,object_model_storage,operation_repository,image_repository}/
-├── interfaces/{station_cache,object_model_storage,operation_repository,image_repository}/
-├── models/{station_cache,object_model_storage,operation_repository,image_repository}/
-├── services/{station_cache,object_model_storage,operation_repository,image_repository}/
+├── material_repository.py         # material_repository node
+├── enums/{station_cache,object_model_storage,operation_repository,image_repository,material_repository}/
+├── exceptions/{image_repository,material_repository}/
+├── interfaces/{station_cache,object_model_storage,operation_repository,image_repository,material_repository}/
+├── models/{station_cache,object_model_storage,operation_repository,image_repository,material_repository}/
+├── services/{station_cache,object_model_storage,operation_repository,image_repository,material_repository}/
 └── utils/                         # shared helpers
 ```
 
@@ -211,6 +213,109 @@ so compare round trips by orientation, not by RPY values. The frame id of the
 poses is dropped; `to_msg(frame_id)` restamps them. `dispensing_patterns` is
 filled only for `dispensing` operations.
 
+## `material_repository` node
+
+A read-only repository of material data, referenced by **product number and
+revision**, that endtools use to learn about the material they process (for
+example the density and color of the putty a dispensing endtool dispenses).
+Nothing in this node writes material data.
+
+- **Class:** `MaterialRepository` (`rclpy.lifecycle.LifecycleNode`)
+- **Executable:** `material_repository`
+- **Service:** `~/get_material_data`
+  (`repositories/srv/MaterialRepositoryGetMaterialData`), created on `activate`
+  and destroyed on `deactivate`
+- **Backends:** `LocalMaterialBackend` (JSON file, parsed on `configure`) /
+  `CloudMaterialBackend` (stub: no HTTP calls are made)
+
+The request carries `product_number` and `product_revision`; the lookup is a
+**case-insensitive exact match** on that pair (stored and returned values keep the
+casing of the file). The response holds a `MaterialRepositoryMaterialData`
+(`product_number`, `product_revision`, `material_type`, `is_serialized`,
+`payload_json`), `success` and `error_message`. On failure `material_data` is
+empty and `error_message` is `material not found` (no match) or
+`cloud mode not implemented` (cloud mode); failures are logged and never raise
+across the ROS boundary.
+
+### Parameters
+
+| Parameter | Type | Default | Notes |
+|-----------|------|---------|-------|
+| `station_id` | string | `''` | **Required.** Must be a UUID4 string. |
+| `local_storage` | bool | `true` | `true` → local materials file; `false` → cloud (stubbed). |
+| `material_service_url` | string | `''` | Required only when `local_storage = false`. |
+| `request_timeout_sec` | double | `5.0` | Must be `> 0`; unused until cloud mode is implemented. |
+| `materials_file_path` | string | `/tmp/station/materials.json` | Local mode only; must be absolute. |
+
+Parameters are read and frozen on `configure`; an invalid value fails the
+transition. In cloud mode all lifecycle transitions succeed and every lookup
+answers `cloud mode not implemented`.
+
+### Lifecycle
+
+| Transition | Behaviour |
+|------------|-----------|
+| `configure` | Builds the frozen config, creates the internal material service (not yet initialized) and, in local mode, parses and validates the materials file into an in-memory mapping `(number, revision) → material`. A missing, unreadable, invalid-JSON or invalid file fails the transition. |
+| `activate` | Creates `~/get_material_data` and initializes the internal service. |
+| `deactivate` | De-initializes the internal service and destroys `~/get_material_data`. |
+| `cleanup` / `shutdown` | Remove the config, the cache and the internal service. |
+
+### Local mode
+
+`materials_file_path` points to a JSON file with a top-level list of materials,
+see [example_material_file.json](./example_material_file.json):
+
+```json
+[
+  {
+    "product_number": "material-123",
+    "product_revision": "a1",
+    "material_type": "fluid",
+    "is_serialized": false,
+    "payload_json": {
+      "density_kg_m3": 3150.0,
+      "viscosity_pa_s": 20.0,
+      "color_rgba": [1.0, 0.631, 0.0, 1.0]
+    }
+  }
+]
+```
+
+Every entry holds the common fields (`product_number`, `product_revision`,
+`material_type`, `is_serialized`) plus a nested `payload_json` **object**, which
+the node serializes to a string for the message. Loading is strict: any invalid
+entry fails the load. Invalid means a missing common field, an unknown
+`material_type` (`fluid` or `screw`), a payload that does not validate against
+its type model (`screw` payloads only have to be JSON objects), or a duplicate
+(`product_number`, `product_revision`) pair, compared case-insensitively.
+
+### Material models
+
+The payload models live in this package and are imported by the consuming
+nodes: `repositories.models.material_repository.FluidMaterial` and `ScrewMaterial`
+(both based on `Material`). They are frozen Pydantic v2 models without default
+values, allow extra fields (preserved when converting back to a message) and
+provide `to_msg()` / `from_msg()` for the full `MaterialRepositoryMaterialData`
+message:
+
+```python
+from repositories.models.material_repository import FluidMaterial
+
+material = FluidMaterial.from_msg(response.material_data)  # raises ValueError if invalid
+material.density_kg_m3
+```
+
+`FluidMaterial` carries `density_kg_m3` (> 0), `viscosity_pa_s` (> 0) and
+`color_rgba` (exactly four values, each 0.0–1.0). `ScrewMaterial` only names the
+type; no fields or behaviour are implemented yet. A consumer that cannot parse
+`payload_json` into its model must treat that as a failure (the dispensing
+endtool fails its configuration).
+
+### Cloud mode (stub)
+
+No HTTP calls are made; the service contract will be defined once a cloud
+material service exists.
+
 ## `image_repository` node
 
 Lets other nodes **upload** images to and **fetch** images from a storage. Every
@@ -283,6 +388,8 @@ ros2 run repositories object_model_storage --ros-args \
   -p station_id:=<uuid4> -p download_path:=/tmp/station/object_models/
 
 ros2 run repositories operation_repository
+
+ros2 run repositories material_repository --ros-args -p station_id:=<uuid4>
 ```
 
 Drive the lifecycle with `ros2 lifecycle set /<node> configure` then
