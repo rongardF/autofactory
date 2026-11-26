@@ -26,9 +26,6 @@
 # POSSIBILITY OF SUCH DAMAGE.
 """Internal data models used by the ``image_repository`` node."""
 
-from repositories.models.image_repository.image_index_entry_dto import (
-    ImageIndexEntryDTO,
-)
 from repositories.models.image_repository.image_payload_dto import (
     ImageInfoDTO,
     ImagePayloadDTO,
@@ -38,7 +35,6 @@ from repositories.models.image_repository.image_repository_config_dto import (
 )
 
 __all__ = [
-    'ImageIndexEntryDTO',
     'ImageInfoDTO',
     'ImagePayloadDTO',
     'ImageRepositoryConfigDTO',

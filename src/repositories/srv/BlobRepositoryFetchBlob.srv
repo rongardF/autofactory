@@ -1,0 +1,13 @@
+# Make one blob available locally and return its path and descriptor.
+string blob_id           # UUID4 of the blob
+string destination_path  # empty = node-managed cache path; else absolute path under an allowed root
+bool   download_fresh    # cloud mode: re-download even if cached (ignored in local mode)
+---
+string local_path        # path of the content ('' on failure)
+string blob_name
+string media_type
+uint64 size_bytes
+string sha256
+string metadata          # compact JSON or empty
+bool   success
+string error_message

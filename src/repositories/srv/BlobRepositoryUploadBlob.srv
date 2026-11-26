@@ -1,0 +1,14 @@
+# Upload one file by path. Content is streamed by the node; no bytes cross ROS.
+string source_path    # absolute path to a readable regular file under an allowed root
+string blob_id        # optional UUID4; empty = new id, non-empty = create or replace
+string blob_name      # optional display name; empty = source file basename (metadata only)
+string media_type     # optional MIME type; empty = inferred, else application/octet-stream
+string metadata       # optional JSON value; empty = no user metadata
+---
+string blob_id        # canonical UUID4 of the stored blob ('' on failure)
+string blob_name
+string media_type
+uint64 size_bytes
+string sha256         # lowercase hex SHA-256 of the content
+bool   success
+string error_message  # empty on success, human-readable reason on failure
