@@ -13,8 +13,14 @@ class ToolInfoDto(BaseModel):
     tool_type: ToolTypeEnum = Field(description='Type of the tool mounted to the slot.', default=ToolTypeEnum.UNKNOWN)
     tool_part_number: str = Field(description='Part number of the tool mounted to the slot.', default='')
     tool_part_revision: str = Field(description='Part revision of the tool mounted to the slot.', default='')
-    material_part_number: str = Field(description='Part number of the material used by the tool.', default='')
-    material_part_revision: str = Field(description='Part revision of the material used by the tool.', default='')
+    material_part_number: str = Field(
+        description="Product number of the material used by the tool; filled from the endtool's material parameters, not from the RFID tag.",
+        default='',
+    )
+    material_part_revision: str = Field(
+        description="Product revision of the material used by the tool; filled from the endtool's material parameters, not from the RFID tag.",
+        default='',
+    )
 
     def __eq__(self, value: object) -> bool:
         return (
@@ -74,18 +80,20 @@ class ToolInfoDto(BaseModel):
         """Build a ToolInfoDto from a hex-encoded RFID tag payload string.
 
         This is the single decoding and validation path for RFID payloads. The
-        decoded payload holds six fixed-width 16-byte fields (null/space padded),
-        in order: serial number, tool type, tool part number, tool part revision,
-        material part number and material part revision.
+        decoded payload holds four fixed-width 16-byte fields (null/space padded),
+        in order: serial number, tool type, tool part number and tool part revision.
+        The material is not stored on the tag: ``material_part_number`` and
+        ``material_part_revision`` stay empty here and are filled in by the nodes
+        that publish the tool information.
 
         :param index: Slot index the tag was read from (``-1`` for the tool mount).
         :param hex_text: Hex-encoded tag payload.
         :returns: The parsed tool information.
-        :raises ValueError: If the payload is not valid hex, is shorter than the six
+        :raises ValueError: If the payload is not valid hex, is shorter than the four
             fields, is not text, has an empty serial number or has an unknown tool type.
         """
         field_size = 16
-        field_count = 6
+        field_count = 4
         try:
             raw = bytes.fromhex(hex_text)
         except ValueError as error:
@@ -102,7 +110,7 @@ class ToolInfoDto(BaseModel):
             ]
         except UnicodeDecodeError as error:
             raise ValueError(f'RFID tag payload fields are not valid text: {error}') from error
-        serial, tool_type, tool_pn, tool_rev, material_pn, material_rev = fields
+        serial, tool_type, tool_pn, tool_rev = fields
         if not serial:
             raise ValueError('RFID tag payload has an empty serial number')
         return ToolInfoDto(
@@ -111,21 +119,19 @@ class ToolInfoDto(BaseModel):
             tool_type=ToolTypeEnum(tool_type),
             tool_part_number=tool_pn,
             tool_part_revision=tool_rev,
-            material_part_number=material_pn,
-            material_part_revision=material_rev,
         )
 
     def to_tag_data(self) -> bytes:
         """Convert the tool information to a hex-encoded RFID tag payload.
 
-        The payload is a hex string whose decoded form is six fixed-width
+        The payload is a hex string whose decoded form is four fixed-width
         16-byte fields (null/space padded), in order: 
             serial number
             tool_type
             tool_part_number
             tool_part_revision
-            material_part_number
-            material_part_revision
+
+        The material is not part of the tag.
 
         :returns: The hex-encoded tag payload bytes.
         :rtype: bytes
@@ -136,8 +142,6 @@ class ToolInfoDto(BaseModel):
             self.tool_type.value,
             self.tool_part_number,
             self.tool_part_revision,
-            self.material_part_number,
-            self.material_part_revision,
         ]
         padded_fields = [f.ljust(field_size, '\x00') for f in fields]
         concatenated = ''.join(padded_fields)

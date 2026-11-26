@@ -153,6 +153,11 @@ COPY requirements-dev.txt ./
 RUN --mount=type=cache,id=autofactory-pip,target=/root/.cache/pip \
     pip install -r requirements-dev.txt
 
+# Jupyter kernel that sources the ROS 2 overlay before starting (see
+# scripts/ros2-kernel.sh). Installed into the venv rather than ~/.local so it
+# survives container rebuilds.
+COPY docker/jupyter/ros2-jazzy/kernel.json /opt/venv/share/jupyter/kernels/ros2-jazzy/kernel.json
+
 # Advertise GPU/graphics capabilities to the NVIDIA Container Toolkit so it
 # mounts the driver libraries and /dev/nvidia* devices at container start.
 ENV NVIDIA_VISIBLE_DEVICES=void

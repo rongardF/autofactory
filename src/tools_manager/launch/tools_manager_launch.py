@@ -59,6 +59,8 @@ class _Endtool(NamedTuple):
     node_name: str
     pattern_executor_argument: str
     pattern_executor_default: str
+    material_product_number: str
+    material_product_revision: str
 
 
 # Every physical rack slot with the endtool that lives in it; ``None`` marks a slot
@@ -71,6 +73,8 @@ _RACK_SLOTS: tuple[tuple[int, _Endtool | None], ...] = (
             node_name='dispenser_abc123',
             pattern_executor_argument='pattern_executor_abc123',
             pattern_executor_default='dispensing_executor_abc123',
+            material_product_number='material-123',
+            material_product_revision='a1',
         ),
     ),
     (
@@ -80,13 +84,15 @@ _RACK_SLOTS: tuple[tuple[int, _Endtool | None], ...] = (
             node_name='dispenser_def123',
             pattern_executor_argument='pattern_executor_def123',
             pattern_executor_default='dispensing_executor_def123',
+            material_product_number='material-456',
+            material_product_revision='a1',
         ),
     ),
 )
 
 
 def _tools_parameters() -> dict[str, list]:
-    """Build the expected tool assignment shared by the tool rack and the tools manager."""
+    """Build the expected tool assignment shared by the tool rack, the tool mount and the tools manager."""
     index = [slot_index for slot_index, _ in _RACK_SLOTS]
     tool_sn = [endtool.tool_sn if endtool else '' for _, endtool in _RACK_SLOTS]
     node_name = [endtool.node_name if endtool else '' for _, endtool in _RACK_SLOTS]
@@ -121,6 +127,8 @@ def _endtool_actions(endtool: _Endtool):
             'tool_sn': endtool.tool_sn,
             'node_name': endtool.node_name,
             'pattern_executor': pattern_executor,
+            'material_product_number': endtool.material_product_number,
+            'material_product_revision': endtool.material_product_revision,
             'station_workplace_node_name': LaunchConfiguration('station_workplace_node_name'),
         }.items(),
     )
@@ -292,6 +300,7 @@ def generate_launch_description():
                     "mounted_publish_rate": LaunchConfiguration(
                         "tool_mounted_update_rate"
                     ),
+                    **tools_parameters,
                 },
             ],
         )

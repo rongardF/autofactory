@@ -41,7 +41,7 @@ The nodes never read a configuration file; everything is a ROS parameter.
 Launch supplies the values (see [Launch / run](#launch--run)).
 
 ### `tools.*` — expected tools and physical rack slots
-Passed identically to `tool_rack` and `tools_manager`, validated by
+Passed identically to `tool_rack`, `tool_mount` and `tools_manager`, validated by
 `ToolsManagerConfigDTO` (Pydantic v2). The three arrays are associated **by
 position**:
 
@@ -80,11 +80,20 @@ The arrays must have the same length, indices must be unique and exist in
 values; the launch file passes it to `tools_manager`.
 
 ### Tool identity encoding (`ToolInfoDto`)
-A tool's identity is a **96-byte RFID payload** = six 16-byte, null/space-padded
-fields: `serial, tool_type, tool_part_number, tool_part_revision,
-material_part_number, material_part_revision`. `ToolInfoDto.from_hex_tag_data` /
+A tool's identity is a **64-byte RFID payload** = four 16-byte, null/space-padded
+fields: `serial, tool_type, tool_part_number, tool_part_revision` (the parser
+accepts payloads of at least 64 bytes). The tag is constant for a tool: it does
+**not** carry the material, so changing the material an endtool uses never
+requires rewriting the tag. `ToolInfoDto.from_hex_tag_data` /
 `to_tag_data` convert between the hex payload and the structured DTO; invalid
 hex, a short payload, an empty serial or an unknown tool type is rejected.
+
+`ToolInfoDto` and `ToolInfo.msg` still carry `material_part_number` and
+`material_part_revision`. They are not decoded from the tag (they stay empty
+there); `tool_rack` and `tool_mount` fill them from the endtool's read-only
+`material.product_number` / `material.product_revision` parameters before
+publishing `~/slots` and `~/tool_mounted`.
+
 Each tool also derives three frame names from its slot index:
 - `slot<index>_slide_in_link`
 - `slot<index>_attached_link`
@@ -102,7 +111,15 @@ at `slots_update_rate` Hz.
 - **`on_configure`:** reads the `tools.*` parameters, builds `ToolRackNodeConfigDTO`,
   creates the `~/slots` publisher, and picks `SimulatedRackController` or
   `HardwareRackController`.
-- **`on_activate`:** `controller.setup()` then a timer that publishes slot data.
+- **`on_activate`:** first reads the read-only `material.product_number` /
+  `material.product_revision` parameters of every configured endtool node
+  (through `GetParameters`, once, with timeouts) and caches them by `tool_sn`;
+  then `controller.setup()` and a timer that publishes slot data. Every
+  published `ToolInfo` gets its material from that cache by `tool_sn`; a tool
+  whose serial number is not configured gets an empty material. The endtool
+  nodes must be running (unconfigured is enough). If an endtool cannot be read
+  or its material parameters are empty, the activation fails (logged), so no
+  `ToolInfo` is ever published with a missing material.
 - **Simulated controller:** subscribes to `/slot<index>_rfid_scanner/tag_data`
   for each physical slot (assigned or not); each `Dataframe` is parsed into a
   `ToolInfoDto` (empty payload ⇒ slot empty). `get_slots_data()` returns a
@@ -115,10 +132,12 @@ at `slots_update_rate` Hz.
 Publishes a latched `tool_mounted` topic (`tools_manager/ToolInfo`) at
 `mounted_publish_rate` Hz and exposes a `lock` service (`std_srvs/SetBool`).
 
-- **Parameters:** `simulated`, `parent_frame_id` (default `tool0`),
-  `mounted_publish_rate`.
-- **`on_activate`:** `controller.setup()`, a timer (`_check_mounted_tool`) that
-  publishes the mounted-tool info, and the `lock` service.
+- **Parameters:** `simulated`, `tools.*` (same as `tool_rack`),
+  `parent_frame_id` (default `tool0`), `mounted_publish_rate`.
+- **`on_activate`:** reads the endtool material parameters exactly like
+  `tool_rack` (cached by `tool_sn`; a failure fails the activation), then
+  `controller.setup()`, a timer (`_check_mounted_tool`) that
+  publishes the mounted-tool info (with its material), and the `lock` service.
 - **`lock` service:** `data=True` ⇒ close (lock), `data=False` ⇒ open (unlock);
   delegates to `controller.lock_closed(...)`.
 - **Simulated controller:** subscribes to `/tool_mount_rfid_scanner/tag_data`;
@@ -158,6 +177,16 @@ simulation — `simulation.*`.
 The manager never starts or stops processes and never drives executor
 lifecycles. Its endtools stay `inactive` after activation; an unmounted endtool
 cannot be activated for dispensing.
+
+`tools_manager` itself does not read endtool materials: its own simulated
+inventory (YAML tag data) carries none, and in hardware mode it relies on the
+`tool_rack` / `tool_mount` topics, which already contain the material. The
+manufacturing executor matches tools against the material of
+`tool_rack/slots` and `tool_mount/tool_mounted`.
+
+The material repository must be `active` before the endtools are configured
+(the endtools fetch their material while configuring); ordering is the
+responsibility of the external orchestrator.
 
 ### `on_configure`
 Reads and validates the parameters into `ToolsManagerNodeConfigDTO` (failing on
@@ -303,15 +332,16 @@ per-consumer ROS-Gazebo service or detachable-joint bridge.
 
 ## Endtool discovery parameters
 
-Every endtool exposes two **read-only** parameters, declared in its constructor
+Every endtool exposes **read-only** parameters, declared in its constructor
 and set once at startup through the standard ROS parameter override mechanism
-(its launch file forwards them via the node's `parameters`), so they can be read
-while the node is `unconfigured`:
+(its launch file forwards them as `--ros-args -p` node arguments), so they can be
+read while the node is `unconfigured`:
 
 | Parameter | Used by |
 |-----------|---------|
 | `model` | The tools manager, to find the collision mesh and Gazebo model of the tool. Launch argument default for the dispenser: `dispensing_tool`. |
 | `pattern_executor` | Discovery only: the node name of the executor associated with the tool. The manager does not drive that executor's lifecycle. |
+| `material.product_number`, `material.product_revision` | `tool_rack` and `tool_mount` on activation, to fill `ToolInfo.material_part_number` / `material_part_revision`; also the endtool itself, to fetch its material from the material repository. |
 
 ---
 
@@ -349,12 +379,17 @@ the mount. If a parent launch already starts the shared world manager, keep
 `start_world_manager:=false` (the default); the endtool launches never start one.
 
 The rack is defined statically at the top of the launch file (`_RACK_SLOTS`):
-each physical slot with the endtool that lives in it. The same `tools.*` values
-are passed to `tool_rack` and `tools_manager`; an unassigned slot (`None`) gets
+each physical slot with the endtool that lives in it, together with the material
+the endtool dispenses (hardcoded like the serial number): `abc123` →
+`material-123` / `a1`, `def123` → `material-456` / `a1`. The same `tools.*`
+values are passed to `tool_rack`, `tool_mount` and `tools_manager`; an
+unassigned slot (`None`) gets
 neither an endtool nor an executor. For every endtool the launch includes
 `endtools/volumetric_dispenser_launch.py` and
 `pattern_executors/dispensing_pattern_executor.launch.py`, passing the same
-`simulated`, `world_name` and tool identity. The executor node name is a launch
+`simulated`, `world_name` and tool identity, plus the material as the
+`material_product_number` / `material_product_revision` launch arguments of the
+endtool launch (the endtool's read-only `material.*` parameters). The executor node name is a launch
 argument per instance (`pattern_executor_<tool_sn>`); its resolved value names
 the executor node **and** is forwarded to the endtool launch as
 `pattern_executor`. The `station_workplace_node_name` launch argument (default

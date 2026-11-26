@@ -40,8 +40,10 @@ from tools_manager.msg import Slots
 from tools_manager.exception.deactivation_failed_exception import DeactivationFailedException
 from tools_manager.exception.cleanup_failed_exception import CleanupFailedException
 from tools_manager.model.slots_dto import SlotsDto
+from tools_manager.model.endtool_material_dto import EndtoolMaterialDTO
 from tools_manager.model.tool_rack_node_config_dto import ToolRackNodeConfigDTO
 from tools_manager.interface.rack_controller import RackController
+from tools_manager.services.endtool_material_reader import read_endtool_materials, with_material
 from tools_manager.services.hardware_rack_controller import HardwareRackController
 from tools_manager.services.simulated_rack_controller import SimulatedRackController
 
@@ -64,6 +66,8 @@ class ToolRack(LifecycleNode):
 
         self._config: ToolRackNodeConfigDTO | None = None
         self._rack_controller: RackController | None = None
+        # Material of every configured tool by serial number; read on activate.
+        self._materials: dict[str, EndtoolMaterialDTO] = {}
 
         # region: parameters
         self.declare_parameter(
@@ -126,11 +130,21 @@ class ToolRack(LifecycleNode):
 
     def on_activate(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info(f'Activating from state: {state.label}')
-        if super().on_activate(state) != TransitionCallbackReturn.SUCCESS:
-            return TransitionCallbackReturn.FAILURE
 
         if self._config is None:
             self.get_logger().error('Cannot activate: configuration is not set')
+            return TransitionCallbackReturn.FAILURE
+
+        # The material of every tool comes from its endtool node, which only has to be
+        # running. Read before the base activation so a failure leaves nothing activated.
+        try:
+            self._materials = read_endtool_materials(self, self._config.slots)
+        except Exception as e:
+            self.get_logger().error(f'Failed to read the endtool materials: {e}')
+            self._materials = {}
+            return TransitionCallbackReturn.FAILURE
+
+        if super().on_activate(state) != TransitionCallbackReturn.SUCCESS:
             return TransitionCallbackReturn.FAILURE
 
         if self._slots_topic is None:
@@ -163,6 +177,7 @@ class ToolRack(LifecycleNode):
         if self._slots_update_timer is not None:
             self.destroy_timer(self._slots_update_timer)
             self._slots_update_timer = None
+        self._materials = {}
 
         return TransitionCallbackReturn.SUCCESS
 
@@ -174,6 +189,7 @@ class ToolRack(LifecycleNode):
         
         self._config = None
         self._rack_controller = None
+        self._materials = {}
         if self._slots_topic is not None:
             self.destroy_publisher(self._slots_topic)
             self._slots_topic = None
@@ -198,6 +214,9 @@ class ToolRack(LifecycleNode):
             return
 
         slots = self._rack_controller.get_slots_data()
+        slots = slots.model_copy(
+            update={'tools_mounted': [with_material(tool, self._materials) for tool in slots.tools_mounted]}
+        )
         slots_msg = SlotsDto.to_slots_msg(slots)
         self._slots_topic.publish(slots_msg)
     # endregion: callbacks

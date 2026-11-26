@@ -467,7 +467,8 @@ class DispensingPatternExecutor(PatternExecutor):
             element_metric.element_id = (
                 self._current_open_element_id or movement.id
             )
-            element_metric.dispensed_volume_m3 = cc_to_m3(response.dispensed_volume)
+            element_metric.dispensed_volume_m3 = cc_to_m3(response.dispensed_volume_cc)
+            element_metric.dispensed_mass_kg = response.dispensed_mass_kg
             element_metric.dispensing_time_s = response.duration_seconds
             self._current_element_metrics.append(element_metric)
             self._current_open_element_id = None
@@ -483,6 +484,9 @@ class DispensingPatternExecutor(PatternExecutor):
         pattern_metric.pattern_id = pattern.id
         pattern_metric.dispensed_volume_m3 = sum(
             element.dispensed_volume_m3 for element in element_metrics
+        )
+        pattern_metric.dispensed_mass_kg = sum(
+            element.dispensed_mass_kg for element in element_metrics
         )
         pattern_metric.pattern_execution_time_s = pattern_execution_time_s
         pattern_metric.element_metrics = element_metrics

@@ -37,13 +37,24 @@ from rclpy.time import Time as RclpyTime
 from endtools.model.dispensing_tool_config_dto import DispensingToolConfigDTO
 from endtools.srv import SetTcp
 from endtools.volumetric_dispensing_tool import VolumetricDispensingTool
+from repositories.models.material_repository import FluidMaterial
+
+_MATERIAL = FluidMaterial(
+    product_number='material-123',
+    product_revision='a1',
+    material_type='fluid',
+    is_serialized=False,
+    density_kg_m3=3150.0,
+    viscosity_pa_s=20.0,
+    color_rgba=[1.0, 0.631, 0.0, 1.0],
+)
 
 
 @pytest.fixture
 def tool(monkeypatch: pytest.MonkeyPatch) -> VolumetricDispensingTool:
     """Provide real TCP resolution and publishing with mocked ROS dependencies."""
     node = object.__new__(VolumetricDispensingTool)
-    node._config = DispensingToolConfigDTO(tool_sn='abc123', mounted=False)
+    node._config = DispensingToolConfigDTO(tool_sn='abc123', mounted=False, material=_MATERIAL)
     node._tool_tcp = None
     node._tcp_expiration = None
     node._tcp_expiration_publisher = Mock()

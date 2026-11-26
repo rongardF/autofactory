@@ -7,6 +7,8 @@
 set -e
 
 source /opt/ros/jazzy/setup.bash
-source /workspaces/autofactory/install/setup.bash
+if [ -f /workspaces/autofactory/install/setup.bash ]; then
+    source /workspaces/autofactory/install/setup.bash
+fi
 
 exec /opt/venv/bin/python "$@"

@@ -7,5 +7,6 @@ class DispensingMetricsDTO(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     dispensed_volume_cc: float = Field(..., description="The volume dispensed in cubic centimeters.")
+    dispensed_mass_kg: float = Field(..., description="The mass dispensed in kilograms (dispensed volume x material density).")
     dispensing_duration_s: float = Field(..., description="The duration of the dispensing operation in seconds.")
     flowrate_cc: float = Field(..., description="The flow rate during the dispensing operation in cubic centimeters per second.")

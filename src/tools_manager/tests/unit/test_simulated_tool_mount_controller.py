@@ -42,8 +42,6 @@ def _tool() -> ToolInfoDto:
         tool_type=ToolTypeEnum.VOLUMETRIC_DISPENSER,
         tool_part_number='KRC123',
         tool_part_revision='R1A',
-        material_part_number='SXN999',
-        material_part_revision='R1A',
     )
 
 

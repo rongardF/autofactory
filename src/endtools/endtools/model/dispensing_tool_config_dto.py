@@ -1,5 +1,7 @@
 from pydantic import Field, field_validator
 
+from repositories.models.material_repository import FluidMaterial
+
 from endtools.model.tool_config_base_dto import ToolConfigBaseDTO
 from endtools.enumerator.tool_type_enum import ToolTypeEnum
 
@@ -8,6 +10,9 @@ class DispensingToolConfigDTO(ToolConfigBaseDTO):
     """Pydantic v2 DTO for dispensing tool parameters."""
 
     tool_type: ToolTypeEnum = ToolTypeEnum.VOLUMETRIC_DISPENSER
+    material: FluidMaterial = Field(
+        description='Material dispensed by this tool, fetched from the material repository on configure.',
+    )
     flow_rate: float = Field(
         default=1.0,
         description='Volumetric flow rate (ml/s). Used by the mock now and by real hardware later. Must be >= 0.',

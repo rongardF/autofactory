@@ -35,8 +35,9 @@ State topic `~/models` (`world_manager/ModelList`, reliable + transient-local) i
 `delete_models` takes model ids or an owner. A model that another model still holds through a non-detached
 DetachableJoint cannot be deleted alone: the call is rejected before anything is deleted. The exception is a holder
 spawned with `delete_with_child=true` (`ModelSpec`): it is added to the delete set, whatever its owner (transitively),
-detached and removed before the model it holds. The dispensed material of the endtools is spawned this way, so deleting
-a product also removes the material on it. If a cascaded holder can neither be detached nor removed, the model it holds
+detached and removed before the model it holds. The dispensed material of the endtools is spawned this way (each blob
+holds the previous one, the first holds the product), so deleting a product also removes the material on it. If a
+cascaded holder can neither be detached nor removed, the model it holds
 is kept and the call fails. Cascaded models do not use up `operation_timeout_sec`.
 
 Parameters: `world_name` (required), `world_frame`, `service_timeout_sec`, `tf_timeout_sec`, `confirm_timeout_sec`,

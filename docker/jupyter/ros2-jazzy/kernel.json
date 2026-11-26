@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "/workspaces/autofactory/scripts/ros2-kernel.sh",
+    "-m",
+    "ipykernel_launcher",
+    "-f",
+    "{connection_file}"
+  ],
+  "display_name": "ROS 2 Jazzy (autofactory)",
+  "language": "python",
+  "metadata": {
+    "debugger": true
+  }
+}

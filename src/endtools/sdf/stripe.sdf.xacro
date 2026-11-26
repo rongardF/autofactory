@@ -4,14 +4,15 @@
   <xacro:macro name="dispensed_stripe_model"
       params="
         model_name:=stripe_123
-        product_model_name:=product
-        product_link:=heatsink
+        anchor_model_name:=anchor
+        anchor_link:=anchor_link
         radius_m:=0.02
         length_m:=0.1
+        color_rgba:='0.33 0.66 0.99 1'
       ">
 
     <model name="${model_name}">
-      <link name="stripe_link">
+      <link name="putty_link">
         <inertial>
             <mass>1e-6</mass>
         </inertial>
@@ -24,8 +25,8 @@
                 </sphere>
             </geometry>
             <material>
-              <ambient>0.33 0.66 0.99 1</ambient>
-              <diffuse>0.33 0.66 0.99 1</diffuse>
+              <ambient>${color_rgba}</ambient>
+              <diffuse>${color_rgba}</diffuse>
             </material>
         </visual>
         <visual name="stripe_cylinder_visual">
@@ -37,8 +38,8 @@
                 </cylinder>
             </geometry>
             <material>
-              <ambient>0.33 0.66 0.99 1</ambient>
-              <diffuse>0.33 0.66 0.99 1</diffuse>
+              <ambient>${color_rgba}</ambient>
+              <diffuse>${color_rgba}</diffuse>
             </material>
         </visual>
         <visual name="stripe_cap_end_visual">
@@ -49,17 +50,21 @@
                 </sphere>
             </geometry>
             <material>
-              <ambient>0.33 0.66 0.99 1</ambient>
-              <diffuse>0.33 0.66 0.99 1</diffuse>
+              <ambient>${color_rgba}</ambient>
+              <diffuse>${color_rgba}</diffuse>
             </material>
         </visual>
       </link>
 
+      <!-- The anchor is the product for the first blob and the previously spawned blob
+           afterwards. Welding every blob to the product makes gz-physics add a mirror
+           body and a solver constraint per blob to the product skeleton, which slows the
+           simulation down as blobs accumulate. Chaining keeps them plain tree welds. -->
       <plugin filename="gz-sim-detachable-joint-system"
                 name="gz::sim::systems::DetachableJoint">
-        <parent_link>stripe_link</parent_link>
-        <child_model>${product_model_name}</child_model>
-        <child_link>${product_link}</child_link>
+        <parent_link>putty_link</parent_link>
+        <child_model>${anchor_model_name}</child_model>
+        <child_link>${anchor_link}</child_link>
         <attach_topic>/${model_name}/attach</attach_topic>
         <detach_topic>/${model_name}/detach</detach_topic>
         <output_topic>/${model_name}/state</output_topic>
@@ -69,17 +74,19 @@
   </xacro:macro>
 
   <xacro:arg name="model_name"                  default="stripe_123"/>
-  <xacro:arg name="product_model_name"          default="product"/>
-  <xacro:arg name="product_link"             default="heatsink"/>
+  <xacro:arg name="anchor_model_name"          default="anchor"/>
+  <xacro:arg name="anchor_link"             default="anchor_link"/>
   <xacro:arg name="radius_m"              default="0.02"/>
   <xacro:arg name="length_m"              default="0.1"/>
+  <xacro:arg name="color_rgba"            default="0.33 0.66 0.99 1"/>
 
   <xacro:dispensed_stripe_model
       model_name="$(arg model_name)"
-      product_model_name="$(arg product_model_name)"
-      product_link="$(arg product_link)"
+      anchor_model_name="$(arg anchor_model_name)"
+      anchor_link="$(arg anchor_link)"
       radius_m="$(arg radius_m)"
       length_m="$(arg length_m)"
+      color_rgba="$(arg color_rgba)"
   />
 
 </sdf>

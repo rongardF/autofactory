@@ -45,9 +45,12 @@ from tools_manager.exception.cleanup_failed_exception import CleanupFailedExcept
 from tools_manager.exception.tool_mount_exception import ToolMountControllerError
 from tools_manager.model.tool_mount_node_config_dto import ToolMountNodeConfigDTO
 from tools_manager.model.tool_info_dto import ToolInfoDto
+from tools_manager.model.endtool_material_dto import EndtoolMaterialDTO
 from tools_manager.interface.tool_mount_controller import ToolMountController
+from tools_manager.services.endtool_material_reader import read_endtool_materials, with_material
 from tools_manager.services.simulated_tool_mount_controller import SimulatedToolMountController
 from tools_manager.services.hardware_tool_mount_controller import HardwareToolMountController
+from tools_manager.utils.node_parameters import declare_tools_parameters, read_tools_config
 
 
 class ToolMount(LifecycleNode):
@@ -67,6 +70,8 @@ class ToolMount(LifecycleNode):
         
         self._tool_mount_controller: ToolMountController|None = None
         self._config: ToolMountNodeConfigDTO|None = None
+        # Material of every configured tool by serial number; read on activate.
+        self._materials: dict[str, EndtoolMaterialDTO] = {}
 
         # region: parameters
         self.declare_parameter(
@@ -74,6 +79,7 @@ class ToolMount(LifecycleNode):
             True,
             ParameterDescriptor(description='Whether the node is running in simulation mode'),
         )
+        declare_tools_parameters(self)
         self.declare_parameter(
             'parent_frame_id',
             "tool0",
@@ -106,7 +112,9 @@ class ToolMount(LifecycleNode):
             return TransitionCallbackReturn.FAILURE
 
         try:
+            tools_config = read_tools_config(self)
             self._config = ToolMountNodeConfigDTO(
+                slots=list(tools_config.slots),
                 simulated=self.get_parameter('simulated').get_parameter_value().bool_value,
                 parent_frame_id=self.get_parameter('parent_frame_id').get_parameter_value().string_value,
                 mounted_publish_rate=self.get_parameter('mounted_publish_rate').get_parameter_value().double_value,
@@ -130,6 +138,14 @@ class ToolMount(LifecycleNode):
                 self.destroy_publisher(self._tool_mounted_publisher)
                 self._tool_mounted_publisher = None
             return TransitionCallbackReturn.FAILURE
+        except ValueError as e:
+            self.get_logger().error(f'Invalid tool mount parameters: {e}')
+            self._config = None
+            self._tool_mount_controller = None
+            if self._tool_mounted_publisher is not None:
+                self.destroy_publisher(self._tool_mounted_publisher)
+                self._tool_mounted_publisher = None
+            return TransitionCallbackReturn.FAILURE
         except Exception as e:
             self.get_logger().error(f'Unknown error while configuring: {e}')
             self._config = None
@@ -143,9 +159,6 @@ class ToolMount(LifecycleNode):
 
     def on_activate(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info(f'Activating from state: {state.label}')
-        if super().on_activate(state) != TransitionCallbackReturn.SUCCESS:
-            self.get_logger().error('Failed to activate base lifecycle node.')
-            return TransitionCallbackReturn.FAILURE
 
         # sanity checks before activating the node
         if (
@@ -154,6 +167,19 @@ class ToolMount(LifecycleNode):
             self._tool_mounted_publisher is None
         ):
             self.get_logger().error('Sanity check failed, something is un-initialized. Cannot activate node.')
+            return TransitionCallbackReturn.FAILURE
+
+        # The material of every tool comes from its endtool node, which only has to be
+        # running. Read before the base activation so a failure leaves nothing activated.
+        try:
+            self._materials = read_endtool_materials(self, self._config.slots)
+        except Exception as e:
+            self.get_logger().error(f'Failed to read the endtool materials: {e}')
+            self._materials = {}
+            return TransitionCallbackReturn.FAILURE
+
+        if super().on_activate(state) != TransitionCallbackReturn.SUCCESS:
+            self.get_logger().error('Failed to activate base lifecycle node.')
             return TransitionCallbackReturn.FAILURE
 
         # initialize tool_mount controller
@@ -193,6 +219,7 @@ class ToolMount(LifecycleNode):
         if self._mounted_check_timer is not None:
             self.destroy_timer(self._mounted_check_timer)
             self._mounted_check_timer = None
+        self._materials = {}
 
         return TransitionCallbackReturn.SUCCESS
 
@@ -208,6 +235,7 @@ class ToolMount(LifecycleNode):
 
         self._tool_mount_controller = None
         self._config = None
+        self._materials = {}
 
         return TransitionCallbackReturn.SUCCESS
 
@@ -247,7 +275,7 @@ class ToolMount(LifecycleNode):
 
         tool_info = self._tool_mount_controller.get_mounted_tool_info()
         if tool_info is not None:
-            tool_info_msg = ToolInfoDto.to_msg(tool_info)
+            tool_info_msg = ToolInfoDto.to_msg(with_material(tool_info, self._materials))
         else:
             tool_info_msg = ToolInfoDto.to_msg(ToolInfoDto())  # publish empty ToolInfo when nothing is mounted
         self._tool_mounted_publisher.publish(tool_info_msg)

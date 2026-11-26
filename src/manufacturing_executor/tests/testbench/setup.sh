@@ -69,6 +69,7 @@ rm -rf "${DOWNLOAD_PATH:?}/${CARRIER_SDF_ID}" "${DOWNLOAD_PATH:?}/${PRODUCT_SDF_
 
 cp "${ASSETS_DIR}/local_storage.json" "${DOWNLOAD_PATH}/local_storage.json"
 cp "${ASSETS_DIR}/mock_assembly_file.json" "${DOWNLOAD_PATH}/mock_assembly_file.json"
+cp "${ASSETS_DIR}/materials.json" "${DOWNLOAD_PATH}/materials.json"
 
 cp -r "${MODELS_DIR}/carrier_model" "${DOWNLOAD_PATH}/${CARRIER_SDF_ID}"
 cp -r "${MODELS_DIR}/mock_product" "${DOWNLOAD_PATH}/${PRODUCT_SDF_ID}"

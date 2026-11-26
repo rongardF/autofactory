@@ -9,8 +9,9 @@ manufacturing loop needs it:
   product_carrier conveyor and the RFID scanner) and ``srdf/station.srdf.xacro``;
 - ``gazebo_world_manager`` and ``moveit2_world_manager`` (``world_manager``);
 - the simulated ``basler_camera`` (``cameras``);
-- ``station_cache`` and ``object_model_storage`` (local), ``operation_repository`` and
-  ``image_repository`` (``repositories``), ``production_manager`` (local assembly file);
+- ``station_cache`` and ``object_model_storage`` (local), ``operation_repository``,
+  ``image_repository`` and ``material_repository`` (``repositories``), ``production_manager``
+  (local assembly file);
 - ``tool_mount``, ``tool_rack``, ``tools_manager``, the endtools, the pattern executors and the
   ``dispensing_optimizer`` (``tools_manager`` launch) with the simulated tool inventory of
   ``config/tools_manager_config.yaml``;
@@ -80,6 +81,7 @@ def generate_launch_description() -> LaunchDescription:
     station_id = LaunchConfiguration('station_id')
     download_path = LaunchConfiguration('download_path')
     assembly_file = PathJoinSubstitution([download_path, 'mock_assembly_file.json'])
+    materials_file = PathJoinSubstitution([download_path, 'materials.json'])
 
     declared_arguments = [
         DeclareLaunchArgument('gui', default_value='true', choices=['true', 'false'],
@@ -89,8 +91,8 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument('station_id', default_value='c330289c-0db3-4b5b-9fe0-3d9b63bedb72',
                               description='Station UUID4 (repositories, production_manager).'),
         DeclareLaunchArgument('download_path', default_value='/tmp/station',
-                              description='Folder holding local_storage.json, the model entries '
-                              'and mock_assembly_file.json.'),
+                              description='Folder holding local_storage.json, the model entries, '
+                              'mock_assembly_file.json and materials.json.'),
     ]
 
     movement_controller = _include('movement_controller', 'launch.py', {
@@ -151,6 +153,11 @@ def generate_launch_description() -> LaunchDescription:
     image_repository = _lifecycle_node('repositories', 'image_repository', {
         'station_id': station_id,
     })
+    material_repository = _lifecycle_node('repositories', 'material_repository', {
+        'station_id': station_id,
+        'local_storage': True,
+        'materials_file_path': materials_file,
+    })
 
     return LaunchDescription([
         *declared_arguments,
@@ -162,6 +169,7 @@ def generate_launch_description() -> LaunchDescription:
         object_model_storage,
         operation_repository,
         image_repository,
+        material_repository,
         production_manager,
         conveyor,
         workplace,

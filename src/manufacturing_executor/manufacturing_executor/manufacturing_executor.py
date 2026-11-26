@@ -90,6 +90,7 @@ class ManufacturingExecutor(LifecycleNode):
         'image_capture_settling_s',
         'lifecycle_transition_timeout_s',
         'localization_result_timeout_s',
+        'localize_per_operation',
         'optimization_timeout_s',
         'mount_tool_timeout_s',
         'image_capture_timeout_s',

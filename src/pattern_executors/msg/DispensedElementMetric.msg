@@ -1,3 +1,4 @@
 string element_id
 float64 dispensed_volume_m3
+float64 dispensed_mass_kg
 float64 dispensing_time_s

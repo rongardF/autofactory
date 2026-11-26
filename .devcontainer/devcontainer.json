@@ -11,7 +11,6 @@
         "ms-azuretools.vscode-docker",
         "github.copilot-chat",
         "openai.chatgpt",
-        "ms-vscode.cmake-tools",
         "ms-toolsai.jupyter"
       ],
       "settings": {

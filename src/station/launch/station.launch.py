@@ -71,6 +71,7 @@ def generate_launch_description() -> LaunchDescription:
     station_id = LaunchConfiguration("station_id")
     local_cache = LaunchConfiguration("local_cache")
     local_object_models = LaunchConfiguration("local_object_models")
+    local_materials = LaunchConfiguration("local_materials")
     world_file = LaunchConfiguration("world_file")
 
     declared_arguments = [
@@ -132,6 +133,15 @@ def generate_launch_description() -> LaunchDescription:
             description=(
                 "Select local storage (true) or the cloud backend (false) for "
                 "the object_model_storage node."
+            ),
+        ),
+        DeclareLaunchArgument(
+            "local_materials",
+            default_value="true",
+            choices=["true", "false"],
+            description=(
+                "Select local storage (true) or the cloud backend (false) for "
+                "the material_repository node."
             ),
         ),
         DeclareLaunchArgument(
@@ -292,6 +302,19 @@ def generate_launch_description() -> LaunchDescription:
         }],
     )
 
+    material_repository_node = LifecycleNode(
+        package="repositories",
+        executable="material_repository",
+        name="material_repository",
+        namespace="",
+        output="screen",
+        parameters=[{
+            "station_id": station_id,
+            "local_storage": ParameterValue(local_materials, value_type=bool),
+            "use_sim_time": simulated,
+        }],
+    )
+
     production_manager_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution(
@@ -352,6 +375,7 @@ def generate_launch_description() -> LaunchDescription:
             GroupAction([operation_repository_node], scoped=True),
             GroupAction([image_repository_node], scoped=True),
             GroupAction([object_model_storage_node], scoped=True),
+            GroupAction([material_repository_node], scoped=True),
             GroupAction([production_manager_launch], scoped=True),
             GroupAction([station_workplace_launch], scoped=True),
             GroupAction([product_carrier_launch], scoped=True),

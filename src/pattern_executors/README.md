@@ -48,7 +48,8 @@ messages.
   executor forwards them unchanged.
 - **Result**: `bool success`, `string error_message`, `float64 execution_time_s`,
   `string operation_id`, `DispensingPatternMetric[] metrics` (one per executed
-  pattern; only fully-completed patterns are reported on failure/cancel).
+  pattern, carrying the dispensed volume in m³ and the dispensed mass in kg;
+  only fully-completed patterns are reported on failure/cancel).
 - **Feedback**: emitted after each completed pattern — `string pattern_id`,
   `float64 execution_time_s`, `DispensingPatternMetric metric`.
 
@@ -108,7 +109,8 @@ moving the robot while a dwell still has the valve open.
 
 Each `open_valve` → `close_valve` cycle yields one `DispensedElementMetric`
 (`element_id` = movement `id` of the movement whose `open_valve` started it, volume
-converted cc→m³).
+converted cc→m³, mass in kg as reported by the end tool). A pattern's
+`dispensed_volume_m3` and `dispensed_mass_kg` are the sums over its elements.
 
 ### Abort / cancel
 

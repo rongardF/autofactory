@@ -48,6 +48,10 @@ class SimulatedDispenserController(DispenserController):
     # How long a single TF lookup may block waiting for the transform.
     _TF_TIMEOUT_S: float = 3.0
 
+    # Link every dispensed material SDF exposes for chaining; must match the
+    # link name in sdf/stripe.sdf.xacro and sdf/dot.sdf.xacro.
+    _MATERIAL_LINK: str = 'putty_link'
+
     # Must match the latched QoS the station workplace publishes with.
     _PRODUCT_METADATA_QOS = QoSProfile(
         reliability=ReliabilityPolicy.RELIABLE,
@@ -75,6 +79,12 @@ class SimulatedDispenserController(DispenserController):
         # None while no product is spawned (or nothing has been received yet).
         self._product_model_name: str | None = None
         self._product_link: str | None = None
+        # Most recently spawned material model. The next one is welded to it rather
+        # than to the product: every extra joint on the product link makes gz-physics
+        # add a mirror body and a solver constraint to the product skeleton, so the
+        # real-time factor collapses as material accumulates. A chain of welds
+        # between the free-floating material bodies stays a plain kinematic tree.
+        self._last_material_model_name: str | None = None
 
         self._world_client: GazeboWorldClient | None = None
         self._world_client_callback_group: ReentrantCallbackGroup | None = None
@@ -97,14 +107,20 @@ class SimulatedDispenserController(DispenserController):
         """Cache the Gazebo identity of the product spawned by the station workplace."""
         with self._lock:
             if msg.spawned:
+                if (msg.product_model_name, msg.product_link) != (
+                    self._product_model_name, self._product_link
+                ):
+                    self._last_material_model_name = None
                 self._product_model_name = msg.product_model_name
                 self._product_link = msg.product_link
             else:
                 self._product_model_name = None
                 self._product_link = None
+                self._last_material_model_name = None
         if msg.spawned:
             self._node.get_logger().info(
-                f"Dispensed material will be welded to '{msg.product_model_name}::{msg.product_link}'."
+                f"Dispensed material will be welded to '{msg.product_model_name}::{msg.product_link}' "
+                'and chained onto each other.'
             )
         else:
             self._node.get_logger().info('No simulated product is spawned in the station workplace.')
@@ -122,10 +138,11 @@ class SimulatedDispenserController(DispenserController):
     def _get_stripe_sdf(
         self,
         model_name: str,
-        product_model_name: str,
-        product_link: str,
+        anchor_model_name: str,
+        anchor_link: str,
         radius_mm: float,
-        length_mm: float
+        length_mm: float,
+        color_rgba: str,
     ) -> str:
         model_path = os.path.join(
             get_package_share_directory("endtools"),
@@ -136,20 +153,22 @@ class SimulatedDispenserController(DispenserController):
             model_path,
             {
                 'model_name': model_name,
-                'product_model_name': product_model_name,
-                'product_link': product_link,
+                'anchor_model_name': anchor_model_name,
+                'anchor_link': anchor_link,
                 # SDF geometry is expressed in metres, inputs are millimetres
                 'radius_m': str(radius_mm / 1000.0),
                 'length_m': str(length_mm / 1000.0),
+                'color_rgba': color_rgba,
             },
         )
 
     def _get_dot_sdf(
         self,
         model_name: str,
-        product_model_name: str,
-        product_link: str,
-        radius_mm: float
+        anchor_model_name: str,
+        anchor_link: str,
+        radius_mm: float,
+        color_rgba: str,
     ) -> str:
         model_path = os.path.join(
             get_package_share_directory("endtools"),
@@ -160,10 +179,11 @@ class SimulatedDispenserController(DispenserController):
             model_path,
             {
                 'model_name': model_name,
-                'product_model_name': product_model_name,
-                'product_link': product_link,
+                'anchor_model_name': anchor_model_name,
+                'anchor_link': anchor_link,
                 # SDF geometry is expressed in metres, inputs are millimetres
                 'radius_m': str(radius_mm / 1000),
+                'color_rgba': color_rgba,
             },
         )
 
@@ -217,8 +237,8 @@ class SimulatedDispenserController(DispenserController):
 
     def _generate_sdf_content(
         self,
-        product_model_name: str,
-        product_link: str,
+        anchor_model_name: str,
+        anchor_link: str,
         length_mm: float,
         volume_mm3: float,
     ) -> tuple[str, str]:
@@ -231,34 +251,42 @@ class SimulatedDispenserController(DispenserController):
         with volume, is also used to calculate the radius of the spheres and cylinder.
 
         Args:
-            product_model_name: Name of the spawned product model.
-            product_link: Name of the product link in the product model.
+            anchor_model_name: Name of the model the new material is welded to
+                (the product, or the previously spawned material).
+            anchor_link: Name of the link of the anchor model to weld to.
             length_mm: Length of the dispensed material in millimeters.
             volume_mm3: Volume of the dispensed material in cubic millimeters.
 
         Returns:
             Tuple of the unique model name and the SDF content as a string. The model
             name must be reused when spawning so the entity name matches the
-            DetachableJoint topic namespace baked into the SDF.
+            DetachableJoint topic namespace baked into the SDF. The primitives are
+            colored with the color of the dispensed material.
         """
+        if self._config is None:
+            raise RuntimeError("Controller is not set up with a configuration.")
+        color_rgba = ' '.join(str(channel) for channel in self._config.material.color_rgba)
+
         if length_mm > self._STRIPE_MIN_LENGTH_MM:
             model_name = self._generate_model_name('stripe')
             radius_mm = self._calculate_capsule_radius(length_mm, volume_mm3)
             return model_name, self._get_stripe_sdf(
                 model_name,
-                product_model_name,
-                product_link,
+                anchor_model_name,
+                anchor_link,
                 radius_mm,
-                length_mm
+                length_mm,
+                color_rgba,
             )
         else:  # DOT
             model_name = self._generate_model_name('dot')
             radius_mm = (3 * volume_mm3 / (4 * math.pi)) ** (1 / 3)
             return model_name, self._get_dot_sdf(
                 model_name,
-                product_model_name,
-                product_link,
-                radius_mm
+                anchor_model_name,
+                anchor_link,
+                radius_mm,
+                color_rgba,
             )
 
     def _lookup_tcp_position(self, stamp: Time) -> tuple[float, float, float]:
@@ -333,6 +361,7 @@ class SimulatedDispenserController(DispenserController):
         with self._lock:
             product_model_name = self._product_model_name
             product_link = self._product_link
+            last_material_model_name = self._last_material_model_name
         if product_model_name is None or product_link is None:
             self._node.get_logger().error(
                 'No simulated product is known (nothing received on '
@@ -375,10 +404,15 @@ class SimulatedDispenserController(DispenserController):
         else:
             roll = pitch = yaw = 0.0
 
+        if last_material_model_name is not None:
+            anchor_model_name, anchor_link = last_material_model_name, self._MATERIAL_LINK
+        else:
+            anchor_model_name, anchor_link = product_model_name, product_link
+
         try:
             model_name, sdf_content = self._generate_sdf_content(
-                product_model_name,
-                product_link,
+                anchor_model_name,
+                anchor_link,
                 length_mm,
                 volume_mm3,
             )
@@ -410,11 +444,16 @@ class SimulatedDispenserController(DispenserController):
                 ],
                 owner=self._owner,
             )
+            with self._lock:
+                self._last_material_model_name = model_name
             return model_name
         except WorldManagerError as exc:
             self._node.get_logger().error(
                 f'Failed to spawn dispensed material {model_name}: {exc}'
             )
+            # The chain tail may be what is missing; the next material restarts at the product.
+            with self._lock:
+                self._last_material_model_name = None
             return None
 
     def start_dispensing(self, pose_stamp: Time | None = None):
@@ -457,6 +496,8 @@ class SimulatedDispenserController(DispenserController):
         # pose stamps are the same instant, which yields a dot of the dwell volume.
         dispensing_time = dispensing_end_time - self._dispensing_start_time
         dispensed_volume = self._config.flow_rate * dispensing_time.nanoseconds / 1e9  # Convert nanoseconds to seconds
+        # 1 cc = 1e-6 m^3
+        dispensed_mass_kg = self._config.material.density_kg_m3 * dispensed_volume * 1e-6
 
         self._spawn_dispensed_material(
             volume_cc=dispensed_volume,
@@ -469,6 +510,7 @@ class SimulatedDispenserController(DispenserController):
 
         return DispensingMetricsDTO(
             dispensed_volume_cc=dispensed_volume,
+            dispensed_mass_kg=dispensed_mass_kg,
             dispensing_duration_s=dispensing_time.nanoseconds / 1e9,
             flowrate_cc=self._config.flow_rate,
         )
@@ -505,6 +547,7 @@ class SimulatedDispenserController(DispenserController):
         with self._lock:
             self._product_model_name = None
             self._product_link = None
+            self._last_material_model_name = None
 
         if self._world_client is not None:
             try:
