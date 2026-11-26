@@ -1,0 +1,17 @@
+# Goal: upload several files, all-or-nothing, processed sequentially in order.
+string[] source_paths  # required, non-empty
+string[] blob_ids      # optional: empty or same length; empty elements request new ids
+string[] blob_names    # optional: empty or same length; empty elements use the basename
+string[] media_types   # optional: empty or same length; empty elements infer the type
+string[] metadata      # optional: empty or same length; empty elements mean no metadata
+---
+# Result
+bool     success
+string[] blob_ids      # in request order on success; empty on failure
+string   error_message # on failure, also names ids whose rollback failed
+---
+# Feedback, published after each successfully processed file
+uint32   completed
+uint32   total
+string   source_path
+string   blob_id

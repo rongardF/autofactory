@@ -61,6 +61,13 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/ImageRepositoryUploadImages.srv"
   "srv/ImageRepositoryFetchImage.srv"
   "srv/ImageRepositoryFetchImages.srv"
+  # blob_repository interfaces
+  "srv/BlobRepositoryUploadBlob.srv"
+  "srv/BlobRepositoryFetchBlob.srv"
+  "srv/BlobRepositoryGetBlobInfo.srv"
+  "srv/BlobRepositoryDeleteBlob.srv"
+  "action/BlobRepositoryUploadBlobs.action"
+  "action/BlobRepositoryFetchBlobs.action"
   DEPENDENCIES builtin_interfaces action_msgs geometry_msgs sensor_msgs
   SKIP_INSTALL
 )
@@ -68,7 +75,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 ament_index_register_resource(
   "rosidl_interfaces"
   CONTENT
-    "msg/StationCacheStringCache.msg\nmsg/StationCacheBooleanCache.msg\nmsg/StationCacheNumberCache.msg\nmsg/StationCacheStringArrayCache.msg\nmsg/StationCacheBytesCache.msg\nmsg/StationCacheNumberArrayCache.msg\nsrv/StationCacheStoreString.srv\nsrv/StationCacheFetchString.srv\nsrv/StationCacheStoreBoolean.srv\nsrv/StationCacheFetchBoolean.srv\nsrv/StationCacheStoreNumber.srv\nsrv/StationCacheFetchNumber.srv\nsrv/StationCacheStoreStringArray.srv\nsrv/StationCacheFetchStringArray.srv\nsrv/StationCacheStoreBytes.srv\nsrv/StationCacheFetchBytes.srv\nsrv/StationCacheStoreNumberArray.srv\nsrv/StationCacheFetchNumberArray.srv\nsrv/StationCacheDelete.srv\nmsg/ObjectModelStorageMappingValue.msg\nmsg/ObjectModelStorageModelInfo.msg\nmsg/ObjectModelStorageCachedModels.msg\nsrv/ObjectModelStorageGetModelsInfo.srv\nsrv/ObjectModelStorageGetModel.srv\naction/ObjectModelStorageGetModels.action\nmsg/OperationRepositoryArg.msg\nmsg/OperationRepositoryMaterial.msg\nmsg/OperationRepositoryEndTool.msg\nmsg/OperationRepositoryPatternAction.msg\nmsg/OperationRepositoryDispensingMovement.msg\nmsg/OperationRepositoryDispensingPattern.msg\nmsg/OperationRepositoryOperation.msg\nsrv/OperationRepositoryGetOperation.srv\nsrv/ImageRepositoryUploadImage.srv\nsrv/ImageRepositoryUploadImages.srv\nsrv/ImageRepositoryFetchImage.srv\nsrv/ImageRepositoryFetchImages.srv\nmsg/MaterialRepositoryMaterialData.msg\nsrv/MaterialRepositoryGetMaterialData.srv"
+    "msg/StationCacheStringCache.msg\nmsg/StationCacheBooleanCache.msg\nmsg/StationCacheNumberCache.msg\nmsg/StationCacheStringArrayCache.msg\nmsg/StationCacheBytesCache.msg\nmsg/StationCacheNumberArrayCache.msg\nsrv/StationCacheStoreString.srv\nsrv/StationCacheFetchString.srv\nsrv/StationCacheStoreBoolean.srv\nsrv/StationCacheFetchBoolean.srv\nsrv/StationCacheStoreNumber.srv\nsrv/StationCacheFetchNumber.srv\nsrv/StationCacheStoreStringArray.srv\nsrv/StationCacheFetchStringArray.srv\nsrv/StationCacheStoreBytes.srv\nsrv/StationCacheFetchBytes.srv\nsrv/StationCacheStoreNumberArray.srv\nsrv/StationCacheFetchNumberArray.srv\nsrv/StationCacheDelete.srv\nmsg/ObjectModelStorageMappingValue.msg\nmsg/ObjectModelStorageModelInfo.msg\nmsg/ObjectModelStorageCachedModels.msg\nsrv/ObjectModelStorageGetModelsInfo.srv\nsrv/ObjectModelStorageGetModel.srv\naction/ObjectModelStorageGetModels.action\nmsg/OperationRepositoryArg.msg\nmsg/OperationRepositoryMaterial.msg\nmsg/OperationRepositoryEndTool.msg\nmsg/OperationRepositoryPatternAction.msg\nmsg/OperationRepositoryDispensingMovement.msg\nmsg/OperationRepositoryDispensingPattern.msg\nmsg/OperationRepositoryOperation.msg\nsrv/OperationRepositoryGetOperation.srv\nsrv/ImageRepositoryUploadImage.srv\nsrv/ImageRepositoryUploadImages.srv\nsrv/ImageRepositoryFetchImage.srv\nsrv/ImageRepositoryFetchImages.srv\nmsg/MaterialRepositoryMaterialData.msg\nsrv/MaterialRepositoryGetMaterialData.srv\nsrv/BlobRepositoryUploadBlob.srv\nsrv/BlobRepositoryFetchBlob.srv\nsrv/BlobRepositoryGetBlobInfo.srv\nsrv/BlobRepositoryDeleteBlob.srv\naction/BlobRepositoryUploadBlobs.action\naction/BlobRepositoryFetchBlobs.action"
 )
 
 # Generated headers include their package-qualified paths (for example
@@ -224,6 +231,11 @@ install(PROGRAMS
   ${PROJECT_NAME}/material_repository.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME material_repository
+)
+install(PROGRAMS
+  ${PROJECT_NAME}/blob_repository.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME blob_repository
 )
 
 if(BUILD_TESTING)

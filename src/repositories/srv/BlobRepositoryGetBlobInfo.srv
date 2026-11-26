@@ -1,0 +1,10 @@
+# Return the descriptor of one blob without fetching its content.
+string blob_id
+---
+string blob_name
+string media_type
+uint64 size_bytes
+string sha256
+string metadata          # compact JSON or empty
+bool   success
+string error_message

@@ -6,7 +6,8 @@ over a particular kind of data and a pluggable storage backend.
 
 ## Package layout
 
-Python code is grouped per node inside each domain package; `utils/` is shared:
+Python code is grouped per node inside each domain package; `utils/` and the
+`common/` sub-packages are shared:
 
 ```
 repositories/
@@ -15,11 +16,12 @@ repositories/
 ├── operation_repository.py        # operation_repository node
 ├── image_repository.py            # image_repository node
 ├── material_repository.py         # material_repository node
+├── blob_repository.py             # blob_repository node
 ├── enums/{station_cache,object_model_storage,operation_repository,image_repository,material_repository}/
-├── exceptions/{image_repository,material_repository}/
-├── interfaces/{station_cache,object_model_storage,operation_repository,image_repository,material_repository}/
-├── models/{station_cache,object_model_storage,operation_repository,image_repository,material_repository}/
-├── services/{station_cache,object_model_storage,operation_repository,image_repository,material_repository}/
+├── exceptions/{image_repository,material_repository,blob_repository}/
+├── interfaces/{station_cache,object_model_storage,operation_repository,image_repository,material_repository,blob_repository}/
+├── models/{common,station_cache,object_model_storage,operation_repository,image_repository,material_repository,blob_repository}/
+├── services/{common,station_cache,object_model_storage,operation_repository,image_repository,material_repository,blob_repository}/
 └── utils/                         # shared helpers
 ```
 
@@ -367,9 +369,139 @@ the most recently stored image are never evicted, and uploads never fail for lac
 of cache space. In remote mode eviction only drops the local copy; in local mode
 it permanently deletes the image.
 
+`LocalImageStore` is built on the shared `ManagedFileStore` core
+(`services/common/`), which `blob_repository` also uses.
+
 ```bash
 ros2 run repositories image_repository --ros-args \
   -p station_id:=<uuid4> -p local_storage_path:=/tmp/station/images
+```
+
+## `blob_repository` node
+
+Stores and retrieves **arbitrary files** as opaque byte streams. Clients upload
+a file by filesystem path and get a UUID4 `blob_id`; they fetch by id and get a
+local path. File content never crosses ROS messages: the node streams it between
+the filesystem, its storage directory and (in cloud mode) the cloud service, so
+clients and the node must share the filesystems behind `allowed_path_roots`.
+Content is never interpreted, converted or executed.
+
+- **Class:** `BlobRepository` (`rclpy.lifecycle.LifecycleNode`)
+- **Executable:** `blob_repository`
+- **Backends:** `LocalBlobBackend` (local filesystem is the source of truth,
+  default) / `RemoteBlobBackend` (station-scoped HTTPS REST service is the source
+  of truth; the local directory is a cache)
+- **Limits:** max blob size 1 GiB, storage/cache size 3 GiB (defaults)
+
+### ROS surface (node-relative, resolve to `/blob_repository/<name>`)
+
+| Name | Type | Notes |
+|------|------|-------|
+| `~/upload_blob` | `BlobRepositoryUploadBlob` (srv) | Upload `source_path`; optional `blob_id` (UUID4 upsert), `blob_name` (defaults to the basename; metadata only), `media_type` (inferred from the file name, else `application/octet-stream`), `metadata` (JSON). Returns id, name, media type, `size_bytes`, `sha256`. |
+| `~/fetch_blob` | `BlobRepositoryFetchBlob` (srv) | Make one blob local. Empty `destination_path` returns the managed cache path; otherwise the content is copied to the destination. `download_fresh` (cloud mode only) re-downloads even on a cache hit. Returns `local_path` and the descriptor. |
+| `~/get_blob_info` | `BlobRepositoryGetBlobInfo` (srv) | Descriptor only; no content transfer. |
+| `~/delete_blob` | `BlobRepositoryDeleteBlob` (srv) | Delete the blob and its local copy; an absent blob succeeds, an invalid id fails. |
+| `~/upload_blobs` | `BlobRepositoryUploadBlobs` (action) | Sequential, **all-or-nothing** batch upload with per-item feedback. Optional arrays (`blob_ids`, `blob_names`, `media_types`, `metadata`) are empty or the same length as `source_paths`. On failure or cancel everything written by the batch is rolled back (overwritten blobs are restored); ids whose cloud rollback failed are named in `error_message`. |
+| `~/fetch_blobs` | `BlobRepositoryFetchBlobs` (action) | Sequential, **fail-fast** batch fetch with per-item feedback; `destination_paths` is empty or the same length as `blob_ids`. Items fetched before a failure/cancel stay available, but no paths are returned. |
+
+Services and actions exist only while the node is `active`. Every response
+carries `success` + `error_message`; failures are logged and returned, never
+raised across the ROS boundary, and failed responses have empty/zero data
+fields. Requests are validated before any storage work (empty batches,
+mismatched arrays, invalid UUID4s, malformed JSON metadata or media types).
+Cancellation is checked between batch items; single-file services cannot be
+canceled.
+
+### Path policy
+
+- `source_path` must be absolute and resolve (after `..` and symlink
+  resolution) to a readable regular file under one of `allowed_path_roots`.
+- An explicit `destination_path` must be absolute, its parent directory must
+  exist inside an allowed root, and an existing entry must be a regular file
+  (it is **overwritten**); symlinks and other non-regular entries are rejected.
+  The content is copied to a hidden temp file next to the destination, verified
+  (size + SHA-256) and atomically renamed over it, so a failed transfer leaves an
+  existing file unchanged.
+- The node's own `local_storage_path` is never a valid source or destination,
+  and `blob_name` never contributes to any path.
+
+### Parameters
+
+| Parameter | Type | Default | Notes |
+|-----------|------|---------|-------|
+| `local_storage` | bool | `true` | `true` → local disk is the source of truth; `false` → cloud service plus local cache. |
+| `local_storage_path` | string | `/tmp/station/blobs` | Absolute; created on `configure`; **dedicated to this node**. |
+| `station_id` | string | `''` | **Required** UUID4 in both modes. |
+| `blob_service_url` | string | `''` | Required in cloud mode; must be an `https://` URL without credentials, query or fragment. |
+| `request_timeout_sec` | double | `5.0` | `> 0`; connect and metadata request timeout. |
+| `transfer_timeout_sec` | double | `600.0` | `> 0`; total time budget for streaming one file. |
+| `cache_size_mb` | int | `3072` | `> 0` and `>= max_blob_size_mb`; strict limit of the storage/cache directory. |
+| `max_blob_size_mb` | int | `1024` | `> 0`; larger files are rejected before transfer. |
+| `cache_check_interval_sec` | double | `60.0` | `> 0`; period of the cache limit check while `active`. |
+| `allowed_path_roots` | string[] | `[]` | **At least one** absolute, existing directory. |
+
+Parameters are frozen into `BlobRepositoryConfigDTO` on `configure`; changes
+apply only after `cleanup` + `configure`. `configure` fails on invalid values,
+an unusable storage directory or a missing allowed root.
+
+### Storage layout and cache policy
+
+`local_storage_path` holds `<blob_id>` (raw content) and
+`<blob_id>_metadata.json` (descriptor: id, name, media type, byte length,
+SHA-256, `created_at`/`updated_at`, user metadata) per blob. Writes are staged
+in hidden files and atomically renamed into place; a supplied `blob_id` replaces
+content and descriptor together (`created_at` is kept). On `configure`, hidden
+temp/staging/backup files, incomplete pairs, descriptors that do not match their
+content size and unrelated regular files are deleted (subdirectories and
+symlinks are left alone). `deactivate`, `cleanup` and `shutdown` never delete
+valid blobs.
+
+The directory never exceeds `cache_size_mb`: before each write, the oldest blobs
+(content modification time, then id) are evicted until the new file fits; blobs
+of the current request and blobs being read or written are never evicted. If the
+space still cannot be made available, the operation fails. A timer enforces the
+limit while active. **In local mode eviction permanently deletes blobs**
+(intentional v1 behavior: size `cache_size_mb` for the data you must keep); in
+cloud mode it only drops the cached copy.
+
+### Cloud mode (REST contract)
+
+With `{base}` = `{blob_service_url}/{station_id}/blob_repository/blobs`:
+
+| Method and path | Behavior |
+|---|---|
+| `POST {base}` | Multipart upload; the server allocates and returns a UUID4. |
+| `PUT {base}/{blob_id}` | Multipart upsert at the supplied UUID4. |
+| `GET {base}/{blob_id}` | Stream the content. |
+| `GET {base}/{blob_id}/info` | Descriptor JSON. |
+| `DELETE {base}/{blob_id}` | Delete; `404` counts as deleted. |
+
+Multipart bodies contain a `descriptor` part (JSON: `blob_name`, `media_type`,
+`size_bytes`, `sha256`, `metadata`) followed by a `file` part with the content.
+`POST`/`PUT` and `/info` respond with the stored descriptor JSON (those fields
+plus `blob_id`, `created_at`, `updated_at`). `404` means not found, `400`
+invalid, `413` too large; response bodies are never echoed into errors.
+Transfers are streamed in 1 MiB chunks in both directions; downloads are verified
+(size + SHA-256) before they become visible. Uploads go to the cloud first and
+then to the cache. Before a supplied id is overwritten, its current content is
+kept as a hidden local backup (taken from the cache, or downloaded) so a failed
+batch can restore it.
+
+Authentication: set the bearer token in the **`BLOB_REPOSITORY_AUTH_TOKEN`**
+environment variable of the node process (via the deployment's secret
+mechanism; never commit it). It is sent as `Authorization: Bearer <token>` and
+never logged. If it is unset, `configure` logs a warning and requests are sent
+without authentication.
+
+```bash
+ros2 run repositories blob_repository --ros-args \
+  -p station_id:=<uuid4> -p "allowed_path_roots:=['/data/station']"
+ros2 lifecycle set /blob_repository configure
+ros2 lifecycle set /blob_repository activate
+ros2 service call /blob_repository/upload_blob repositories/srv/BlobRepositoryUploadBlob \
+  "{source_path: /data/station/program.json}"
+ros2 service call /blob_repository/fetch_blob repositories/srv/BlobRepositoryFetchBlob \
+  "{blob_id: <uuid4>, destination_path: /data/station/copy.json}"
 ```
 ## Build
 
@@ -390,6 +522,9 @@ ros2 run repositories object_model_storage --ros-args \
 ros2 run repositories operation_repository
 
 ros2 run repositories material_repository --ros-args -p station_id:=<uuid4>
+
+ros2 run repositories blob_repository --ros-args \
+  -p station_id:=<uuid4> -p "allowed_path_roots:=['/data/station']"
 ```
 
 Drive the lifecycle with `ros2 lifecycle set /<node> configure` then

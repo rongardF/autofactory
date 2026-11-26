@@ -1,0 +1,5 @@
+# Delete one blob and any local copy. Deleting an absent blob succeeds.
+string blob_id
+---
+bool   success
+string error_message

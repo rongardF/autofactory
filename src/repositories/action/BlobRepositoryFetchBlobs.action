@@ -1,0 +1,15 @@
+# Goal: make several blobs available locally, fail-fast, processed sequentially in order.
+string[] blob_ids           # required, non-empty
+string[] destination_paths  # optional: empty or same length; empty elements use the cache path
+bool     download_fresh     # cloud mode: re-download every blob even if cached
+---
+# Result
+bool     success
+string[] local_paths        # in request order on success; empty on failure
+string   error_message
+---
+# Feedback, published after each successfully fetched blob
+uint32   completed
+uint32   total
+string   blob_id
+string   local_path

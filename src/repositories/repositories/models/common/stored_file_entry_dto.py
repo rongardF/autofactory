@@ -24,18 +24,27 @@
 # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
-"""Index entry model for the local image store."""
+"""Index models of the shared :class:`ManagedFileStore` core."""
 
 from pathlib import Path
 
 from pydantic import BaseModel, Field
 
 
-class ImageIndexEntryDTO(BaseModel, frozen=True):
-    """One stored image/metadata pair tracked by the in-memory index."""
+class StoredFileEntryDTO(BaseModel, frozen=True):
+    """One stored content/metadata file pair tracked by the in-memory index."""
 
-    image_id: str = Field(description='UUID4 identifier of the image.')
-    image_path: Path = Field(description='Path of the PNG image file.')
-    metadata_path: Path = Field(description='Path of the metadata JSON file.')
+    entry_id: str = Field(description='Canonical UUID4 identifier of the entry.')
+    content_path: Path = Field(description='Path of the content file.')
+    metadata_path: Path = Field(description='Path of the metadata JSON sidecar.')
     size_bytes: int = Field(ge=0, description='Combined size of both files in bytes.')
-    modified_ns: int = Field(description='Modification time of the image file in ns.')
+    modified_ns: int = Field(description='Modification time of the content file in ns.')
+
+
+class DetachedEntryDTO(BaseModel, frozen=True):
+    """An entry moved out of the index to hidden backup files for a later restore."""
+
+    entry_id: str = Field(description='Canonical UUID4 identifier of the entry.')
+    content_path: Path = Field(description='Hidden backup path of the content file.')
+    metadata_path: Path = Field(description='Hidden backup path of the metadata sidecar.')
+    size_bytes: int = Field(ge=0, description='Combined size of both files in bytes.')
