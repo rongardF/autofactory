@@ -56,7 +56,8 @@ Do not guess API signatures, topic names, or parameter names for these packages 
 ## Key Conventions
 
 ### ROS 2 Node Patterns
-- All ROS 2 nodes that manage hardware or services use `rclpy.lifecycle.LifecycleNode`
+- All ROS 2 nodes that manage hardware or services use `station_utils.autofactory_base_node.AutofactoryBaseNode` (a `rclpy.lifecycle.LifecycleNode` subclass) and call `self._publish_transition_error('<reason>')` wherever a transition returns `FAILURE`
+- To drive or observe another lifecycle node use `station_utils.services.node_manager.NodeManager`; to run a launch file from a node use `station_utils.services.ros2_launch.Ros2Launch` — do not re-implement either
 - Action clients use the async + callback pattern — **never** `send_goal` (blocking):
   ```python
   future = self._action_client.send_goal_async(goal)

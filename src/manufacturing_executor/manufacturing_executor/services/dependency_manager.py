@@ -29,13 +29,13 @@
 from collections.abc import Callable
 
 from rclpy.node import Node
+from station_utils.enums import LifecycleStateEnum
 
-from manufacturing_executor.enums.lifecycle_state_enum import LifecycleStateEnum
 from manufacturing_executor.exceptions import ActivationFailedError, ManufacturingError
 from manufacturing_executor.models.manufacturing_executor_config_dto import (
     ManufacturingExecutorConfigDTO,
 )
-from manufacturing_executor.services.lifecycle_client import LifecycleClientRegistry
+from manufacturing_executor.services.node_manager_registry import NodeManagerRegistry
 
 
 class DependencyManager:
@@ -46,7 +46,7 @@ class DependencyManager:
     """
 
     def __init__(
-        self, node: Node, config: ManufacturingExecutorConfigDTO, registry: LifecycleClientRegistry
+        self, node: Node, config: ManufacturingExecutorConfigDTO, registry: NodeManagerRegistry
     ) -> None:
         self._logger = node.get_logger()
         self._config = config

@@ -21,6 +21,7 @@
   <depend>builtin_interfaces</depend>
   <depend>action_msgs</depend>
 
+  <depend>station_utils</depend>
   <!-- Python runtime -->
   <exec_depend>rclpy</exec_depend>
   <exec_depend>python3-pydantic</exec_depend>

@@ -28,12 +28,10 @@
 
 from manufacturing_executor.enums.dependency_key_enum import DependencyKeyEnum
 from manufacturing_executor.enums.failure_kind_enum import FailureKindEnum
-from manufacturing_executor.enums.lifecycle_state_enum import LifecycleStateEnum
 from manufacturing_executor.enums.routing_operation_enum import RoutingOperationEnum
 
 __all__ = [
     'DependencyKeyEnum',
     'FailureKindEnum',
-    'LifecycleStateEnum',
     'RoutingOperationEnum',
 ]

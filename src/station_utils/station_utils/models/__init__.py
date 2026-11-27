@@ -24,15 +24,13 @@
 # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
-"""Lifecycle state labels returned by ``get_state``."""
+"""Data models shared by Autofactory packages."""
 
-from enum import Enum
+from station_utils.models.node_manager_result_dto import (
+    GetParameterResultDTO,
+    GetParametersResultDTO,
+    GetStateResultDTO,
+    NodeManagerResultDTO,
+)
 
-
-class LifecycleStateEnum(str, Enum):
-    """Primary lifecycle states."""
-
-    UNCONFIGURED = 'unconfigured'
-    INACTIVE = 'inactive'
-    ACTIVE = 'active'
-    FINALIZED = 'finalized'
+__all__ = ['GetParameterResultDTO', 'GetParametersResultDTO', 'GetStateResultDTO', 'NodeManagerResultDTO']

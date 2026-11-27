@@ -35,7 +35,7 @@ from manufacturing_executor.models.manufacturing_executor_config_dto import (
 from manufacturing_executor.models.tool_nodes_dto import ToolNodesDTO
 from manufacturing_executor.services.abort_context import AbortContext
 from manufacturing_executor.services.async_calls import call_service
-from manufacturing_executor.services.lifecycle_client import LifecycleClientRegistry
+from manufacturing_executor.services.node_manager_registry import NodeManagerRegistry
 from manufacturing_executor.services.loop_clients import LoopClients
 from manufacturing_executor.services.tool_inventory import ToolInventory
 from manufacturing_executor.utils.node_names import strip_slash
@@ -52,7 +52,7 @@ class ToolSelectionService:
         node: Node,
         config: ManufacturingExecutorConfigDTO,
         clients: LoopClients,
-        registry: LifecycleClientRegistry,
+        registry: NodeManagerRegistry,
         inventory: ToolInventory,
     ) -> None:
         self._logger = node.get_logger()

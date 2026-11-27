@@ -28,8 +28,9 @@ import rclpy
 from pydantic import ValidationError
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.lifecycle import LifecycleNode, State, TransitionCallbackReturn
+from rclpy.lifecycle import State, TransitionCallbackReturn
 from rclpy.service import Service
+from station_utils.autofactory_base_node import AutofactoryBaseNode
 
 from repositories.exceptions.material_repository.material_not_found_error import (
     MaterialNotFoundError,
@@ -51,7 +52,7 @@ from repositories.services.material_repository.material_service import MaterialS
 from repositories.srv import MaterialRepositoryGetMaterialData
 
 
-class MaterialRepository(LifecycleNode):
+class MaterialRepository(AutofactoryBaseNode):
     """Read-only material data exposed as a lifecycle node."""
 
     def __init__(self, node_name: str = 'material_repository') -> None:
@@ -145,6 +146,7 @@ class MaterialRepository(LifecycleNode):
             )
         except ValidationError as error:
             self.get_logger().error(f'Invalid configuration: {error}')
+            self._publish_transition_error(f'Invalid configuration: {error}')
             return TransitionCallbackReturn.FAILURE
 
         backend: MaterialBackend
@@ -160,6 +162,7 @@ class MaterialRepository(LifecycleNode):
             material_count = backend.load()
         except ValueError as error:
             self.get_logger().error(f'Failed to load materials: {error}')
+            self._publish_transition_error(f'Failed to load materials: {error}')
             return TransitionCallbackReturn.FAILURE
 
         self._config = config
@@ -192,10 +195,12 @@ class MaterialRepository(LifecycleNode):
         """
         if self._config is None or self._material_service is None:
             self.get_logger().error('Cannot activate: node is not configured.')
+            self._publish_transition_error('Cannot activate: node is not configured.')
             return TransitionCallbackReturn.FAILURE
 
         if super().on_activate(state) != TransitionCallbackReturn.SUCCESS:
             self.get_logger().error('Base on_activate did not succeed; aborting.')
+            self._publish_transition_error('Base on_activate did not succeed; aborting.')
             return TransitionCallbackReturn.FAILURE
 
         try:
@@ -209,6 +214,7 @@ class MaterialRepository(LifecycleNode):
             self.get_logger().error(
                 f'Failed to create get_material_data service: {error}'
             )
+            self._publish_transition_error(f'Failed to create get_material_data service: {error}')
             return TransitionCallbackReturn.FAILURE
 
         self._material_service.initialize()
@@ -233,6 +239,7 @@ class MaterialRepository(LifecycleNode):
 
         if super().on_deactivate(state) != TransitionCallbackReturn.SUCCESS:
             self.get_logger().error('Base on_deactivate did not succeed.')
+            self._publish_transition_error('Base on_deactivate did not succeed.')
             return TransitionCallbackReturn.FAILURE
 
         self.get_logger().info('Deactivated material_repository.')

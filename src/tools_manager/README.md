@@ -161,10 +161,10 @@ simulation — `simulation.*`.
 - **`ToolsWorldClientAdapter`** — resolves tool geometry and XACRO mappings,
   then uses the shared `world_manager` clients for Gazebo (simulation only)
   and MoveIt planning-scene operations.
-- **`NodeStateManager`** × tool_rack / tool_mount / each endtool — drives the
-  lifecycle transitions and parameters of other nodes **by name**, over their
-  standard `change_state` / `get_state` / `set_parameters` / `get_parameters`
-  services.
+- **`NodeManager`** (from `station_utils`) × tool_rack / tool_mount / each
+  endtool — drives the lifecycle transitions and parameters of other nodes
+  **by name**, over their standard `change_state` / `get_state` /
+  `set_parameters` / `get_parameters` services.
 
 ### Ownership
 | Owner | Responsibility |

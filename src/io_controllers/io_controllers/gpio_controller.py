@@ -43,8 +43,9 @@ from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.lifecycle import LifecycleNode, State, TransitionCallbackReturn
+from rclpy.lifecycle import State, TransitionCallbackReturn
 from rclpy.qos import QoSProfile, ReliabilityPolicy
+from station_utils.autofactory_base_node import AutofactoryBaseNode
 
 from io_controllers.action import MonitorIO
 from io_controllers.drivers.driver_factory import create_driver
@@ -62,7 +63,7 @@ from io_controllers.utils.monitor_entry import MonitorEntry
 _SignalMeta = tuple[bool, IODirectionEnum]
 
 
-class GpioController(LifecycleNode):
+class GpioController(AutofactoryBaseNode):
     """Device-agnostic GPIO controller as a managed lifecycle node."""
 
     def __init__(self, node_name: str = 'gpio_controller') -> None:
@@ -140,6 +141,7 @@ class GpioController(LifecycleNode):
             self._config = load_config(config_file)
         except ConfigError as exc:
             self.get_logger().error(f'Failed to load config: {exc}')
+            self._publish_transition_error(f'Failed to load config')
             return TransitionCallbackReturn.FAILURE
 
         try:
@@ -148,6 +150,7 @@ class GpioController(LifecycleNode):
         except Exception as exc:  # noqa: BLE001 - convert to lifecycle FAILURE
             self.get_logger().error(f'Failed to configure driver: {exc}')
             self._driver = None
+            self._publish_transition_error(f'Failed to configure driver')
             return TransitionCallbackReturn.FAILURE
 
         # Effective publish rate: the node parameter overrides the config value
@@ -207,11 +210,13 @@ class GpioController(LifecycleNode):
         """
         if self._driver is None:
             self.get_logger().error('Cannot activate: driver is not configured.')
+            self._publish_transition_error('Cannot activate: driver is not configured.')
             return TransitionCallbackReturn.FAILURE
         try:
             self._driver.activate()
         except Exception as exc:  # noqa: BLE001 - convert to lifecycle FAILURE
             self.get_logger().error(f'Failed to activate driver: {exc}')
+            self._publish_transition_error(f'Failed to activate driver')
             return TransitionCallbackReturn.FAILURE
 
         # Activate managed entities (lifecycle publishers) before publishing.
@@ -261,6 +266,7 @@ class GpioController(LifecycleNode):
                 self._driver.deactivate()
             except Exception as exc:  # noqa: BLE001 - convert to lifecycle FAILURE
                 self.get_logger().error(f'Failed to deactivate driver: {exc}')
+                self._publish_transition_error(f'Failed to deactivate driver')
                 return TransitionCallbackReturn.FAILURE
 
         self.get_logger().info('Deactivated gpio_controller.')

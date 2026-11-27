@@ -21,8 +21,9 @@ from pydantic import ValidationError
 from rcl_interfaces.msg import ParameterDescriptor
 import rclpy
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.lifecycle import LifecycleNode, State, TransitionCallbackReturn
+from rclpy.lifecycle import State, TransitionCallbackReturn
 from rclpy.service import Service
+from station_utils.autofactory_base_node import AutofactoryBaseNode
 
 from repositories.interfaces.operation_repository.operation_backend import (
     OperationBackend,
@@ -40,7 +41,7 @@ from repositories.srv import OperationRepositoryGetOperation
 from repositories.utils.uuid_validator import parse_uuid4
 
 
-class OperationRepository(LifecycleNode):
+class OperationRepository(AutofactoryBaseNode):
     """Provide one operation lookup service with local and cloud backends."""
 
     def __init__(self, node_name: str = 'operation_repository') -> None:
@@ -109,6 +110,7 @@ class OperationRepository(LifecycleNode):
             )
         except ValidationError as error:
             self.get_logger().error(f'Invalid configuration: {error}')
+            self._publish_transition_error(f'Invalid configuration: {error}')
             return TransitionCallbackReturn.FAILURE
 
         try:
@@ -128,6 +130,7 @@ class OperationRepository(LifecycleNode):
             self.get_logger().error(f'Failed to configure operation backend: {error}')
             self._config = None
             self._backend = None
+            self._publish_transition_error(f'Failed to configure operation backend: {error}')
             return TransitionCallbackReturn.FAILURE
 
         self._config = config
@@ -147,9 +150,11 @@ class OperationRepository(LifecycleNode):
         """Create the lookup service for the active lifecycle state."""
         if self._config is None or self._backend is None:
             self.get_logger().error('Cannot activate: node is not configured.')
+            self._publish_transition_error('Cannot activate: node is not configured.')
             return TransitionCallbackReturn.FAILURE
         if super().on_activate(state) != TransitionCallbackReturn.SUCCESS:
             self.get_logger().error('Base on_activate did not succeed.')
+            self._publish_transition_error('Base on_activate did not succeed.')
             return TransitionCallbackReturn.FAILURE
         try:
             self._get_operation_service = self.create_service(
@@ -160,6 +165,7 @@ class OperationRepository(LifecycleNode):
         except Exception as error:
             self._destroy_service()
             self.get_logger().error(f'Failed to create get_operation service: {error}')
+            self._publish_transition_error(f'Failed to create get_operation service: {error}')
             return TransitionCallbackReturn.FAILURE
         self.get_logger().info('Activated operation_repository (service: ~/get_operation).')
         return TransitionCallbackReturn.SUCCESS
@@ -169,6 +175,7 @@ class OperationRepository(LifecycleNode):
         self._destroy_service()
         if super().on_deactivate(state) != TransitionCallbackReturn.SUCCESS:
             self.get_logger().error('Base on_deactivate did not succeed.')
+            self._publish_transition_error('Base on_deactivate did not succeed.')
             return TransitionCallbackReturn.FAILURE
         self.get_logger().info('Deactivated operation_repository.')
         return TransitionCallbackReturn.SUCCESS

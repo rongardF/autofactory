@@ -35,11 +35,11 @@ from rclpy import init, ok, shutdown
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.duration import Duration
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
-from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle.node import LifecycleState, TransitionCallbackReturn
 from rclpy.qos import QoSDurabilityPolicy, QoSProfile, QoSReliabilityPolicy
 from rclpy.time import Time
 from tf2_ros import Buffer, TransformListener
+from station_utils.autofactory_base_node import AutofactoryBaseNode
 
 from world_manager.exceptions import ActivationError
 from world_manager.models import (
@@ -67,7 +67,7 @@ from world_manager.srv import (
 _Response = TypeVar('_Response')
 
 
-class GazeboWorldManager(LifecycleNode):
+class GazeboWorldManager(AutofactoryBaseNode):
     """Owns every spawn, delete, set_pose and attach/detach in the Gazebo world."""
 
     def __init__(self, node_name: str = 'gazebo_world_manager') -> None:
@@ -122,12 +122,14 @@ class GazeboWorldManager(LifecycleNode):
             config = self._read_config()
         except ValidationError as e:
             self.get_logger().error(f'invalid parameters: {e}')
+            self._publish_transition_error(f'invalid parameters')
             return TransitionCallbackReturn.FAILURE
         try:
             logger = self.get_logger()
             adapter = RealGzTransportAdapter(logger)
         except Exception as e:
             self.get_logger().error(f'cannot create the gz-transport node: {e}')
+            self._publish_transition_error(f'cannot create the gz-transport node')
             return TransitionCallbackReturn.FAILURE
 
         registry = ModelRegistry(on_change=self._dirty.set)
@@ -151,6 +153,7 @@ class GazeboWorldManager(LifecycleNode):
             self._service.activate()
         except ActivationError as e:
             self.get_logger().error(str(e))
+            self._publish_transition_error(str(e))
             return TransitionCallbackReturn.FAILURE
         try:
             self._tf_buffer = Buffer()
@@ -180,6 +183,7 @@ class GazeboWorldManager(LifecycleNode):
             self.get_logger().error(f'failed to activate interfaces: {e}')
             self._active = False
             self._destroy_active_interfaces()
+            self._publish_transition_error(f'failed to activate interfaces')
             return TransitionCallbackReturn.FAILURE
         return TransitionCallbackReturn.SUCCESS
 

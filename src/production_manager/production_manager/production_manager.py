@@ -29,9 +29,9 @@ import rclpy
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle.node import LifecycleState, TransitionCallbackReturn
 from rclpy.service import Service
+from station_utils.autofactory_base_node import AutofactoryBaseNode
 
 from production_manager.model.production_manager_node_config import ProductionManagerNodeConfig
 from production_manager.model.report_result_dto import ReportResultDTO
@@ -42,7 +42,7 @@ from production_manager.utils.uuid_validator import is_uuid4
 from production_manager.srv import GetProductionData, ReportProduction, SetOperation
 
 
-class ProductionManager(LifecycleNode):
+class ProductionManager(AutofactoryBaseNode):
     def __init__(self, node_name: str = 'production_manager') -> None:
         super().__init__(node_name)
 
@@ -105,12 +105,14 @@ class ProductionManager(LifecycleNode):
             self.get_logger().error(f'Unable to configure production manager: {error}')
             self._config = None
             self._backend = None
+            self._publish_transition_error(f'Unable to configure production manager: {error}')
             return TransitionCallbackReturn.FAILURE
 
     def on_activate(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info('Activating production manager...')
         if self._config is None or self._backend is None:
             self.get_logger().error('Cannot activate before successful configuration.')
+            self._publish_transition_error('Cannot activate before successful configuration.')
             return TransitionCallbackReturn.FAILURE
         try:
             self._get_production_data_service = self.create_service(
@@ -139,6 +141,7 @@ class ProductionManager(LifecycleNode):
         except Exception as error:
             self.get_logger().error(f'Unable to activate production manager: {error}')
             self._destroy_services()
+            self._publish_transition_error(f'Unable to activate production manager: {error}')
             return TransitionCallbackReturn.FAILURE
 
     def on_deactivate(self, state: LifecycleState) -> TransitionCallbackReturn:
@@ -147,15 +150,18 @@ class ProductionManager(LifecycleNode):
             services_removed = self._destroy_services()
             result = super().on_deactivate(state)
             if not services_removed:
+                self._publish_transition_error('Failed to remove the production manager services')
                 return TransitionCallbackReturn.FAILURE
             return result
         except Exception as error:
             self.get_logger().error(f'Unable to deactivate production manager: {error}')
+            self._publish_transition_error(f'Unable to deactivate production manager: {error}')
             return TransitionCallbackReturn.FAILURE
 
     def on_cleanup(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info('Cleaning up production manager...')
         if not self._destroy_services():
+            self._publish_transition_error('Failed to remove the production manager services')
             return TransitionCallbackReturn.FAILURE
         self._backend = None
         self._config = None
@@ -168,6 +174,7 @@ class ProductionManager(LifecycleNode):
         self._config = None
         result = super().on_shutdown(state)
         if not services_removed:
+            self._publish_transition_error('Failed to remove the production manager services')
             return TransitionCallbackReturn.FAILURE
         return result
 

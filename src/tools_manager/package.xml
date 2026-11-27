@@ -25,6 +25,7 @@
   <depend>rfid_scanner</depend>
   <depend>world_manager</depend>
 
+  <depend>station_utils</depend>
   <!-- Launch composition of the endtools and their pattern executors -->
   <exec_depend>pattern_executors</exec_depend>
   <exec_depend>execution_optimizer</exec_depend>

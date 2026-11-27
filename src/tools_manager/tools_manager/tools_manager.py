@@ -36,7 +36,6 @@ from rclpy.parameter import ParameterValue, ParameterType
 from rclpy.qos import QoSProfile, DurabilityPolicy
 from rclpy.action import ActionClient
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
-from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle.node import LifecycleState, TransitionCallbackReturn
 from rclpy.subscription import Subscription
 from rclpy.action import ActionServer
@@ -52,6 +51,9 @@ from movement_controller.action import ExecuteTrajectory
 from movement_controller.msg import TrajectoryPath
 from movement_controller.services.movement_session import MovementSession
 from movement_controller.srv import CloseSession, InSession
+from station_utils.autofactory_base_node import AutofactoryBaseNode
+from station_utils.enums import LifecycleStateEnum
+from station_utils.services.node_manager import NodeManager
 from tools_manager.msg import Slots, ToolInfo
 from tools_manager.action import MountTool, UnmountTool
 from tools_manager.srv import GetToolNodeName
@@ -66,7 +68,6 @@ from tools_manager.model.tool_info_dto import ToolInfoDto
 from tools_manager.model.endtool_dto import EndtoolDto
 from tools_manager.model.tools_manager_node_config import ToolsManagerNodeConfigDTO
 from tools_manager.model.tools_manager_config import ToolSlotDTO
-from tools_manager.services.node_state_manager import NodeStateManager
 from tools_manager.services.world_client_adapter import ToolsWorldClientAdapter
 from tools_manager.utils.inventory_validation import find_inventory_problems
 from tools_manager.utils.node_parameters import (
@@ -78,7 +79,7 @@ from tools_manager.utils.node_parameters import (
 
 from world_manager.exceptions import WorldManagerError
 
-class ToolsManager(LifecycleNode):
+class ToolsManager(AutofactoryBaseNode):
 
     def __init__(self, node_name: str = 'tools_manager') -> None:
         """Initialise the ToolsManager lifecycle node.
@@ -87,16 +88,16 @@ class ToolsManager(LifecycleNode):
         creates the internal thread-safety primitives used to serialise
         concurrent goal and cancel callbacks.
 
-        :param node_name: ROS 2 node name passed to :class:`rclpy.lifecycle.LifecycleNode`.
+        :param node_name: ROS 2 node name passed to :class:`AutofactoryBaseNode`.
         :type node_name: str
         """
         super().__init__(node_name)
 
         self._world_client_adapter: ToolsWorldClientAdapter | None = None
-        self._tool_mount_manager: NodeStateManager|None = None
-        self._tool_rack_manager: NodeStateManager|None = None
+        self._tool_mount_manager: NodeManager | None = None
+        self._tool_rack_manager: NodeManager | None = None
         # rack and mount nodes brought up by this manager, in the order they were configured
-        self._sensing_managers: list[NodeStateManager] = []
+        self._sensing_managers: list[NodeManager] = []
         self._endtools: dict[str, EndtoolDto] = {}
         self._config: ToolsManagerNodeConfigDTO|None = None
 
@@ -201,6 +202,7 @@ class ToolsManager(LifecycleNode):
     def on_configure(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info(f'Configuring from state: {state.label}')
         if super().on_configure(state) != TransitionCallbackReturn.SUCCESS:
+            self._publish_transition_error('Base configure transition failed')
             return TransitionCallbackReturn.FAILURE
 
         try:
@@ -219,6 +221,7 @@ class ToolsManager(LifecycleNode):
         except ValueError as e:
             self.get_logger().error(f'Invalid tools manager parameters: {e}')
             self._config = None
+            self._publish_transition_error(f'Invalid tools manager parameters')
             return TransitionCallbackReturn.FAILURE
 
         try:
@@ -231,11 +234,12 @@ class ToolsManager(LifecycleNode):
             )
 
             self.get_logger().info('Creating node state managers')
-            self._tool_rack_manager = NodeStateManager(self, self._config.tool_rack_node_name)
-            self._tool_mount_manager = NodeStateManager(self, self._config.tool_mount_node_name)
+            self._tool_rack_manager = NodeManager(self, self._config.tool_rack_node_name)
+            self._tool_mount_manager = NodeManager(self, self._config.tool_mount_node_name)
         except Exception as e:
             self.get_logger().error(f'Unknown error while configuring: {e}')
             self._release_configuration()
+            self._publish_transition_error(f'Unknown error while configuring')
             return TransitionCallbackReturn.FAILURE
 
         return TransitionCallbackReturn.SUCCESS
@@ -244,6 +248,7 @@ class ToolsManager(LifecycleNode):
         self.get_logger().info(f'Activating from state: {state.label}')
         if super().on_activate(state) != TransitionCallbackReturn.SUCCESS:
             self.get_logger().error('Failed to activate node: super().on_activate() returned FAILURE')
+            self._publish_transition_error('Failed to activate node: super().on_activate() returned FAILURE')
             return TransitionCallbackReturn.FAILURE
 
         # sanity checks before activating the node
@@ -254,6 +259,7 @@ class ToolsManager(LifecycleNode):
             self._tool_mount_manager is None
         ):
             self.get_logger().error('Sanity check failed, something is un-initialized. Cannot activate node.')
+            self._publish_transition_error('Sanity check failed, something is un-initialized. Cannot activate node.')
             return TransitionCallbackReturn.FAILURE
 
         try:
@@ -262,6 +268,7 @@ class ToolsManager(LifecycleNode):
             self.get_logger().error(f'Activation failed: {e}')
             for failure in self._release_activation():
                 self.get_logger().error(f'Rollback failure: {failure}')
+            self._publish_transition_error(f'Activation failed: {e}')
             return TransitionCallbackReturn.FAILURE
 
         return TransitionCallbackReturn.SUCCESS
@@ -828,11 +835,15 @@ class ToolsManager(LifecycleNode):
 
         # configure and activate tool rack and tool mount
         for manager in (self._tool_rack_manager, self._tool_mount_manager):
-            if manager.configure_node() != TransitionCallbackReturn.SUCCESS:
-                raise ActivationFailedException(f'Failed to configure node [{manager.node_name}]')
+            result = manager.configure()
+            if not result.success:
+                raise ActivationFailedException(
+                    f'Failed to configure node [{manager.node_name}]: {result.error_message}')
             self._sensing_managers.append(manager)
-            if manager.activate_node() != TransitionCallbackReturn.SUCCESS:
-                raise ActivationFailedException(f'Failed to activate node [{manager.node_name}]')
+            result = manager.activate()
+            if not result.success:
+                raise ActivationFailedException(
+                    f'Failed to activate node [{manager.node_name}]: {result.error_message}')
 
         # create subscription for tool_rack and tool_mount topics that provide
         # installed and mounted endtool info
@@ -898,7 +909,7 @@ class ToolsManager(LifecycleNode):
         for tool, mounted in located:
             home_slot = self._config.tools_manager_config.get_tool_slot_data(tool.tool_sn)
             assert home_slot.node_name is not None
-            manager = NodeStateManager(self, home_slot.node_name)
+            manager = NodeManager(self, home_slot.node_name)
             try:
                 model_name = self._read_endtool_model(manager, tool.tool_sn)
             except Exception:
@@ -912,33 +923,34 @@ class ToolsManager(LifecycleNode):
                 mounted=mounted,
             )
 
-    def _read_endtool_model(self, manager: NodeStateManager, tool_sn: str) -> str:
+    def _read_endtool_model(self, manager: NodeManager, tool_sn: str) -> str:
         """Verify that an endtool node is ready to be taken over and read its model name.
 
         The node must be unconfigured, belong to ``tool_sn`` and provide its
         read-only ``model`` parameter.
         """
         node_name = manager.node_name
-        state = manager.get_node_state()
-        if state is None:
+        state_result = manager.get_state()
+        if not state_result.success:
             raise ActivationFailedException(
-                f"Endtool node '{node_name}' of tool '{tool_sn}' is unavailable: its lifecycle state cannot be read. "
-                'Make sure the endtool node is running.'
+                f"Endtool node '{node_name}' of tool '{tool_sn}' is unavailable: its lifecycle state cannot be read "
+                f'({state_result.error_message}). Make sure the endtool node is running.'
             )
-        if state != 'unconfigured':
+        state = state_result.state
+        if state != LifecycleStateEnum.UNCONFIGURED:
             raise ActivationFailedException(
-                f"Endtool node '{node_name}' of tool '{tool_sn}' is '{state}', expected 'unconfigured'. "
+                f"Endtool node '{node_name}' of tool '{tool_sn}' is '{state.value}', expected 'unconfigured'. "
                 'Make sure its pattern executor is inactive and the endtool was cleaned up.'
             )
 
-        serial = manager.get_parameter('tool_sn')
+        serial = manager.get_parameter('tool_sn').value
         if serial is None or serial.type != ParameterType.PARAMETER_STRING or serial.string_value != tool_sn:
             actual = serial.string_value if serial is not None else None
             raise ActivationFailedException(
                 f"Endtool node '{node_name}' reports tool serial number {actual!r}, expected '{tool_sn}'."
             )
 
-        model = manager.get_parameter('model')
+        model = manager.get_parameter('model').value
         if model is None or model.type != ParameterType.PARAMETER_STRING or not model.string_value:
             raise ActivationFailedException(
                 f"Cannot read the 'model' parameter of endtool node '{node_name}' for tool '{tool_sn}'."
@@ -951,11 +963,11 @@ class ToolsManager(LifecycleNode):
         if not manager.set_parameter(
             'mounted',
             ParameterValue(type=ParameterType.PARAMETER_BOOL, bool_value=endtool.mounted),
-        ):
+        ).success:
             raise ActivationFailedException(
                 f"Failed to set 'mounted' parameter on endtool node '{manager.node_name}'."
             )
-        if manager.configure_node() != TransitionCallbackReturn.SUCCESS:
+        if not manager.configure().success:
             raise ActivationFailedException(
                 f"Failed to configure endtool node '{manager.node_name}' for tool '{endtool.tool.tool_sn}'."
             )
@@ -1080,17 +1092,18 @@ class ToolsManager(LifecycleNode):
                 del self._endtools[tool_sn]
         return failures
 
-    def _return_to_unconfigured(self, manager: NodeStateManager) -> str | None:
+    def _return_to_unconfigured(self, manager: NodeManager) -> str | None:
         """Take a node back to ``unconfigured``, deactivating it first when it is active.
 
         :returns: A failure description, or ``None`` on success.
         """
-        state = manager.get_node_state()
-        if state is None:
-            return f"Cannot read the lifecycle state of node '{manager.node_name}'"
-        if state == 'active' and manager.deactivate_node() != TransitionCallbackReturn.SUCCESS:
+        state_result = manager.get_state()
+        if not state_result.success:
+            return f"Cannot read the lifecycle state of node '{manager.node_name}': {state_result.error_message}"
+        state = state_result.state
+        if state == LifecycleStateEnum.ACTIVE and not manager.deactivate().success:
             return f"Failed to deactivate node '{manager.node_name}'"
-        if state in ('active', 'inactive') and manager.unconfigure_node() != TransitionCallbackReturn.SUCCESS:
+        if state in (LifecycleStateEnum.ACTIVE, LifecycleStateEnum.INACTIVE) and not manager.cleanup().success:
             return f"Failed to unconfigure node '{manager.node_name}'"
         return None
 
@@ -1287,7 +1300,7 @@ class ToolsManager(LifecycleNode):
 
         manager = endtool.node_manager
 
-        if manager.unconfigure_node() != TransitionCallbackReturn.SUCCESS:
+        if not manager.cleanup().success:
             raise EndtoolReconfigurationException(
                 f"failed to unconfigure endtool node '{manager.node_name}' of tool '{tool_sn}'; "
                 'make sure its pattern executor is inactive'
@@ -1297,13 +1310,13 @@ class ToolsManager(LifecycleNode):
         if not manager.set_parameter(
             'mounted',
             ParameterValue(type=ParameterType.PARAMETER_BOOL, bool_value=mounted),
-        ):
+        ).success:
             raise EndtoolReconfigurationException(
                 f"failed to set 'mounted' parameter on endtool node '{manager.node_name}' of tool '{tool_sn}'; "
                 'the node is left unconfigured'
             )
 
-        if manager.configure_node() != TransitionCallbackReturn.SUCCESS:
+        if not manager.configure().success:
             raise EndtoolReconfigurationException(
                 f"failed to configure endtool node '{manager.node_name}' of tool '{tool_sn}'; "
                 'the node is left unconfigured'

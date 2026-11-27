@@ -46,7 +46,6 @@ from threading import Lock
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.action import ActionClient, ActionServer
 from rclpy.callback_groups import ReentrantCallbackGroup
-from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle.node import LifecycleState, TransitionCallbackReturn
 from rclpy.publisher import Publisher
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
@@ -55,29 +54,31 @@ from movement_controller.action import ExecuteTrajectory
 from movement_controller.srv import InSession
 from rclpy.client import Client
 from std_msgs.msg import Bool
+from station_utils.autofactory_base_node import AutofactoryBaseNode
+from station_utils.enums import LifecycleStateEnum
+from station_utils.services.node_manager import NodeManager
 
 from pattern_executors.model.pattern_executor_config_dto import PatternExecutorConfigDTO
-from pattern_executors.service.endtool_lifecycle_manager import EndtoolLifecycleManager
 from pattern_executors.service.movement_dispatcher import MovementDispatcher
 
 
-class PatternExecutor(LifecycleNode, ABC):
+class PatternExecutor(AutofactoryBaseNode, ABC):
     """Shared lifecycle node base for all pattern executor implementations."""
 
-    _ENDTOOL_STATE_ACTIVE = 'active'
-    _ENDTOOL_STATE_INACTIVE = 'inactive'
+    _ENDTOOL_STATE_ACTIVE = LifecycleStateEnum.ACTIVE
+    _ENDTOOL_STATE_INACTIVE = LifecycleStateEnum.INACTIVE
 
     def __init__(self, node_name: str = 'pattern_executor') -> None:
         """Initialise the executor node and declare the shared parameters.
 
-        :param node_name: ROS 2 node name passed to :class:`LifecycleNode`.
+        :param node_name: ROS 2 node name passed to :class:`AutofactoryBaseNode`.
         :type node_name: str
         """
         super().__init__(node_name)
 
         self._config: PatternExecutorConfigDTO | None = None
         self._movement_action_client: ActionClient | None = None
-        self._endtool_manager: EndtoolLifecycleManager | None = None
+        self._endtool_manager: NodeManager | None = None
         self._in_session_client: Client | None = None
         self._dispatcher: MovementDispatcher | None = None
         self._action_server: ActionServer | None = None
@@ -185,6 +186,7 @@ class PatternExecutor(LifecycleNode, ABC):
         self.get_logger().info(f'Configuring from state: {state.label}')
         if super().on_configure(state) != TransitionCallbackReturn.SUCCESS:
             self.get_logger().error('Failed to configure base lifecycle node.')
+            self._publish_transition_error('Failed to configure base lifecycle node.')
             return TransitionCallbackReturn.FAILURE
 
         try:
@@ -192,6 +194,7 @@ class PatternExecutor(LifecycleNode, ABC):
         except Exception as error:  # noqa: BLE001
             self.get_logger().error(f'Failed to build executor config: {error}')
             self._config = None
+            self._publish_transition_error(f'Failed to build executor config')
             return TransitionCallbackReturn.FAILURE
 
         self._movement_action_client = ActionClient(
@@ -200,10 +203,10 @@ class PatternExecutor(LifecycleNode, ABC):
             self._config.movement_action_name,
             callback_group=self._movement_callback_group,
         )
-        self._endtool_manager = EndtoolLifecycleManager(
+        self._endtool_manager = NodeManager(
             self,
             self._config.endtool_node_name,
-            self._config.endtool_service_timeout_s,
+            service_timeout_s=self._config.endtool_service_timeout_s,
         )
         self._in_session_client = self.create_client(
             InSession,
@@ -224,6 +227,7 @@ class PatternExecutor(LifecycleNode, ABC):
         self.get_logger().info(f'Activating from state: {state.label}')
         if super().on_activate(state) != TransitionCallbackReturn.SUCCESS:
             self.get_logger().error('Failed to activate base lifecycle node.')
+            self._publish_transition_error('Failed to activate base lifecycle node.')
             return TransitionCallbackReturn.FAILURE
         try:
             if (
@@ -235,9 +239,11 @@ class PatternExecutor(LifecycleNode, ABC):
                 self.get_logger().error(
                     'Sanity check failed, executor is not configured. Cannot activate.'
                 )
+                self._publish_transition_error('Sanity check failed, executor is not configured. Cannot activate.')
                 return TransitionCallbackReturn.FAILURE
 
             if not self._activate_end_tool():
+                self._publish_transition_error('Failed to activate the end-tool')
                 return TransitionCallbackReturn.FAILURE
 
             if not self._movement_action_client.wait_for_server(
@@ -245,6 +251,7 @@ class PatternExecutor(LifecycleNode, ABC):
             ):
                 self.get_logger().error('Movement controller action server not available.')
                 self._deactivate_end_tool()
+                self._publish_transition_error('Movement controller action server not available.')
                 return TransitionCallbackReturn.FAILURE
 
             try:
@@ -252,6 +259,7 @@ class PatternExecutor(LifecycleNode, ABC):
             except Exception as error:  # noqa: BLE001
                 self.get_logger().error(f'Failed to create end-tool clients: {error}')
                 self._deactivate_end_tool()
+                self._publish_transition_error(f'Failed to create end-tool clients')
                 return TransitionCallbackReturn.FAILURE
 
             self._executing_patterns_publisher = self.create_publisher(
@@ -271,6 +279,7 @@ class PatternExecutor(LifecycleNode, ABC):
             return TransitionCallbackReturn.SUCCESS
         except Exception as error:  # noqa: BLE001
             self.get_logger().error(f'Failed to activate executor: {error}')
+            self._publish_transition_error(f'Failed to activate executor')
             return TransitionCallbackReturn.FAILURE
     
 
@@ -279,6 +288,7 @@ class PatternExecutor(LifecycleNode, ABC):
         self.get_logger().info(f'Deactivating from state: {state.label}')
         if super().on_deactivate(state) != TransitionCallbackReturn.SUCCESS:
             self.get_logger().error('Failed to deactivate base lifecycle node.')
+            self._publish_transition_error('Failed to deactivate base lifecycle node.')
             return TransitionCallbackReturn.FAILURE
 
         self._is_active = False
@@ -315,6 +325,7 @@ class PatternExecutor(LifecycleNode, ABC):
         self.get_logger().info(f'Cleaning up from state: {state.label}')
         if super().on_cleanup(state) != TransitionCallbackReturn.SUCCESS:
             self.get_logger().error('Failed to cleanup base lifecycle node.')
+            self._publish_transition_error('Failed to cleanup base lifecycle node.')
             return TransitionCallbackReturn.FAILURE
 
         if self._movement_action_client is not None:
@@ -348,12 +359,13 @@ class PatternExecutor(LifecycleNode, ABC):
             self.get_logger().error('End-tool manager is not initialized; activation failed.')
             return False
 
-        current_state = self._endtool_manager.get_node_state()
-        if current_state is None:
+        state_result = self._endtool_manager.get_state()
+        if not state_result.success:
             self.get_logger().error(
-                'Could not read end-tool lifecycle state; activation failed.'
+                f'Could not read end-tool lifecycle state ({state_result.error_message}); activation failed.'
             )
             return False
+        current_state = state_result.state
 
         if current_state == self._ENDTOOL_STATE_ACTIVE:
             self.get_logger().warning(
@@ -363,12 +375,12 @@ class PatternExecutor(LifecycleNode, ABC):
 
         if current_state != self._ENDTOOL_STATE_INACTIVE:
             self.get_logger().error(
-                f"End tool is in '{current_state}'; this executor only activates "
+                f"End tool is in '{current_state.value}'; this executor only activates "
                 f"an 'inactive' end tool. Activation failed."
             )
             return False
 
-        if not self._endtool_manager.activate_node():
+        if not self._endtool_manager.activate().success:
             self.get_logger().error('Failed to activate the end tool.')
             return False
 
@@ -379,9 +391,9 @@ class PatternExecutor(LifecycleNode, ABC):
         if self._endtool_manager is None:
             return
 
-        current_state = self._endtool_manager.get_node_state()
+        current_state = self._endtool_manager.get_state().state
         if current_state == self._ENDTOOL_STATE_ACTIVE:
-            if not self._endtool_manager.deactivate_node():
+            if not self._endtool_manager.deactivate().success:
                 self.get_logger().error('Failed to deactivate the end tool.')
     # endregion: end-tool lifecycle
 

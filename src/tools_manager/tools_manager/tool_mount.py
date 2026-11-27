@@ -30,12 +30,12 @@ from pydantic import ValidationError
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.qos import QoSProfile, DurabilityPolicy
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
-from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle.node import LifecycleState, TransitionCallbackReturn
 from rclpy.publisher import Publisher
 from rclpy.timer import Timer
 from rclpy.service import Service
 from rclpy.callback_groups import ReentrantCallbackGroup
+from station_utils.autofactory_base_node import AutofactoryBaseNode
 
 from tools_manager.msg import ToolInfo
 from std_srvs.srv import SetBool
@@ -53,7 +53,7 @@ from tools_manager.services.hardware_tool_mount_controller import HardwareToolMo
 from tools_manager.utils.node_parameters import declare_tools_parameters, read_tools_config
 
 
-class ToolMount(LifecycleNode):
+class ToolMount(AutofactoryBaseNode):
 
     def __init__(self, node_name: str = 'tool_mount') -> None:
         """Initialise the ToolMount lifecycle node.
@@ -62,7 +62,7 @@ class ToolMount(LifecycleNode):
         creates the internal thread-safety primitives used to serialise
         concurrent goal and cancel callbacks.
 
-        :param node_name: ROS 2 node name passed to :class:`rclpy.lifecycle.LifecycleNode`.
+        :param node_name: ROS 2 node name passed to :class:`AutofactoryBaseNode`.
         :type node_name: str
         """
         super().__init__(node_name)
@@ -109,6 +109,7 @@ class ToolMount(LifecycleNode):
         self.get_logger().info(f'Configuring from state: {state.label}')
         if super().on_configure(state) != TransitionCallbackReturn.SUCCESS:
             self.get_logger().error('Failed to configure base lifecycle node.')
+            self._publish_transition_error('Failed to configure base lifecycle node.')
             return TransitionCallbackReturn.FAILURE
 
         try:
@@ -137,6 +138,7 @@ class ToolMount(LifecycleNode):
             if self._tool_mounted_publisher is not None:
                 self.destroy_publisher(self._tool_mounted_publisher)
                 self._tool_mounted_publisher = None
+            self._publish_transition_error(f'Failed to read tools manager config file: {e}')
             return TransitionCallbackReturn.FAILURE
         except ValueError as e:
             self.get_logger().error(f'Invalid tool mount parameters: {e}')
@@ -145,6 +147,7 @@ class ToolMount(LifecycleNode):
             if self._tool_mounted_publisher is not None:
                 self.destroy_publisher(self._tool_mounted_publisher)
                 self._tool_mounted_publisher = None
+            self._publish_transition_error(f'Invalid tool mount parameters: {e}')
             return TransitionCallbackReturn.FAILURE
         except Exception as e:
             self.get_logger().error(f'Unknown error while configuring: {e}')
@@ -153,6 +156,7 @@ class ToolMount(LifecycleNode):
             if self._tool_mounted_publisher is not None:
                 self.destroy_publisher(self._tool_mounted_publisher)
                 self._tool_mounted_publisher = None
+            self._publish_transition_error(f'Unknown error while configuring: {e}')
             return TransitionCallbackReturn.FAILURE
 
         return TransitionCallbackReturn.SUCCESS
@@ -167,6 +171,7 @@ class ToolMount(LifecycleNode):
             self._tool_mounted_publisher is None
         ):
             self.get_logger().error('Sanity check failed, something is un-initialized. Cannot activate node.')
+            self._publish_transition_error('Sanity check failed, something is un-initialized. Cannot activate node.')
             return TransitionCallbackReturn.FAILURE
 
         # The material of every tool comes from its endtool node, which only has to be
@@ -176,10 +181,12 @@ class ToolMount(LifecycleNode):
         except Exception as e:
             self.get_logger().error(f'Failed to read the endtool materials: {e}')
             self._materials = {}
+            self._publish_transition_error(f'Failed to read the endtool materials: {e}')
             return TransitionCallbackReturn.FAILURE
 
         if super().on_activate(state) != TransitionCallbackReturn.SUCCESS:
             self.get_logger().error('Failed to activate base lifecycle node.')
+            self._publish_transition_error('Failed to activate base lifecycle node.')
             return TransitionCallbackReturn.FAILURE
 
         # initialize tool_mount controller
@@ -187,6 +194,7 @@ class ToolMount(LifecycleNode):
             self._tool_mount_controller.setup()
         except ToolMountControllerError as e:
             self.get_logger().error(f'Failed to setup tool mount controller: {e}')
+            self._publish_transition_error(f'Failed to setup tool mount controller: {e}')
             return TransitionCallbackReturn.FAILURE
 
         self._mounted_check_timer = self.create_timer(
@@ -207,6 +215,7 @@ class ToolMount(LifecycleNode):
         self.get_logger().info(f'Deactivating from state: {state.label}')
         if super().on_deactivate(state) != TransitionCallbackReturn.SUCCESS:
             self.get_logger().error('Failed to deactivate base lifecycle node.')
+            self._publish_transition_error('Failed to deactivate base lifecycle node.')
             return TransitionCallbackReturn.FAILURE
 
         if self._tool_mount_controller is not None:

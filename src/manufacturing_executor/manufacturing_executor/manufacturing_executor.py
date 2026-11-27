@@ -48,8 +48,9 @@ from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.action.server import ServerGoalHandle
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.lifecycle import LifecycleNode, State, TransitionCallbackReturn
+from rclpy.lifecycle import State, TransitionCallbackReturn
 from rclpy.time import Time
+from station_utils.autofactory_base_node import AutofactoryBaseNode
 
 from manufacturing_executor.action import Manufacture
 from manufacturing_executor.enums.dependency_key_enum import DependencyKeyEnum
@@ -68,7 +69,7 @@ from manufacturing_executor.services.execution_service import ExecutionService
 from manufacturing_executor.services.executor_service import ExecutorService
 from manufacturing_executor.services.idle_pose_service import IdlePoseService
 from manufacturing_executor.services.image_capture_service import ImageCaptureService
-from manufacturing_executor.services.lifecycle_client import LifecycleClientRegistry
+from manufacturing_executor.services.node_manager_registry import NodeManagerRegistry
 from manufacturing_executor.services.loop_clients import LoopClients
 from manufacturing_executor.services.manufacturing_loop import ManufacturingLoop
 from manufacturing_executor.services.optimizer_service import OptimizerService
@@ -79,7 +80,7 @@ from manufacturing_executor.services.tool_inventory import ToolInventory
 from manufacturing_executor.services.tool_selection_service import ToolSelectionService
 
 
-class ManufacturingExecutor(LifecycleNode):
+class ManufacturingExecutor(AutofactoryBaseNode):
     """Lifecycle node serving the ``~/manufacture`` action."""
 
     _SCALAR_PARAMETERS = (
@@ -125,7 +126,7 @@ class ManufacturingExecutor(LifecycleNode):
 
         self._group = ReentrantCallbackGroup()
         self._config: ManufacturingExecutorConfigDTO | None = None
-        self._registry: LifecycleClientRegistry | None = None
+        self._registry: NodeManagerRegistry | None = None
         self._dependencies: DependencyManager | None = None
         self._monitor: ProductMonitor | None = None
         self._inventory: ToolInventory | None = None
@@ -165,9 +166,11 @@ class ManufacturingExecutor(LifecycleNode):
             for item in error.errors():
                 location = '.'.join(str(part) for part in item['loc'])
                 self.get_logger().error(f"Invalid parameter '{location}': {item['msg']}")
+            self._publish_transition_error('Invalid parameters: ' + ', '.join('.'.join(str(part) for part in item['loc']) for item in error.errors()))
             return TransitionCallbackReturn.FAILURE
         except ValueError as error:
             self.get_logger().error(f'Invalid parameters: {error}')
+            self._publish_transition_error(f'Invalid parameters')
             return TransitionCallbackReturn.FAILURE
         self._config = config
         self.get_logger().info(f'Configured: {config}')
@@ -178,11 +181,11 @@ class ManufacturingExecutor(LifecycleNode):
         config = self._config
         if config is None:
             self.get_logger().error('Activation failed: node is not configured')
+            self._publish_transition_error('Activation failed: node is not configured')
             return TransitionCallbackReturn.FAILURE
         try:
-            self._registry = LifecycleClientRegistry(
+            self._registry = NodeManagerRegistry(
                 self,
-                callback_group=self._group,
                 call_timeout_s=config.service_call_timeout_s,
                 transition_timeout_s=config.lifecycle_transition_timeout_s,
             )
@@ -206,6 +209,7 @@ class ManufacturingExecutor(LifecycleNode):
         except Exception as error:  # noqa: BLE001 - roll back and fail the transition
             self.get_logger().error(f'Activation failed: {error}')
             self._release(owned_nodes=self._dependencies is not None and self._loop is not None)
+            self._publish_transition_error(f'Activation failed')
             return TransitionCallbackReturn.FAILURE
         self.get_logger().info('Activated')
         return TransitionCallbackReturn.SUCCESS
@@ -216,6 +220,7 @@ class ManufacturingExecutor(LifecycleNode):
         super().on_deactivate(state)
         if failures:
             self.get_logger().error(f'Deactivation incomplete: {failures}')
+            self._publish_transition_error(f'Deactivation incomplete')
             return TransitionCallbackReturn.FAILURE
         self.get_logger().info('Deactivated')
         return TransitionCallbackReturn.SUCCESS

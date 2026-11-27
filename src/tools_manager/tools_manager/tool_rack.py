@@ -29,11 +29,11 @@ from rclpy import init, ok, shutdown
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.qos import QoSProfile, DurabilityPolicy
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
-from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle.node import LifecycleState, TransitionCallbackReturn
 from rclpy.publisher import Publisher
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.timer import Timer
+from station_utils.autofactory_base_node import AutofactoryBaseNode
 
 from tools_manager.msg import Slots
 
@@ -50,7 +50,7 @@ from tools_manager.services.simulated_rack_controller import SimulatedRackContro
 from tools_manager.utils.node_parameters import declare_tools_parameters, read_tools_config
 
 
-class ToolRack(LifecycleNode):
+class ToolRack(AutofactoryBaseNode):
 
     def __init__(self, node_name: str = 'tool_rack') -> None:
         """Initialise the ToolRack lifecycle node.
@@ -59,7 +59,7 @@ class ToolRack(LifecycleNode):
         creates the internal thread-safety primitives used to serialise
         concurrent goal and cancel callbacks.
 
-        :param node_name: ROS 2 node name passed to :class:`rclpy.lifecycle.LifecycleNode`.
+        :param node_name: ROS 2 node name passed to :class:`AutofactoryBaseNode`.
         :type node_name: str
         """
         super().__init__(node_name)
@@ -96,6 +96,7 @@ class ToolRack(LifecycleNode):
     def on_configure(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info(f'Configuring from state: {state.label}')
         if super().on_configure(state) != TransitionCallbackReturn.SUCCESS:
+            self._publish_transition_error('Base configure transition failed')
             return TransitionCallbackReturn.FAILURE
 
         # Read and validate constraint parameters
@@ -120,10 +121,12 @@ class ToolRack(LifecycleNode):
                 self._rack_controller = HardwareRackController(self, self._config)
         except ValueError as e:
             self.get_logger().error(f'Invalid tool rack parameters: {e}')
+            self._publish_transition_error(f'Invalid tool rack parameters: {e}')
             return TransitionCallbackReturn.FAILURE
         except Exception as e:
             self.get_logger().error(f'Unknown error while configuring: {e}')
             self._rack_controller = None  # ensure rack controller is not used if config fails
+            self._publish_transition_error(f'Unknown error while configuring: {e}')
             return TransitionCallbackReturn.FAILURE
 
         return TransitionCallbackReturn.SUCCESS
@@ -133,6 +136,7 @@ class ToolRack(LifecycleNode):
 
         if self._config is None:
             self.get_logger().error('Cannot activate: configuration is not set')
+            self._publish_transition_error('Cannot activate: configuration is not set')
             return TransitionCallbackReturn.FAILURE
 
         # The material of every tool comes from its endtool node, which only has to be
@@ -142,17 +146,21 @@ class ToolRack(LifecycleNode):
         except Exception as e:
             self.get_logger().error(f'Failed to read the endtool materials: {e}')
             self._materials = {}
+            self._publish_transition_error(f'Failed to read the endtool materials: {e}')
             return TransitionCallbackReturn.FAILURE
 
         if super().on_activate(state) != TransitionCallbackReturn.SUCCESS:
+            self._publish_transition_error('Base activate transition failed')
             return TransitionCallbackReturn.FAILURE
 
         if self._slots_topic is None:
             self.get_logger().error("Slots topic publisher is not initialized.")
+            self._publish_transition_error("Slots topic publisher is not initialized.")
             return TransitionCallbackReturn.FAILURE
 
         if self._rack_controller is None:
             self.get_logger().error("Rack controller is not initialized.")
+            self._publish_transition_error("Rack controller is not initialized.")
             return TransitionCallbackReturn.FAILURE
 
         self._rack_controller.setup()

@@ -38,6 +38,7 @@ from rclpy.lifecycle import LifecycleNode, State, TransitionCallbackReturn
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.subscription import Subscription
 from std_msgs.msg import Bool
+from station_utils.autofactory_base_node import AutofactoryBaseNode
 
 from station_workplace.enums.process_type_enum import ProcessTypeEnum
 from station_workplace.interface.product_data_reader import ProductDataReader
@@ -54,7 +55,7 @@ from station_workplace.services.workplace_state_publisher import WorkplaceStateP
 from station_workplace.services.workplace_state_tracker import WorkplaceStateTracker
 
 
-class WorkplaceNodeBase(LifecycleNode):
+class WorkplaceNodeBase(AutofactoryBaseNode):
     """Lifecycle node reacting to ``product_in_place`` with injection/ejection.
 
     Subclasses only provide the node-specific parameters, configuration DTO and
@@ -191,6 +192,7 @@ class WorkplaceNodeBase(LifecycleNode):
             for error in exc.errors():
                 location = '.'.join(str(part) for part in error['loc'])
                 self.get_logger().error(f"Invalid parameter '{location}': {error['msg']}")
+            self._publish_transition_error('Invalid parameters: ' + ', '.join('.'.join(str(part) for part in item['loc']) for item in exc.errors()))
             return TransitionCallbackReturn.FAILURE
 
         try:
@@ -217,6 +219,7 @@ class WorkplaceNodeBase(LifecycleNode):
                     self._io_group)
         except Exception as exc:  # noqa: BLE001 - convert to transition failure
             self.get_logger().error(f'Failed to construct the internal services: {exc}')
+            self._publish_transition_error(f'Failed to construct the internal services: {exc}')
             return TransitionCallbackReturn.FAILURE
 
         self._config = config
@@ -238,6 +241,7 @@ class WorkplaceNodeBase(LifecycleNode):
             or self._process is None or self._runner is None or self._routing is None
         ):
             self.get_logger().error('Activation failed: node is not configured')
+            self._publish_transition_error('Activation failed: node is not configured')
             return TransitionCallbackReturn.FAILURE
         try:
             self._scene.activate()
@@ -264,6 +268,7 @@ class WorkplaceNodeBase(LifecycleNode):
             self._is_active = False
             self._runner.disable()
             self._destroy_interfaces()
+            self._publish_transition_error(f'Activation failed: {exc}')
             return TransitionCallbackReturn.FAILURE
         self.get_logger().info(f'Activated (listening on {self._config.product_in_place_topic})')
         return TransitionCallbackReturn.SUCCESS

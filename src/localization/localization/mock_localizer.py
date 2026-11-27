@@ -46,10 +46,11 @@ from pydantic import ValidationError
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.lifecycle import LifecycleNode, LifecyclePublisher, State, TransitionCallbackReturn
+from rclpy.lifecycle import LifecyclePublisher, State, TransitionCallbackReturn
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 
 from std_msgs.msg import Bool
+from station_utils.autofactory_base_node import AutofactoryBaseNode
 
 from localization.interface.localization_service import LocalizationService
 from localization.models.localization_poses_dto import LocalizationPosesDTO
@@ -59,7 +60,7 @@ from localization.services.mock_localization_service import MockLocalizationServ
 from localization.utils.poses_file_loader import load_poses_file
 
 
-class MockLocalizer(LifecycleNode):
+class MockLocalizer(AutofactoryBaseNode):
     """Lifecycle node mocking the product localizer."""
 
     # Placeholder; set the real pose with the 'initial_localization_pose' parameter.
@@ -114,11 +115,13 @@ class MockLocalizer(LifecycleNode):
             for error in exc.errors():
                 location = '.'.join(str(part) for part in error['loc'])
                 self.get_logger().error(f"Invalid parameter '{location}': {error['msg']}")
+            self._publish_transition_error('Invalid parameters: ' + ', '.join('.'.join(str(part) for part in item['loc']) for item in exc.errors()))
             return TransitionCallbackReturn.FAILURE
         try:
             poses = load_poses_file(config.calibration_poses_file)
         except ValueError as exc:
             self.get_logger().error(f'Invalid calibration poses: {exc}')
+            self._publish_transition_error(f'Invalid calibration poses')
             return TransitionCallbackReturn.FAILURE
 
         self._config = config
@@ -131,6 +134,7 @@ class MockLocalizer(LifecycleNode):
         """Initialize the service and create the action server and the topic."""
         if self._service is None or self._config is None:
             self.get_logger().error('Activation failed: node is not configured')
+            self._publish_transition_error('Activation failed: node is not configured')
             return TransitionCallbackReturn.FAILURE
         try:
             self._service.initialize(self, self._on_invalidated)
@@ -145,6 +149,7 @@ class MockLocalizer(LifecycleNode):
         except Exception as exc:  # noqa: BLE001 - tear down and fail the transition
             self.get_logger().error(f'Activation failed: {exc}')
             self._destroy_interfaces()
+            self._publish_transition_error(f'Activation failed')
             return TransitionCallbackReturn.FAILURE
         with self._localized_lock:
             self._localized = False

@@ -37,7 +37,6 @@ from rclpy.duration import Duration
 from rclpy.service import Service
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle.node import LifecycleState, TransitionCallbackReturn
 from rclpy.publisher import Publisher
 from rclpy.qos import QoSProfile, DurabilityPolicy, HistoryPolicy
@@ -56,6 +55,7 @@ from repositories.srv import (
     StationCacheFetchNumberArray,
     StationCacheStoreNumberArray,
 )
+from station_utils.autofactory_base_node import AutofactoryBaseNode
 
 from endtools.srv import SetTcp, StartDispensing, StopDispensing
 
@@ -69,7 +69,7 @@ from endtools.service import (
 from endtools.utils import build_tcp_transform
 
 
-class VolumetricDispensingTool(LifecycleNode):
+class VolumetricDispensingTool(AutofactoryBaseNode):
 
     # Hard upper bound (seconds) on how long a calibrated TCP may remain valid.
     # The dispensing tool TCP must always expire, so both the default and any
@@ -445,6 +445,7 @@ class VolumetricDispensingTool(LifecycleNode):
     def on_configure(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info(f'Configuring from state: {state.label}')
         if super().on_configure(state) != TransitionCallbackReturn.SUCCESS:
+            self._publish_transition_error('Base configure transition failed')
             return TransitionCallbackReturn.FAILURE
 
         # Fetched before any resource is created so a failure leaves nothing behind.
@@ -452,6 +453,7 @@ class VolumetricDispensingTool(LifecycleNode):
             material = self._fetch_material()
         except Exception as e:
             self.get_logger().error(f'Failed to get the material data: {e}')
+            self._publish_transition_error(f'Failed to get the material data')
             return TransitionCallbackReturn.FAILURE
         self.get_logger().info(
             f'Using material {material.product_number} revision {material.product_revision} '
@@ -539,9 +541,11 @@ class VolumetricDispensingTool(LifecycleNode):
                 self._controller = HardwareDispenserController(self)
         except ValidationError as e:
             self.get_logger().error(f'Failed to read config values: {e}')
+            self._publish_transition_error(f'Failed to read config values: {e}')
             return TransitionCallbackReturn.FAILURE
         except Exception as e:
             self.get_logger().error(f'Unknown error while configuring: {e}')
+            self._publish_transition_error(f'Unknown error while configuring: {e}')
             return TransitionCallbackReturn.FAILURE
 
         return TransitionCallbackReturn.SUCCESS
@@ -549,16 +553,20 @@ class VolumetricDispensingTool(LifecycleNode):
     def on_activate(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info(f'Activating from state: {state.label}')
         if super().on_activate(state) != TransitionCallbackReturn.SUCCESS:
+            self._publish_transition_error('Base activate transition failed')
             return TransitionCallbackReturn.FAILURE
 
         if self._config is None:
             self.get_logger().error('Cannot activate: configuration is not set.')
+            self._publish_transition_error('Cannot activate: configuration is not set.')
             return TransitionCallbackReturn.FAILURE
         elif self._config.mounted is False:
             self.get_logger().error('Tool is not mounted, cannot activate.')
+            self._publish_transition_error('Tool is not mounted, cannot activate.')
             return TransitionCallbackReturn.FAILURE
         elif self._controller is None:
             self.get_logger().error('Controller is not initialized, cannot activate.')
+            self._publish_transition_error('Controller is not initialized, cannot activate.')
             return TransitionCallbackReturn.FAILURE
 
         self._controller.setup(self._config)
@@ -577,6 +585,7 @@ class VolumetricDispensingTool(LifecycleNode):
     def on_deactivate(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info(f'Deactivating from state: {state.label}')
         if super().on_deactivate(state) != TransitionCallbackReturn.SUCCESS:
+            self._publish_transition_error('Base deactivate transition failed')
             return TransitionCallbackReturn.FAILURE
 
         self.destroy_service(self._start_service) if self._start_service else None
@@ -588,6 +597,7 @@ class VolumetricDispensingTool(LifecycleNode):
     def on_cleanup(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info(f'Cleaning up from state: {state.label}')
         if super().on_cleanup(state) != TransitionCallbackReturn.SUCCESS:
+            self._publish_transition_error('Base cleanup transition failed')
             return TransitionCallbackReturn.FAILURE
 
         self._config = None
