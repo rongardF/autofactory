@@ -47,10 +47,11 @@ from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.publisher import Publisher
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.lifecycle import LifecycleNode, State, TransitionCallbackReturn
+from rclpy.lifecycle import State, TransitionCallbackReturn
 from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
 from rclpy.service import Service
 from std_msgs.msg import Bool
+from station_utils.autofactory_base_node import AutofactoryBaseNode
 
 from rfid_scanner.enums.parity_enum import ParityEnum
 from rfid_scanner.exceptions.reader_fatal_error import ReaderFatalError
@@ -62,7 +63,7 @@ from rfid_scanner.services.simulated_reader import SimulatedReader
 from rfid_scanner.services.simatic_ascii_reader import SimaticAsciiReader
 
 
-class SimaticRf240rAscii(LifecycleNode):
+class SimaticRf240rAscii(AutofactoryBaseNode):
     """ROS 2 driver node for the SIMATIC RF240R reader."""
 
     _TAG_DETECTED_QOS = QoSProfile(
@@ -133,6 +134,7 @@ class SimaticRf240rAscii(LifecycleNode):
                 location = '.'.join(str(part) for part in error['loc'])
                 self.get_logger().error(f"Invalid parameter '{location}': {error['msg']}")
             self._config = None
+            self._publish_transition_error('Invalid parameters: ' + ', '.join('.'.join(str(part) for part in item['loc']) for item in e.errors()))
             return TransitionCallbackReturn.FAILURE
 
         try:
@@ -148,6 +150,7 @@ class SimaticRf240rAscii(LifecycleNode):
             self.get_logger().error(f'Failed to construct the reader: {e}')
             self._reader = None
             self._config = None
+            self._publish_transition_error(f'Failed to construct the reader: {e}')
             return TransitionCallbackReturn.FAILURE
 
         mode = 'simulated' if self._config.simulated else f"serial '{self._config.serial_port}'"
@@ -166,6 +169,7 @@ class SimaticRf240rAscii(LifecycleNode):
         reader = self._reader
         if reader is None:
             self.get_logger().error('Activation failed: node is not configured')
+            self._publish_transition_error('Activation failed: node is not configured')
             return TransitionCallbackReturn.FAILURE
         try:
             self._tag_detected_pub = self.create_lifecycle_publisher(
@@ -185,6 +189,7 @@ class SimaticRf240rAscii(LifecycleNode):
             self.get_logger().error(f'Activation failed: {e}')
             reader.deinitialize()
             self._destroy_interface()
+            self._publish_transition_error(f'Activation failed: {e}')
             return TransitionCallbackReturn.FAILURE
 
         with self._publish_lock:

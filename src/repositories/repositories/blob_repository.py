@@ -46,10 +46,11 @@ from rclpy.action.server import ServerGoalHandle
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.exceptions import ParameterUninitializedException
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
-from rclpy.lifecycle import LifecycleNode, State, TransitionCallbackReturn
+from rclpy.lifecycle import State, TransitionCallbackReturn
 from rclpy.parameter import Parameter
 from rclpy.service import Service
 from rclpy.timer import Timer
+from station_utils.autofactory_base_node import AutofactoryBaseNode
 
 from repositories.action import BlobRepositoryFetchBlobs, BlobRepositoryUploadBlobs
 from repositories.exceptions.blob_repository import (
@@ -82,7 +83,7 @@ from repositories.srv import (
 from repositories.utils.json_metadata import dump_metadata
 
 
-class BlobRepository(LifecycleNode):
+class BlobRepository(AutofactoryBaseNode):
     """Blob upload/fetch/info/delete service exposed as a managed lifecycle node."""
 
     def __init__(self, node_name: str = 'blob_repository') -> None:
@@ -200,6 +201,7 @@ class BlobRepository(LifecycleNode):
                 for error in exc.errors(include_input=False, include_url=False)
             )
             self.get_logger().error(f'Invalid configuration: {details}')
+            self._publish_transition_error(f'Invalid configuration: {details}')
             return TransitionCallbackReturn.FAILURE
 
         store = LocalBlobStore(
@@ -210,9 +212,11 @@ class BlobRepository(LifecycleNode):
             store.prepare()
         except BlobRepositoryError as exc:
             self.get_logger().error(f'Invalid allowed_path_roots: {exc}')
+            self._publish_transition_error(f'Invalid allowed_path_roots: {exc}')
             return TransitionCallbackReturn.FAILURE
         except OSError as exc:
             self.get_logger().error(f'Cannot use local_storage_path: {exc}')
+            self._publish_transition_error(f'Cannot use local_storage_path: {exc}')
             return TransitionCallbackReturn.FAILURE
 
         backend: BlobBackend
@@ -253,10 +257,12 @@ class BlobRepository(LifecycleNode):
         """
         if self._config is None or self._manager is None or self._backend is None:
             self.get_logger().error('Cannot activate: node is not configured.')
+            self._publish_transition_error('Cannot activate: node is not configured.')
             return TransitionCallbackReturn.FAILURE
 
         if super().on_activate(state) != TransitionCallbackReturn.SUCCESS:
             self.get_logger().error('Base on_activate did not succeed; aborting.')
+            self._publish_transition_error('Base on_activate did not succeed; aborting.')
             return TransitionCallbackReturn.FAILURE
 
         try:
@@ -271,6 +277,7 @@ class BlobRepository(LifecycleNode):
         except Exception as exc:  # noqa: BLE001 - leave the node inactive
             self.get_logger().error(f'Activation failed: {exc}')
             self._destroy_entities()
+            self._publish_transition_error(f'Activation failed: {exc}')
             return TransitionCallbackReturn.FAILURE
 
         self.get_logger().info('Activated blob_repository.')
@@ -286,8 +293,10 @@ class BlobRepository(LifecycleNode):
         ok = self._destroy_entities()
         if super().on_deactivate(state) != TransitionCallbackReturn.SUCCESS:
             self.get_logger().error('Base on_deactivate did not succeed.')
+            self._publish_transition_error('Base on_deactivate did not succeed.')
             return TransitionCallbackReturn.FAILURE
         if not ok:
+            self._publish_transition_error('Failed to destroy the blob repository entities')
             return TransitionCallbackReturn.FAILURE
         self.get_logger().info('Deactivated blob_repository.')
         return TransitionCallbackReturn.SUCCESS
@@ -299,6 +308,7 @@ class BlobRepository(LifecycleNode):
             TransitionCallbackReturn.SUCCESS, or FAILURE if teardown fails.
         """
         if not self.release_resources():
+            self._publish_transition_error('Failed to release the blob repository resources')
             return TransitionCallbackReturn.FAILURE
         self.get_logger().info('Cleaned up blob_repository.')
         return TransitionCallbackReturn.SUCCESS
@@ -310,6 +320,7 @@ class BlobRepository(LifecycleNode):
             TransitionCallbackReturn.SUCCESS, or FAILURE if teardown fails.
         """
         if not self.release_resources():
+            self._publish_transition_error('Failed to release the blob repository resources')
             return TransitionCallbackReturn.FAILURE
         self.get_logger().info('Shut down blob_repository.')
         return TransitionCallbackReturn.SUCCESS

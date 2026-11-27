@@ -13,6 +13,7 @@
 
   <exec_depend>rclpy</exec_depend>
   <depend>std_msgs</depend>
+  <depend>station_utils</depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>

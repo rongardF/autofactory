@@ -39,7 +39,6 @@ from rclpy.action.server import ServerGoalHandle
 from rclpy.action.client import CancelGoal, ClientGoalHandle
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
-from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle.node import LifecycleState, TransitionCallbackReturn
 from rclpy.publisher import Publisher
 from rclpy.service import Service
@@ -50,6 +49,7 @@ from moveit_msgs.action import (
     ExecuteTrajectory_GetResult_Response as MoveitExecuteTrajectoryResponse,
     ExecuteTrajectory as MoveItExecuteTrajectory
 )
+from station_utils.autofactory_base_node import AutofactoryBaseNode
 
 from movement_controller.action import ExecuteTrajectory
 from movement_controller.srv import CloseSession, InSession
@@ -63,7 +63,7 @@ from movement_controller.services.session_manager import SessionManager
 from movement_controller.utils.trajectory_grouper import TrajectoryGrouper
 
 
-class MovementController(LifecycleNode):
+class MovementController(AutofactoryBaseNode):
     """LifecycleNode that exposes an ExecuteTrajectory action server for robot arms."""
 
     def __init__(self, node_name: str = 'movement_controller') -> None:
@@ -73,7 +73,7 @@ class MovementController(LifecycleNode):
         creates the internal thread-safety primitives used to serialise
         concurrent goal and cancel callbacks.
 
-        :param node_name: ROS 2 node name passed to :class:`rclpy.lifecycle.LifecycleNode`.
+        :param node_name: ROS 2 node name passed to :class:`AutofactoryBaseNode`.
         :type node_name: str
         """
         super().__init__(node_name)
@@ -303,10 +303,12 @@ class MovementController(LifecycleNode):
         except ValidationError as e:
             self.get_logger().error(f'Constraint parameter validation failed: {e}')
             self._planner_service = None  # ensure planner service is not used if validation fails
+            self._publish_transition_error(f'Constraint parameter validation failed: {e}')
             return TransitionCallbackReturn.FAILURE
         except Exception as e:
             self.get_logger().error(f'Unknown error while configuring: {e}')
             self._planner_service = None  # ensure planner service is not used if config fails
+            self._publish_transition_error(f'Unknown error while configuring')
             return TransitionCallbackReturn.FAILURE
 
         return TransitionCallbackReturn.SUCCESS
@@ -333,6 +335,7 @@ class MovementController(LifecycleNode):
                 self._planner_service.on_activate()
             else:
                 self.get_logger().error('PlanningCoordinator not initialised during on_activate')
+                self._publish_transition_error('PlanningCoordinator not initialised during on_activate')
                 return TransitionCallbackReturn.FAILURE
             self.get_logger().info(f'PlanningCoordinator activated successfully')
         
@@ -343,6 +346,8 @@ class MovementController(LifecycleNode):
                     f'/plan_sequence_path service not available after {timeout}s — '
                     'is move_group launched with pilz_industrial_motion_planner/MoveGroupSequenceService capability?'
                 )
+                self._publish_transition_error(f'/plan_sequence_path service not available after {timeout}s — '
+                    'is move_group launched with pilz_industrial_motion_planner/MoveGroupSequenceService capability?')
                 return TransitionCallbackReturn.FAILURE
             
             with self._goal_handle_lock:
@@ -399,6 +404,7 @@ class MovementController(LifecycleNode):
             if self._planner_service is not None:
                 self._planner_service.on_deactivate()  # ensure planner service is deactivated if activation fails
                 self.get_logger().info('PlanningCoordinator deactivated due to activation failure')
+            self._publish_transition_error(f'Unknown error during activation')
             return TransitionCallbackReturn.FAILURE
 
         return TransitionCallbackReturn.SUCCESS

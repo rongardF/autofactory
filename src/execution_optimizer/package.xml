@@ -28,6 +28,7 @@
   <depend>repositories</depend>
   <depend>cameras</depend>
 
+  <depend>station_utils</depend>
   <exec_depend>python3-pydantic</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-scipy</exec_depend>

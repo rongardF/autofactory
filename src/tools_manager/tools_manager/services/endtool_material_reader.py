@@ -6,11 +6,11 @@ from collections.abc import Mapping, Sequence
 
 from rcl_interfaces.msg import ParameterType, ParameterValue
 from rclpy.lifecycle import LifecycleNode
+from station_utils.services.node_manager import NodeManager
 
 from tools_manager.model.endtool_material_dto import EndtoolMaterialDTO
 from tools_manager.model.tool_info_dto import ToolInfoDto
 from tools_manager.model.tools_manager_config import ToolSlotDTO
-from tools_manager.services.node_state_manager import NodeStateManager
 
 MATERIAL_PRODUCT_NUMBER = 'material.product_number'
 MATERIAL_PRODUCT_REVISION = 'material.product_revision'
@@ -20,12 +20,12 @@ MATERIAL_PRODUCT_REVISION = 'material.product_revision'
 _READ_ATTEMPTS = 2
 
 
-def _get_parameter(manager: NodeStateManager, name: str) -> ParameterValue | None:
+def _get_parameter(manager: NodeManager, name: str) -> ParameterValue | None:
     """Read one parameter of the managed node, retrying once on failure."""
     for _ in range(_READ_ATTEMPTS):
-        value = manager.get_parameter(name)
-        if value is not None:
-            return value
+        result = manager.get_parameter(name)
+        if result.success:
+            return result.value
     return None
 
 
@@ -49,7 +49,7 @@ def read_endtool_materials(
     for slot in slots:
         if not slot.tool_sn or not slot.node_name:
             continue  # intentionally left empty slot
-        manager = NodeStateManager(node, slot.node_name, service_timeout_sec=timeout_sec)
+        manager = NodeManager(node, slot.node_name, service_timeout_s=timeout_sec)
         try:
             product_number = _get_parameter(manager, MATERIAL_PRODUCT_NUMBER)
             product_revision = _get_parameter(manager, MATERIAL_PRODUCT_REVISION)

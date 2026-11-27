@@ -33,8 +33,8 @@ from rcl_interfaces.msg import ParameterDescriptor
 from rclpy import init, ok, shutdown
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
-from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle.node import LifecycleState, TransitionCallbackReturn
+from station_utils.autofactory_base_node import AutofactoryBaseNode
 
 from world_manager.models import (
     MoveItConfigDTO,
@@ -50,7 +50,7 @@ _Response = TypeVar('_Response')
 _NOT_ACTIVE = 'node not active'
 
 
-class MoveIt2WorldManager(LifecycleNode):
+class MoveIt2WorldManager(AutofactoryBaseNode):
     """Owns the MoveIt planning scene's collision objects and ACM."""
 
     def __init__(self, node_name: str = 'moveit2_world_manager') -> None:
@@ -89,6 +89,7 @@ class MoveIt2WorldManager(LifecycleNode):
             self._config = self._read_config()
         except ValidationError as e:
             self.get_logger().error(f'invalid parameters: {e}')
+            self._publish_transition_error(f'invalid parameters')
             return TransitionCallbackReturn.FAILURE
 
         return TransitionCallbackReturn.SUCCESS
@@ -117,6 +118,7 @@ class MoveIt2WorldManager(LifecycleNode):
         except Exception as e:
             self.get_logger().error(f'failed to activate interfaces: {e}')
             self._destroy_active_interfaces()
+            self._publish_transition_error(f'failed to activate interfaces')
             return TransitionCallbackReturn.FAILURE
         return TransitionCallbackReturn.SUCCESS
 

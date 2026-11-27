@@ -46,10 +46,11 @@ from rclpy.action import ActionServer, CancelResponse
 from rclpy.action.server import ServerGoalHandle
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.lifecycle import LifecycleNode, State, TransitionCallbackReturn
+from rclpy.lifecycle import State, TransitionCallbackReturn
 from rclpy.publisher import Publisher
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.service import Service
+from station_utils.autofactory_base_node import AutofactoryBaseNode
 
 from repositories.action import ObjectModelStorageGetModels
 from repositories.interfaces.object_model_storage.model_storage_backend import (
@@ -75,7 +76,7 @@ from repositories.utils.model_info_selector import select_models_info
 from repositories.utils.uuid_validator import parse_uuid4
 
 
-class ObjectModelStorage(LifecycleNode):
+class ObjectModelStorage(AutofactoryBaseNode):
     """Object model metadata and local model cache exposed as a lifecycle node."""
 
     def __init__(self, node_name: str = 'object_model_storage') -> None:
@@ -180,6 +181,7 @@ class ObjectModelStorage(LifecycleNode):
             )
         except ValidationError as exc:
             self.get_logger().error(f'Invalid configuration: {exc}')
+            self._publish_transition_error(f'Invalid configuration: {exc}')
             return TransitionCallbackReturn.FAILURE
 
         download_path = Path(config.download_path)
@@ -191,6 +193,7 @@ class ObjectModelStorage(LifecycleNode):
             self.get_logger().error(
                 f"Cannot prepare download_path '{download_path}': {exc}"
             )
+            self._publish_transition_error(f"Cannot prepare download_path '{download_path}': {exc}")
             return TransitionCallbackReturn.FAILURE
 
         backend: ModelStorageBackend
@@ -234,10 +237,12 @@ class ObjectModelStorage(LifecycleNode):
         """
         if self._backend is None or self._cache is None:
             self.get_logger().error('Cannot activate: node is not configured.')
+            self._publish_transition_error('Cannot activate: node is not configured.')
             return TransitionCallbackReturn.FAILURE
 
         if super().on_activate(state) != TransitionCallbackReturn.SUCCESS:
             self.get_logger().error('Base on_activate did not succeed; aborting.')
+            self._publish_transition_error('Base on_activate did not succeed; aborting.')
             return TransitionCallbackReturn.FAILURE
 
         self._create_ros_surface()
@@ -267,6 +272,7 @@ class ObjectModelStorage(LifecycleNode):
 
         if super().on_deactivate(state) != TransitionCallbackReturn.SUCCESS:
             self.get_logger().error('Base on_deactivate did not succeed.')
+            self._publish_transition_error('Base on_deactivate did not succeed.')
             return TransitionCallbackReturn.FAILURE
 
         self.get_logger().info('Deactivated object_model_storage (cache retained).')

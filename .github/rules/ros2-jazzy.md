@@ -14,13 +14,16 @@ in the official docs for this stack.
 
 ## Node Lifecycle Pattern
 
-All nodes that manage hardware, connections, or stateful services **must** use `LifecycleNode`:
+All nodes that manage hardware, connections, or stateful services **must** inherit from
+`AutofactoryBaseNode` (package `station_utils`), a `LifecycleNode` that reports failed transitions
+on `/transition_error`:
 
 ```python
 from rcl_interfaces.msg import ParameterDescriptor
-from rclpy.lifecycle import LifecycleNode, TransitionCallbackReturn, State
+from rclpy.lifecycle import TransitionCallbackReturn, State
+from station_utils.autofactory_base_node import AutofactoryBaseNode
 
-class MyHardwareNode(LifecycleNode):
+class MyHardwareNode(AutofactoryBaseNode):
     def __init__(self, node_name: str = 'my_hardware_node') -> None:
         super().__init__(node_name)
         # declare all parameters here — before on_configure
@@ -55,7 +58,10 @@ class MyHardwareNode(LifecycleNode):
 **Rules:**
 - Hardware I/O only happens in `on_activate` / `on_deactivate`, never in `__init__` or `on_configure`
 - `on_configure` creates ROS 2 entities (pubs, subs, clients, services); `on_activate` starts them
-- Always return `TransitionCallbackReturn.FAILURE` (not raise) if a transition cannot complete
+- Always return `TransitionCallbackReturn.FAILURE` (not raise) if a transition cannot complete, and call
+  `self._publish_transition_error('<short reason>')` once before returning it (unhandled exceptions /
+  `ERROR` are reported automatically by the base class)
+- Add `<depend>station_utils</depend>` to the package's `package.xml`
 
 ---
 

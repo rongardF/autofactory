@@ -43,9 +43,10 @@ import rclpy
 from pydantic import ValidationError
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.lifecycle import LifecycleNode, State, TransitionCallbackReturn
+from rclpy.lifecycle import State, TransitionCallbackReturn
 from rclpy.service import Service
 from rclpy.timer import Timer
+from station_utils.autofactory_base_node import AutofactoryBaseNode
 
 from repositories.enums.station_cache.cache_value_type_enum import CacheValueTypeEnum
 from repositories.interfaces.station_cache.cache_backend import CacheBackend
@@ -125,7 +126,7 @@ FetchResponse = (
 )
 
 
-class StationCache(LifecycleNode):
+class StationCache(AutofactoryBaseNode):
     """Typed key/value cache exposed as a managed lifecycle node."""
 
     def __init__(self, node_name: str = 'station_cache') -> None:
@@ -221,6 +222,7 @@ class StationCache(LifecycleNode):
             )
         except ValidationError as exc:
             self.get_logger().error(f'Invalid configuration: {exc}')
+            self._publish_transition_error(f'Invalid configuration: {exc}')
             return TransitionCallbackReturn.FAILURE
 
         self._config = config
@@ -253,12 +255,14 @@ class StationCache(LifecycleNode):
         """
         if self._backend is None or self._config is None:
             self.get_logger().error('Cannot activate: node is not configured.')
+            self._publish_transition_error('Cannot activate: node is not configured.')
             return TransitionCallbackReturn.FAILURE
 
         # Activate managed entities (lifecycle publishers) first; only proceed
         # when the base transition reports success.
         if super().on_activate(state) != TransitionCallbackReturn.SUCCESS:
             self.get_logger().error('Base on_activate did not succeed; aborting.')
+            self._publish_transition_error('Base on_activate did not succeed; aborting.')
             return TransitionCallbackReturn.FAILURE
 
         self._create_services()
@@ -300,6 +304,7 @@ class StationCache(LifecycleNode):
         # transition if the base transition does not succeed.
         if super().on_deactivate(state) != TransitionCallbackReturn.SUCCESS:
             self.get_logger().error('Base on_deactivate did not succeed.')
+            self._publish_transition_error('Base on_deactivate did not succeed.')
             return TransitionCallbackReturn.FAILURE
 
         self.get_logger().info('Deactivated station_cache (cache retained).')

@@ -33,19 +33,20 @@ from rcl_interfaces.msg import ParameterDescriptor
 from rclpy import init, ok, shutdown
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
-from rclpy.lifecycle import LifecycleNode, LifecycleState, TransitionCallbackReturn
+from rclpy.lifecycle import LifecycleState, TransitionCallbackReturn
 from rclpy.publisher import Publisher
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.service import Service
 from std_msgs.msg import Bool
 from std_srvs.srv import Trigger
+from station_utils.autofactory_base_node import AutofactoryBaseNode
 
 from product_carrier.interface import CarrierController
 from product_carrier.model import CarrierActionResultDTO, ConveyorNodeConfigDTO
 from product_carrier.services import HardwareConveyorController, SimulatedConveyorController
 
 
-class Conveyor(LifecycleNode):
+class Conveyor(AutofactoryBaseNode):
     """Lifecycle node controlling a conveyor line that feeds the robot workplace.
 
     Exposes the carrier agnostic interface:
@@ -85,6 +86,7 @@ class Conveyor(LifecycleNode):
     def on_configure(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info(f'Configuring from state: {state.label}')
         if super().on_configure(state) != TransitionCallbackReturn.SUCCESS:
+            self._publish_transition_error('Base configure transition failed')
             return TransitionCallbackReturn.FAILURE
 
         try:
@@ -98,10 +100,12 @@ class Conveyor(LifecycleNode):
         except ValidationError as e:
             self.get_logger().error(f'Invalid configuration: {e}')
             self._release_all()
+            self._publish_transition_error(f'Invalid configuration: {e}')
             return TransitionCallbackReturn.FAILURE
         except Exception as e:
             self.get_logger().error(f'Configuration failed: {e}')
             self._release_all()
+            self._publish_transition_error(f'Configuration failed: {e}')
             return TransitionCallbackReturn.FAILURE
 
         self.get_logger().info(f'Configured (simulated={self._config.simulated})')
@@ -111,6 +115,7 @@ class Conveyor(LifecycleNode):
         self.get_logger().info(f'Activating from state: {state.label}')
         if self._config is None or self._controller is None:
             self.get_logger().error('Cannot activate: node is not configured')
+            self._publish_transition_error('Cannot activate: node is not configured')
             return TransitionCallbackReturn.FAILURE
 
         try:
@@ -125,6 +130,7 @@ class Conveyor(LifecycleNode):
             self.get_logger().error(f'Activation failed: {e}')
             self._destroy_interface()
             self._teardown_controller()
+            self._publish_transition_error(f'Activation failed: {e}')
             return TransitionCallbackReturn.FAILURE
 
         self.get_logger().info('Activated')

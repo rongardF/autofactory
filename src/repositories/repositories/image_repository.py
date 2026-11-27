@@ -42,9 +42,10 @@ from pydantic import ValidationError
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.lifecycle import LifecycleNode, State, TransitionCallbackReturn
+from rclpy.lifecycle import State, TransitionCallbackReturn
 from rclpy.service import Service
 from rclpy.timer import Timer
+from station_utils.autofactory_base_node import AutofactoryBaseNode
 
 from repositories.exceptions.image_repository import ImageRepositoryError
 from repositories.interfaces.image_repository.image_backend import ImageBackend
@@ -64,7 +65,7 @@ from repositories.srv import (
 from repositories.utils.json_metadata import dump_metadata
 
 
-class ImageRepository(LifecycleNode):
+class ImageRepository(AutofactoryBaseNode):
     """Image upload/fetch service exposed as a managed lifecycle node."""
 
     def __init__(self, node_name: str = 'image_repository') -> None:
@@ -176,6 +177,7 @@ class ImageRepository(LifecycleNode):
             )
         except ValidationError as exc:
             self.get_logger().error(f'Invalid configuration: {exc}')
+            self._publish_transition_error(f'Invalid configuration: {exc}')
             return TransitionCallbackReturn.FAILURE
 
         store = LocalImageStore(
@@ -185,6 +187,7 @@ class ImageRepository(LifecycleNode):
             store.prepare()
         except OSError as exc:
             self.get_logger().error(f'Cannot use local_storage_path: {exc}')
+            self._publish_transition_error(f'Cannot use local_storage_path: {exc}')
             return TransitionCallbackReturn.FAILURE
 
         backend: ImageBackend | None = None
@@ -218,10 +221,12 @@ class ImageRepository(LifecycleNode):
         """
         if self._config is None or self._manager is None:
             self.get_logger().error('Cannot activate: node is not configured.')
+            self._publish_transition_error('Cannot activate: node is not configured.')
             return TransitionCallbackReturn.FAILURE
 
         if super().on_activate(state) != TransitionCallbackReturn.SUCCESS:
             self.get_logger().error('Base on_activate did not succeed; aborting.')
+            self._publish_transition_error('Base on_activate did not succeed; aborting.')
             return TransitionCallbackReturn.FAILURE
 
         try:
@@ -236,6 +241,7 @@ class ImageRepository(LifecycleNode):
         except Exception as exc:  # noqa: BLE001 - leave the node inactive
             self.get_logger().error(f'Activation failed: {exc}')
             self._destroy_entities()
+            self._publish_transition_error(f'Activation failed: {exc}')
             return TransitionCallbackReturn.FAILURE
 
         self.get_logger().info('Activated image_repository.')
@@ -254,6 +260,7 @@ class ImageRepository(LifecycleNode):
         self._destroy_entities()
         if super().on_deactivate(state) != TransitionCallbackReturn.SUCCESS:
             self.get_logger().error('Base on_deactivate did not succeed.')
+            self._publish_transition_error('Base on_deactivate did not succeed.')
             return TransitionCallbackReturn.FAILURE
 
         self.get_logger().info('Deactivated image_repository.')

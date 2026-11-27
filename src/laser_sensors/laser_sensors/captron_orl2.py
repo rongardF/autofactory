@@ -37,19 +37,20 @@ Device datasheet and models: https://www.captron.com/products/detail/orl2-40t-2p
 """
 
 import rclpy
-from rclpy.lifecycle import LifecycleNode, State, TransitionCallbackReturn
+from rclpy.lifecycle import State, TransitionCallbackReturn
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.publisher import Publisher
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.qos import qos_profile_sensor_data
 
 from sensor_msgs.msg import LaserScan
+from station_utils.autofactory_base_node import AutofactoryBaseNode
 
 from laser_sensors.msg import BeamTriggered
 from io_controllers.msg import IOStates
 
 
-class CaptronORL2(LifecycleNode):
+class CaptronORL2(AutofactoryBaseNode):
     """ROS2 driver node for the Captron ORL2-40T laser cross sensor."""
 
     def __init__(self, node_name: str = 'captron_orl2') -> None:
@@ -131,6 +132,7 @@ class CaptronORL2(LifecycleNode):
                 self._setup_real_hardware()
         except Exception as e:
             self.get_logger().error(f"Error during activation: {e}")
+            self._publish_transition_error(f"Error during activation")
             return TransitionCallbackReturn.FAILURE
 
         # Let the base class activate the managed lifecycle publishers. Without

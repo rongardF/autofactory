@@ -31,14 +31,14 @@ from rclpy.node import Node
 
 from execution_optimizer.msg import PatternGroup
 from execution_optimizer.srv import DispensingOptimizePatterns
-from manufacturing_executor.enums.lifecycle_state_enum import LifecycleStateEnum
+from station_utils.enums import LifecycleStateEnum
 from manufacturing_executor.exceptions import SystemFailureError
 from manufacturing_executor.models.manufacturing_executor_config_dto import (
     ManufacturingExecutorConfigDTO,
 )
 from manufacturing_executor.services.abort_context import AbortContext
 from manufacturing_executor.services.async_calls import ServiceCall
-from manufacturing_executor.services.lifecycle_client import LifecycleClientRegistry
+from manufacturing_executor.services.node_manager_registry import NodeManagerRegistry
 from manufacturing_executor.services.loop_clients import LoopClients
 from manufacturing_executor.utils.log_format import format_pose
 from manufacturing_executor.utils.node_names import strip_slash
@@ -90,7 +90,7 @@ class OptimizerService:
         node: Node,
         config: ManufacturingExecutorConfigDTO,
         clients: LoopClients,
-        registry: LifecycleClientRegistry,
+        registry: NodeManagerRegistry,
     ) -> None:
         self._logger = node.get_logger()
         self._config = config

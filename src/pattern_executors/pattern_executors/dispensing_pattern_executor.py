@@ -57,6 +57,7 @@ from rclpy.client import Client
 from rclpy.duration import Duration
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.time import Time
+from station_utils.enums import LifecycleStateEnum
 from repositories.msg import (
     OperationRepositoryArg,
     OperationRepositoryDispensingMovement,
@@ -280,7 +281,7 @@ class DispensingPatternExecutor(PatternExecutor):
         target_cc_s = m3_s_to_cc_s(self._flowrate_m3_s(pattern))
         current_parameter = self._endtool_manager.get_parameter(
             self._FLOWRATE_PARAMETER_NAME
-        )
+        ).value
         if current_parameter is None:
             raise RuntimeError('Could not read end-tool flowrate parameter.')
 
@@ -293,9 +294,9 @@ class DispensingPatternExecutor(PatternExecutor):
         self.get_logger().info(
             f'Reconfiguring end-tool flowrate to {target_cc_s} cc/s.'
         )
-        if not self._endtool_manager.deactivate_node():
+        if not self._endtool_manager.deactivate().success:
             raise RuntimeError('Failed to deactivate end tool for flowrate change.')
-        if not self._endtool_manager.cleanup_node():
+        if not self._endtool_manager.cleanup().success:
             raise RuntimeError('Failed to clean up end tool for flowrate change.')
 
         flowrate_value = ParameterValue(
@@ -304,13 +305,13 @@ class DispensingPatternExecutor(PatternExecutor):
         )
         if not self._endtool_manager.set_parameter(
             self._FLOWRATE_PARAMETER_NAME, flowrate_value
-        ):
+        ).success:
             raise RuntimeError('Failed to set end-tool flowrate parameter.')
-        if not self._endtool_manager.configure_node():
+        if not self._endtool_manager.configure().success:
             raise RuntimeError('Failed to configure end tool after flowrate change.')
-        if not self._endtool_manager.activate_node():
+        if not self._endtool_manager.activate().success:
             raise RuntimeError('Failed to re-activate end tool after flowrate change.')
-        if self._endtool_manager.get_node_state() != 'active':
+        if self._endtool_manager.get_state().state != LifecycleStateEnum.ACTIVE:
             raise RuntimeError(
                 'End tool did not reach active after flowrate reconfigure.'
             )

@@ -22,6 +22,7 @@
   <depend>gz_common_vendor</depend>
   <depend>std_msgs</depend>
 
+  <depend>station_utils</depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>rcl_interfaces</exec_depend>
   <exec_depend>lifecycle_msgs</exec_depend>

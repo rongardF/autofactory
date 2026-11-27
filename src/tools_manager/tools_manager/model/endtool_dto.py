@@ -27,10 +27,10 @@
 """EndtoolDto — runtime state of an endtool the tools manager has taken under management."""
 
 from pydantic import BaseModel, ConfigDict, Field
+from station_utils.services.node_manager import NodeManager
 
 from tools_manager.model.tool_info_dto import ToolInfoDto
 from tools_manager.model.tools_manager_config import ToolSlotDTO
-from tools_manager.services.node_state_manager import NodeStateManager
 
 
 class EndtoolDto(BaseModel):
@@ -40,7 +40,7 @@ class EndtoolDto(BaseModel):
 
     tool: ToolInfoDto = Field(description='Tool as detected at activation.')
     home_slot: ToolSlotDTO = Field(description='Rack slot the tool belongs to.')
-    node_manager: NodeStateManager = Field(description='Lifecycle and parameter client of the endtool node.')
+    node_manager: NodeManager = Field(description='Lifecycle and parameter client of the endtool node.')
     model_name: str = Field(description='Model (resource directory) name read from the endtool node.')
     mounted: bool = Field(description='Whether the tool was on the tool mount at activation.')
     configured: bool = Field(description='Whether the endtool node was configured by the tools manager.', default=False)

@@ -44,11 +44,11 @@ from typing import Protocol
 from pydantic import ValidationError
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
-from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle.node import LifecycleState, TransitionCallbackReturn
 from rclpy.service import Service
 
 from geometry_msgs.msg import PoseStamped
+from station_utils.autofactory_base_node import AutofactoryBaseNode
 
 from execution_optimizer.exceptions import OptimizationError
 from execution_optimizer.model.camera_intrinsics_dto import CameraIntrinsicsDTO
@@ -70,7 +70,7 @@ class GroupingService(Protocol):
         ...
 
 
-class OptimizerBase(LifecycleNode, ABC):
+class OptimizerBase(AutofactoryBaseNode, ABC):
     """Shared lifecycle node base for all optimizer variants."""
 
     _COMMON_PARAMETERS = ('camera_node_name', 'camera_info_timeout_s')
@@ -78,7 +78,7 @@ class OptimizerBase(LifecycleNode, ABC):
     def __init__(self, node_name: str = 'optimizer_base') -> None:
         """Initialise the node and declare the shared parameters.
 
-        :param node_name: ROS 2 node name passed to :class:`LifecycleNode`.
+        :param node_name: ROS 2 node name passed to :class:`AutofactoryBaseNode`.
         :type node_name: str
         """
         super().__init__(node_name)
@@ -158,9 +158,11 @@ class OptimizerBase(LifecycleNode, ABC):
             for item in error.errors():
                 location = '.'.join(str(part) for part in item['loc'])
                 self.get_logger().error(f"Invalid parameter '{location}': {item['msg']}")
+            self._publish_transition_error('Invalid parameters: ' + ', '.join('.'.join(str(part) for part in item['loc']) for item in error.errors()))
             return TransitionCallbackReturn.FAILURE
         except Exception as error:  # noqa: BLE001 - a failing transition must not raise
             self.get_logger().error(f'Failed to build the configuration: {error}')
+            self._publish_transition_error(f'Failed to build the configuration')
             return TransitionCallbackReturn.FAILURE
 
         try:
@@ -175,6 +177,7 @@ class OptimizerBase(LifecycleNode, ABC):
         except Exception as error:  # noqa: BLE001
             self.get_logger().error(f'Failed to create the internal services: {error}')
             self._drop_internal()
+            self._publish_transition_error(f'Failed to create the internal services: {error}')
             return TransitionCallbackReturn.FAILURE
 
         self.get_logger().info(f'Configured: {config}')
@@ -189,6 +192,7 @@ class OptimizerBase(LifecycleNode, ABC):
             or self._optimizer is None
         ):
             self.get_logger().error('Sanity check failed, node is not configured.')
+            self._publish_transition_error('Sanity check failed, node is not configured.')
             return TransitionCallbackReturn.FAILURE
         try:
             intrinsics = self._camera_provider.initialize()
@@ -201,6 +205,7 @@ class OptimizerBase(LifecycleNode, ABC):
             self.get_logger().error(f'Activation failed: {error}')
             self._destroy_interface()
             self._camera_provider.deinitialize()
+            self._publish_transition_error(f'Activation failed')
             return TransitionCallbackReturn.FAILURE
 
         self.get_logger().info('Activated')

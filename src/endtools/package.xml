@@ -30,6 +30,7 @@
   <exec_depend>std_msgs</exec_depend>
   <depend>builtin_interfaces</depend>
   <depend>service_msgs</depend>
+  <depend>station_utils</depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>tf2_msgs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
